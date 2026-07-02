@@ -282,6 +282,7 @@ const INSPIRATION_SHORTCUT_LABELS = INSPIRATION_SHORTCUTS.reduce((labels, shortc
 const dom = {};
 let state = null;
 let frameHandle = 0;
+let currentLogFilter = "all";
 
 class Lcg {
   constructor(seed) {
@@ -488,10 +489,13 @@ function cacheDom() {
   dom.seedInput = document.querySelector("#seedInput");
   dom.seedStartButton = document.querySelector("#seedStartButton");
   dom.saveStatus = document.querySelector("#saveStatus");
+  dom.endingWatchList = document.querySelector("#endingWatchList");
+  dom.eerfDetailList = document.querySelector("#eerfDetailList");
   dom.inspirationStatus = document.querySelector("#inspirationStatus");
   dom.inspirationCost = document.querySelector("#inspirationCost");
   dom.inspirationButtons = Array.from(document.querySelectorAll("[data-inspiration]"));
   dom.logList = document.querySelector("#logList");
+  dom.logFilterButtons = Array.from(document.querySelectorAll("[data-log-filter]"));
   dom.archiveList = document.querySelector("#archiveList");
   dom.skyCanvas = document.querySelector("#skyCanvas");
   dom.clearLogButton = document.querySelector("#clearLogButton");
@@ -510,6 +514,7 @@ function syncActionButtonCopy() {
     if (description) description.textContent = action.text;
     const shortcut = ACTION_SHORTCUT_LABELS[button.dataset.action];
     const accessibleName = shortcut ? `${action.label}，快捷键 ${shortcut}` : action.label;
+    button.dataset.accessibleName = accessibleName;
     button.title = accessibleName;
     button.setAttribute("aria-label", accessibleName);
     syncShortcutBadge(button, shortcut, "shortcut-badge");
@@ -586,6 +591,9 @@ function bindEvents() {
   dom.seedForm?.addEventListener("submit", startNewGameFromSeed);
 
   dom.clearLogButton.addEventListener("click", clearChronicle);
+  dom.logFilterButtons.forEach((button) => {
+    button.addEventListener("click", () => setLogFilter(button.dataset.logFilter || "all"));
+  });
 
   dom.inspirationButtons.forEach((button) => {
     button.addEventListener("click", () => upgradeInspiration(button.dataset.inspiration));
@@ -649,6 +657,7 @@ function handleInspirationShortcut(event, key) {
 }
 
 function startNewGame() {
+  if (!confirmNewWorld()) return;
   startNewGameWithSeed(Date.now());
 }
 
@@ -660,6 +669,7 @@ function startNewGameFromSeed(event) {
     return;
   }
 
+  if (!confirmNewWorld()) return;
   startNewGameWithSeed(seedText);
 }
 
@@ -671,10 +681,28 @@ function startNewGameWithSeed(seedValue) {
   render();
 }
 
+function confirmNewWorld() {
+  if (!hasActiveRun()) return true;
+  return window.confirm("当前文明进度会被新世界覆盖，造物灵感仍会保留。继续？");
+}
+
+function hasActiveRun() {
+  return Boolean(state && !state.finished && (state.turn > 0 || state.history.length || state.awaitingCivilizationRestart || state.endingCandidate?.id));
+}
+
 function clearChronicle() {
   state.log = [];
   saveState();
   if (dom.saveStatus) dom.saveStatus.textContent = saveStatusText();
+  renderLog();
+}
+
+function setLogFilter(filter) {
+  currentLogFilter = ["all", "disaster", "special", "progress"].includes(filter) ? filter : "all";
+  dom.logFilterButtons.forEach((button) => {
+    const active = button.dataset.logFilter === currentLogFilter;
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
   renderLog();
 }
 
@@ -2531,11 +2559,13 @@ function finishGame(endingId, context = {}) {
   state.finalEnding = {
     id: endingId,
     name: ending.name,
+    seed: state.seed,
     civilization: state.count,
     turn: state.turn,
     rand: Number.isFinite(Number(context.rand)) ? context.rand : state.lastRand,
     trigger: context.trigger || state.weather,
     snapshot: { ...finalSnapshot },
+    peakSnapshot: runPeakSnapshot(finalSnapshot),
     inspirationReward,
     createdAt: new Date().toISOString()
   };
@@ -2550,6 +2580,33 @@ function finishGame(endingId, context = {}) {
   saveFinalEnding();
   clearSavedRun();
   goToEndingPage(endingId);
+}
+
+function runPeakSnapshot(finalSnapshot = snapshot()) {
+  const peak = {
+    sc: finiteOr(finalSnapshot.sc, 0),
+    be: finiteOr(finalSnapshot.be, 0),
+    pop: finiteOr(finalSnapshot.pop, 0),
+    eco: finiteOr(finalSnapshot.eco, 0),
+    eerf: finiteOr(finalSnapshot.eerf, state.eerfLevel || 0),
+    stability: finiteOr(finalSnapshot.stability, state.stability)
+  };
+
+  const records = [
+    ...(Array.isArray(state.history) ? state.history : []),
+    state.currentCivilization
+  ].filter(Boolean);
+
+  records.forEach((entry) => {
+    peak.sc = Math.max(peak.sc, finiteOr(entry.peakSc, peak.sc));
+    peak.be = Math.max(peak.be, finiteOr(entry.peakBe, peak.be));
+    peak.pop = Math.max(peak.pop, finiteOr(entry.peakPop, peak.pop));
+    peak.eco = Math.max(peak.eco, finiteOr(entry.peakEco, peak.eco));
+    peak.eerf = Math.max(peak.eerf, finiteOr(entry.peakEerf, peak.eerf));
+    peak.stability = Math.max(peak.stability, finiteOr(entry.peakStability, peak.stability));
+  });
+
+  return peak;
 }
 
 function endingCopyFor(endingId) {
@@ -2673,6 +2730,8 @@ function render() {
   dom.endingLabel.textContent = state.ending;
   dom.seedValue.textContent = state.seed;
   if (dom.saveStatus) dom.saveStatus.textContent = saveStatusText();
+  renderEndingWatch();
+  renderEerfDetails();
   renderInspiration();
   renderActionButtons();
   renderLog();
@@ -2682,39 +2741,251 @@ function render() {
 }
 
 function renderActionButtons() {
-  const crisis = isEconomicCrisis();
   dom.actionButtons.forEach((button) => {
     const action = ACTIONS[button.dataset.action];
-    let disabled = state.finished;
-    if (!disabled && action?.settleOnly) {
-      disabled = !state.endingCandidate?.id;
-    } else if (!disabled && state.awaitingCivilizationRestart) {
-      disabled = !action?.restartOnly;
-    } else if (!disabled && action?.restartOnly) {
-      disabled = true;
-    } else if (!disabled) {
-      disabled = crisis ? !action?.crisisOnly : Boolean(action?.crisisOnly);
-    }
-    if (!disabled && action === ACTIONS.buildEerf) {
-      disabled = state.eerfLevel > 0 || state.eco < Math.abs(action.delta.eco || 0);
-    }
-    if (!disabled && action === ACTIONS.upgradeEerf) {
-      const rawDelta = typeof action.delta === "function" ? action.delta(state) : action.delta;
-      const nextLevel = Math.min(EERF_MAX_LEVEL, (state.eerfLevel || 0) + 1);
-      const requirement = eerfScienceRequirementForLevel(nextLevel);
-      disabled = state.eerfLevel <= 0 ||
-        state.eerfLevel >= EERF_MAX_LEVEL ||
-        state.sc < requirement ||
-        state.eco < Math.abs(rawDelta.eco || 0);
-    }
-    if (!disabled && action && !action.crisisOnly && !action.restartOnly && !action.settleOnly) {
-      const rawDelta = typeof action.delta === "function" ? action.delta(state) : action.delta;
-      disabled = (Number(rawDelta.eco || 0) < 0 && state.eco < Math.abs(rawDelta.eco || 0)) ||
-        actionPopulationWouldBreakFloor(action, projectedActionPopulationDelta(rawDelta));
-    }
+    const reason = actionDisabledReason(action);
+    const disabled = Boolean(reason);
+    const reasonNode = button.querySelector(".disabled-reason");
+    if (reasonNode) reasonNode.textContent = reason;
+    const baseName = button.dataset.accessibleName || action?.label || "行动";
+    button.title = reason ? `${baseName}：${reason}` : baseName;
     button.disabled = disabled;
     button.setAttribute("aria-disabled", disabled ? "true" : "false");
   });
+}
+
+function renderEndingWatch() {
+  if (!dom.endingWatchList) return;
+
+  const items = endingWatchItems().slice(0, 3);
+  dom.endingWatchList.innerHTML = "";
+  if (!items.length) {
+    const empty = document.createElement("li");
+    empty.innerHTML = "<strong>暂无观测</strong><p>文明还没有足够数据形成终局判断。</p>";
+    dom.endingWatchList.append(empty);
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  items.forEach((item) => {
+    const row = document.createElement("li");
+    const title = document.createElement("strong");
+    title.textContent = `${item.id}｜${item.name}｜${formatPercent(item.progress)}`;
+    const detail = document.createElement("p");
+    detail.textContent = item.missing.length ? `还差：${item.missing.join("；")}` : "条件已满足，可结算。";
+    row.append(title, detail);
+    fragment.append(row);
+  });
+  dom.endingWatchList.append(fragment);
+}
+
+function endingWatchItems() {
+  const current = snapshot();
+  const thresholds = ENDING_THRESHOLDS;
+  const harmony = knowledgeHarmony(current.sc, current.be);
+  const collapseCount = state.history.length + (state.awaitingCivilizationRestart ? 1 : 0);
+  const defs = [
+    {
+      id: "A",
+      reqs: [
+        minimumRequirement("SC", current.sc, thresholds.reformHigh),
+        minimumRequirement("BE", current.be, thresholds.companionKnowledge),
+        minimumRequirement("POP", current.pop, thresholds.promisedPopulation),
+        minimumRequirement("ECO", current.eco, thresholds.promisedEconomy),
+        minimumRequirement("秩序", current.stability, 55),
+        ratioRequirement("科学主导", current.sc, current.be * thresholds.dominanceRatio)
+      ]
+    },
+    {
+      id: "B",
+      reqs: [
+        minimumRequirement("BE", current.be, thresholds.reformHigh),
+        minimumRequirement("SC", current.sc, thresholds.companionKnowledge),
+        minimumRequirement("秩序", current.stability, 62),
+        ratioRequirement("神学主导", current.be, current.sc * thresholds.dominanceRatio)
+      ]
+    },
+    {
+      id: "D",
+      reqs: [
+        minimumRequirement("SC", current.sc, thresholds.exodusKnowledge),
+        maximumRequirement("BE", current.be, thresholds.companionKnowledge - 1),
+        minimumRequirement("POP", current.pop, thresholds.exodusPopulation),
+        minimumRequirement("ECO", current.eco, thresholds.exodusEconomy)
+      ]
+    },
+    {
+      id: "E",
+      reqs: [
+        minimumRequirement("BE", current.be, thresholds.exodusKnowledge),
+        maximumRequirement("SC", current.sc, thresholds.companionKnowledge - 1),
+        minimumRequirement("POP", current.pop, thresholds.exodusPopulation),
+        minimumRequirement("秩序", current.stability, 66)
+      ]
+    },
+    {
+      id: "F",
+      reqs: [
+        minimumRequirement("SC", current.sc, thresholds.balancedKnowledge),
+        minimumRequirement("BE", current.be, thresholds.balancedKnowledge),
+        minimumRequirement("均衡度", harmony, 0.84, formatPercent)
+      ]
+    },
+    {
+      id: "G",
+      reqs: [
+        minimumRequirement("毁灭次数", collapseCount, thresholds.collapseCycle)
+      ]
+    },
+    {
+      id: "H",
+      reqs: [
+        minimumRequirement("SC", current.sc, thresholds.middleScience),
+        maximumRequirement("SC 上限", current.sc, thresholds.exodusKnowledge - 1),
+        maximumRequirement("BE", current.be, thresholds.lowKnowledge),
+        minimumRequirement("秩序", current.stability, thresholds.orderHigh),
+        minimumRequirement("POP", current.pop, 25000)
+      ]
+    }
+  ];
+
+  return defs.map((def) => {
+    const progress = def.reqs.reduce((sum, req) => sum + req.progress, 0) / def.reqs.length;
+    return {
+      id: def.id,
+      name: shortEndingName(def.id),
+      progress: clamp(progress, 0, 1),
+      missing: def.reqs.filter((req) => !req.met).map((req) => req.missing)
+    };
+  }).sort((left, right) => {
+    if (state.endingCandidate?.id === left.id) return -1;
+    if (state.endingCandidate?.id === right.id) return 1;
+    return right.progress - left.progress;
+  });
+}
+
+function minimumRequirement(label, value, target, formatter = formatNumber) {
+  const current = finiteOr(value, 0);
+  const goal = Math.max(0.0001, finiteOr(target, 0));
+  return {
+    met: current >= goal,
+    progress: clamp(current / goal, 0, 1),
+    missing: `${label} ${formatter(Math.max(0, goal - current))}`
+  };
+}
+
+function maximumRequirement(label, value, maximum, formatter = formatNumber) {
+  const current = finiteOr(value, 0);
+  const cap = finiteOr(maximum, 0);
+  return {
+    met: current <= cap,
+    progress: current <= cap ? 1 : clamp(cap / Math.max(current, 1), 0, 1),
+    missing: `${label} 需降至 ${formatter(cap)} 以下`
+  };
+}
+
+function ratioRequirement(label, value, target) {
+  const current = finiteOr(value, 0);
+  const goal = Math.max(1, finiteOr(target, 0));
+  return {
+    met: current >= goal,
+    progress: clamp(current / goal, 0, 1),
+    missing: `${label} 需 ${formatNumber(goal)}`
+  };
+}
+
+function shortEndingName(endingId) {
+  const name = endingCopyFor(endingId).name || `${endingId}结局`;
+  return name.split("/")[0] || name;
+}
+
+function renderEerfDetails() {
+  if (!dom.eerfDetailList) return;
+
+  const level = state.eerfLevel || 0;
+  const rows = [];
+  if (state.awaitingCivilizationRestart && state.pendingRestart) {
+    rows.push(["状态", "等待重启文明"]);
+    rows.push(["火种人口", formatNumber(state.pendingRestart.pop)]);
+    rows.push(["火种知识", `SC ${formatNumber(state.pendingRestart.sc)} / BE ${formatNumber(state.pendingRestart.be)}`]);
+    rows.push(["下一代 EERF", `${formatNumber(state.pendingRestart.eerfLevel)}/${EERF_MAX_LEVEL}`]);
+  } else {
+    const estimate = computeRestartPopulation(snapshot());
+    const knowledge = computeRestartKnowledge(snapshot());
+    rows.push(["当前等级", `${formatNumber(level)}/${EERF_MAX_LEVEL}`]);
+    rows.push(["毁灭后人口", formatNumber(estimate)]);
+    rows.push(["毁灭后知识", `SC ${formatNumber(knowledge.sc)} / BE ${formatNumber(knowledge.be)}`]);
+    rows.push(["下一代 EERF", `${formatNumber(Math.max(0, level - 1))}/${EERF_MAX_LEVEL}`]);
+    if (level < EERF_MAX_LEVEL) {
+      const nextLevel = Math.max(1, level + 1);
+      rows.push(["下级需求", nextLevel <= 1 ? "建造 EERF" : `SC ${formatNumber(eerfScienceRequirementForLevel(nextLevel))}`]);
+    } else {
+      rows.push(["下级需求", "已满级"]);
+    }
+  }
+  renderDefinitionRows(dom.eerfDetailList, rows);
+}
+
+function renderDefinitionRows(list, rows) {
+  list.innerHTML = "";
+  const fragment = document.createDocumentFragment();
+  rows.forEach(([label, value]) => {
+    const item = document.createElement("div");
+    const term = document.createElement("dt");
+    const description = document.createElement("dd");
+    term.textContent = label;
+    description.textContent = value;
+    item.append(term, description);
+    fragment.append(item);
+  });
+  list.append(fragment);
+}
+
+function actionDisabledReason(action) {
+  if (!action) return "未知行动";
+  if (state.finished) return "游戏已经结束";
+
+  if (action.settleOnly) {
+    return state.endingCandidate?.id ? "" : "尚未出现可结算终局";
+  }
+
+  if (state.awaitingCivilizationRestart) {
+    return action.restartOnly ? "" : "等待重启文明";
+  }
+
+  if (action.restartOnly) return "当前文明仍在运行";
+
+  const crisis = isEconomicCrisis();
+  if (crisis && !action.crisisOnly) return "经济危机，只能重启财政";
+  if (!crisis && action.crisisOnly) return "ECO 尚未归零";
+
+  if (state.controlLocked && !action.crisisOnly) return "文明不再响应控制";
+
+  if (action === ACTIONS.buildEerf && state.eerfLevel > 0) return "EERF 已建成";
+  if (action === ACTIONS.upgradeEerf && state.eerfLevel <= 0) return "尚未建造 EERF";
+  if (action === ACTIONS.upgradeEerf && state.eerfLevel >= EERF_MAX_LEVEL) return "EERF 已满级";
+
+  const rawDelta = actionRawDelta(action);
+  if (action === ACTIONS.upgradeEerf) {
+    const nextLevel = Math.min(EERF_MAX_LEVEL, (state.eerfLevel || 0) + 1);
+    const requirement = eerfScienceRequirementForLevel(nextLevel);
+    if (state.sc < requirement) return `升级需 SC ${formatNumber(requirement)}`;
+  }
+
+  if (Number(rawDelta.eco || 0) < 0 && state.eco < Math.abs(rawDelta.eco || 0)) {
+    return `ECO 不足 ${formatNumber(Math.abs(rawDelta.eco || 0))}`;
+  }
+
+  if (actionPopulationWouldBreakFloor(action, projectedActionPopulationDelta(rawDelta))) {
+    return `人口需高于 ${formatNumber(minimumSustainablePopulation())}`;
+  }
+
+  return "";
+}
+
+function actionRawDelta(action) {
+  if (!action) return {};
+  return typeof action.delta === "function" ? action.delta(state) : (action.delta || {});
 }
 
 function renderInspiration() {
@@ -2766,16 +3037,23 @@ function renderSpecialNotice() {
 
 function renderLog() {
   dom.logList.innerHTML = "";
-  if (!state.log.length) {
+  const visibleLogs = state.log.filter(logMatchesFilter);
+  dom.logFilterButtons.forEach((button) => {
+    const active = button.dataset.logFilter === currentLogFilter;
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+  if (!visibleLogs.length) {
     const empty = document.createElement("li");
     empty.className = "progress";
-    empty.innerHTML = "<strong>编年史空白</strong><p>下一年行动会写入新的记录。</p>";
+    empty.innerHTML = currentLogFilter === "all"
+      ? "<strong>编年史空白</strong><p>下一年行动会写入新的记录。</p>"
+      : "<strong>没有符合筛选的记录</strong><p>切回全部即可查看完整编年史。</p>";
     dom.logList.append(empty);
     return;
   }
 
   const fragment = document.createDocumentFragment();
-  state.log.forEach((entry) => {
+  visibleLogs.forEach((entry) => {
     const item = document.createElement("li");
     item.className = entry.type || "progress";
 
@@ -2791,6 +3069,10 @@ function renderLog() {
     fragment.append(item);
   });
   dom.logList.append(fragment);
+}
+
+function logMatchesFilter(entry) {
+  return currentLogFilter === "all" || (entry.type || "progress") === currentLogFilter;
 }
 
 function renderArchive() {

@@ -12,6 +12,11 @@
         <h1 id="endingTitle">终局</h1>
         <div class="ending-copy" id="endingCopy"></div>
         <p class="ending-reward" id="endingReward" hidden></p>
+        <section class="ending-recap" aria-label="终局复盘">
+          <h2>本局复盘</h2>
+          <dl id="endingRecapList"></dl>
+          <button id="copyChallengeButton" type="button">复制挑战链接</button>
+        </section>
         <button id="restartButton" type="button" aria-label="新世界，快捷键 Shift+N" aria-keyshortcuts="Shift+N">
           <span>新世界</span>
           <span class="inline-shortcut" aria-hidden="true">Shift+N</span>
@@ -38,6 +43,8 @@
       const endingTitle = document.querySelector("#endingTitle");
       const endingCopy = document.querySelector("#endingCopy");
       const endingReward = document.querySelector("#endingReward");
+      const endingRecapList = document.querySelector("#endingRecapList");
+      const copyChallengeButton = document.querySelector("#copyChallengeButton");
       const restartButton = document.querySelector("#restartButton");
       const endingSeedForm = document.querySelector("#endingSeedForm");
       const endingSeedInput = document.querySelector("#endingSeedInput");
@@ -109,6 +116,48 @@
         endingReward.textContent = `造物灵感 +${storedEnding.inspirationReward.amount}`;
       }
 
+      function formatNumber(value) {
+        return new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 0 }).format(Number(value) || 0);
+      }
+
+      function renderRecap() {
+        const snapshot = storedEnding?.snapshot || {};
+        const peak = storedEnding?.peakSnapshot || snapshot;
+        const rows = [
+          ["种子", storedEnding?.seed ?? "未知"],
+          ["文明", storedEnding?.civilization ? `第 ${formatNumber(storedEnding.civilization)} 号` : "未知"],
+          ["年份", storedEnding?.turn ? `${formatNumber(storedEnding.turn)} 年` : "未知"],
+          ["触发", storedEnding?.trigger || ending.name],
+          ["终值", `SC ${formatNumber(snapshot.sc)} / BE ${formatNumber(snapshot.be)} / POP ${formatNumber(snapshot.pop)} / ECO ${formatNumber(snapshot.eco)} / 秩序 ${formatNumber(snapshot.stability)}`],
+          ["峰值", `SC ${formatNumber(peak.sc)} / BE ${formatNumber(peak.be)} / POP ${formatNumber(peak.pop)} / ECO ${formatNumber(peak.eco)} / EERF ${formatNumber(peak.eerf)}`]
+        ];
+        endingRecapList.innerHTML = rows.map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`).join("");
+        copyChallengeButton.disabled = !storedEnding?.seed;
+      }
+
+      function challengeUrl() {
+        const url = new URL("index.html", window.location.href);
+        if (storedEnding?.seed) {
+          url.searchParams.set("seed", storedEnding.seed);
+        }
+        return url.href;
+      }
+
+      async function copyChallengeLink() {
+        const link = challengeUrl();
+        try {
+          await navigator.clipboard.writeText(link);
+          copyChallengeButton.textContent = "已复制";
+        } catch {
+          copyChallengeButton.textContent = link;
+        }
+        window.setTimeout(() => {
+          copyChallengeButton.textContent = "复制挑战链接";
+        }, 1600);
+      }
+
+      renderRecap();
+
       function restartGame() {
         clearGame();
         window.location.href = new URL("index.html", window.location.href).href;
@@ -144,6 +193,7 @@
       }
 
       restartButton.addEventListener("click", restartGame);
+      copyChallengeButton.addEventListener("click", copyChallengeLink);
       endingSeedForm.addEventListener("submit", restartGameWithSeed);
       window.addEventListener("keydown", (event) => {
         if (shouldIgnoreShortcut(event)) return;

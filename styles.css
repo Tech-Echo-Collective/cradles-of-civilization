@@ -317,6 +317,7 @@ h2 {
 .action-button {
   position: relative;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-start;
   gap: 10px;
@@ -463,6 +464,7 @@ h2 {
 
 .action-copy {
   display: grid;
+  flex: 1 1 0;
   gap: 3px;
   min-width: 0;
   text-align: left;
@@ -482,6 +484,21 @@ h2 {
 
 .action-button:disabled .action-copy small {
   color: #697386;
+}
+
+.disabled-reason {
+  display: none;
+  flex: 1 0 100%;
+  padding-left: 44px;
+  width: 100%;
+  color: #f6c56f;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.action-button:disabled .disabled-reason {
+  display: block;
 }
 
 .lower-grid {
@@ -607,6 +624,28 @@ h2 {
   white-space: nowrap;
 }
 
+.log-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.log-filters button {
+  min-height: 30px;
+  color: #cbd5e1;
+  background: #1a2130;
+  border: 1px solid #30394e;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.log-filters button[aria-pressed="true"] {
+  color: #ffffff;
+  background: #2b3550;
+  border-color: #667692;
+}
+
 #logList {
   display: grid;
   gap: 10px;
@@ -680,6 +719,72 @@ h2 {
   color: #d1d9e4;
   font-size: 0.9rem;
   line-height: 1.5;
+}
+
+.watch-panel,
+.eerf-detail-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.watch-panel ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.watch-panel li {
+  display: grid;
+  gap: 4px;
+  padding: 9px 10px;
+  background: #101620;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 7px;
+}
+
+.watch-panel strong {
+  color: #ffffff;
+  font-size: 0.84rem;
+}
+
+.watch-panel p {
+  color: #bec9d8;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.eerf-detail-panel dl,
+.ending-recap dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.eerf-detail-panel dl div,
+.ending-recap dl div {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.eerf-detail-panel dt,
+.ending-recap dt {
+  color: #9fb0c5;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.eerf-detail-panel dd,
+.ending-recap dd {
+  margin: 0;
+  color: #dbe3ec;
+  font-size: 0.8rem;
+  line-height: 1.4;
 }
 
 .inspiration-panel {
@@ -864,6 +969,37 @@ h2 {
   border-radius: 7px;
   font-size: 0.86rem;
   font-weight: 800;
+}
+
+.ending-recap {
+  display: grid;
+  gap: 12px;
+  max-width: 760px;
+  padding: 14px;
+  background: rgba(8, 12, 18, 0.34);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+}
+
+.ending-recap h2 {
+  font-size: 0.88rem;
+}
+
+#copyChallengeButton {
+  justify-self: start;
+  min-height: 34px;
+  padding: 0 12px;
+  color: var(--ink);
+  background: #242b3b;
+  border: 1px solid #384259;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+#copyChallengeButton:hover,
+#copyChallengeButton:focus-visible {
+  background: #2f3850;
+  outline: none;
 }
 
 #restartButton {
