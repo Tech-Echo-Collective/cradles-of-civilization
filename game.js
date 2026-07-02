@@ -935,14 +935,14 @@ function computeDrift(rand, current) {
   const lowOrderPenalty = current.stability < 30 ? 900 : 0;
   const highOrderBonus = current.stability > 72 ? 650 : 0;
   const lowEconomyBuffer = current.eco > 0 && current.eco < 42000
-    ? (42000 - current.eco) * 0.032
+    ? (42000 - current.eco) * 0.05
     : 0;
 
   return {
     sc: clamp(Math.round(scNoise * 14 + current.sc * 0.004 - current.be * 0.001), -50, 50),
     be: clamp(Math.round(beNoise * 14 + current.be * 0.004 - current.sc * 0.001), -50, 50),
     pop: Math.round(current.pop * (0.004 + current.stability / 18000) + popNoise * 70 - lowOrderPenalty + highOrderBonus),
-    eco: Math.round(Math.sqrt(Math.max(0, current.eco)) * 6.5 + current.stability * 7 - current.pop * 0.004 - (state.eerfLevel || 0) * 720 + lowEconomyBuffer),
+    eco: Math.round(Math.sqrt(Math.max(0, current.eco)) * 7 + current.stability * 8 - current.pop * 0.003 - (state.eerfLevel || 0) * 620 + lowEconomyBuffer),
     stability: orderNoise
   };
 }
@@ -986,25 +986,7 @@ function computeSystemPressure(current) {
     9000
   );
 
-  const laborBase = Math.sqrt(Math.max(0, current.pop)) * 44;
-  const scienceProductivity = 0.76 + scRatio * 1.35;
-  const beliefOrder = 0.74 + beRatio * 0.72;
-  const harmonyEconomy = 0.86 + harmony * 0.38;
-  const eerfUpkeep = (state.eerfLevel || 0) * 3100;
-  const treasuryDrag = current.eco > 260000 ? (current.eco - 260000) * 0.08 : 0;
-  const upkeep = current.pop * 0.048 + (current.sc + current.be) * 0.16 + eerfUpkeep + treasuryDrag;
-  const overloadCost = current.pop > carryingCapacity
-    ? (current.pop - carryingCapacity) * 0.055
-    : 0;
-  const rivalryCost = rivalry * (1850 + (current.sc + current.be) * 0.065);
-  const lowEconomyLift = current.eco > 0 && current.eco < 65000
-    ? (65000 - current.eco) * 0.04
-    : 0;
-  const ecoPressure = clamp(
-    Math.round(laborBase * scienceProductivity * beliefOrder * harmonyEconomy + lowEconomyLift - upkeep - overloadCost - rivalryCost),
-    -90000,
-    95000
-  );
+  const ecoPressure = computeSolowEconomyPressure(current, carryingCapacity, harmony, rivalry);
 
   return {
     sc: scPressure,
@@ -1013,6 +995,64 @@ function computeSystemPressure(current) {
     eco: ecoPressure,
     stability: clamp(Math.round(harmony * 4 - rivalry * 5 - Math.max(0, current.pop - carryingCapacity) / 60000), -8, 5)
   };
+}
+
+function computeSolowEconomyPressure(current, carryingCapacity, harmony, rivalry) {
+  const scRatio = current.sc / CAP;
+  const beRatio = current.be / CAP;
+  const labor = Math.max(1, current.pop);
+  const capital = Math.max(1, current.eco) + 24000;
+  const laborIndex = labor / 7600;
+  const capitalIndex = capital / (DEFAULT_ECO + 24000);
+  const scienceTfp = 1 + scRatio * 1.35 + Math.sqrt(scRatio) * 0.16;
+  const orderTfp = 0.94 + clamp(current.stability, 0, 100) / 500 + harmony * 0.08;
+  const doctrineFriction = clamp(
+    1 - beRatio * 0.26 - Math.max(0, beRatio - scRatio) * 0.09 + harmony * 0.04,
+    0.62,
+    1.04
+  );
+  // Game-tuned Solow-Cobb-Douglas: ECO is capital, POP is labor, SC is productivity, BE is doctrine drag.
+  const totalFactorProductivity = scienceTfp * orderTfp * doctrineFriction;
+  const grossOutput = 15500 *
+    totalFactorProductivity *
+    Math.pow(capitalIndex, 0.34) *
+    Math.pow(laborIndex, 0.62);
+  const savingsRate = clamp(
+    0.34 + scRatio * 0.08 - beRatio * 0.09 + clamp(current.stability, 0, 100) / 1000 + harmony * 0.04,
+    0.24,
+    0.52
+  );
+  const productiveInvestment = grossOutput * savingsRate;
+  const depreciation = current.eco * 0.023;
+  const laborMaintenance = current.pop * (0.033 + beRatio * 0.004);
+  const knowledgeAdministration = (current.sc + current.be) * 0.12;
+  const eerfUpkeep = (state.eerfLevel || 0) * 2800;
+  const rivalryCost = rivalry * (1450 + (current.sc + current.be) * 0.055);
+  const overloadCost = current.pop > carryingCapacity
+    ? (current.pop - carryingCapacity) * 0.048
+    : 0;
+  const lowCapitalRebuild = current.eco > 0 && current.eco < 60000
+    ? (60000 - current.eco) * 0.055
+    : 0;
+  const treasuryDrag = current.eco > 280000
+    ? Math.pow((current.eco - 280000) / 100000, 1.22) * 12000
+    : 0;
+
+  return clamp(
+    Math.round(
+      productiveInvestment +
+        lowCapitalRebuild -
+        depreciation -
+        laborMaintenance -
+        knowledgeAdministration -
+        eerfUpkeep -
+        rivalryCost -
+        overloadCost -
+        treasuryDrag
+    ),
+    -90000,
+    110000
+  );
 }
 
 function describeSystemPressure(delta) {
