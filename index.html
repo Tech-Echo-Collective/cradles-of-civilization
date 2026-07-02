@@ -20,7 +20,7 @@
               <strong id="countValue">1</strong>
             </div>
             <div>
-              <span>轮数</span>
+              <span>年份</span>
               <strong id="turnValue">0</strong>
             </div>
             <div>
@@ -33,7 +33,7 @@
         <section class="sky-block">
           <canvas id="skyCanvas" width="960" height="420" aria-label="文明摇篮的三颗恒星与城市景观"></canvas>
           <div class="sky-readout">
-            <span id="weatherLabel">等待第一轮观测</span>
+            <span id="weatherLabel">等待第一年观测</span>
             <strong id="endingLabel">文明尚未抵达终局</strong>
           </div>
         </section>
@@ -215,28 +215,36 @@
                 <dd id="saveStatus">自动保存开启</dd>
               </div>
               <div>
-                <dt>上限</dt>
-                <dd>SC/BE 最高 20000；普通随机波动最高 50；终局条件会检查 SC、BE、POP、ECO 与秩序。</dd>
+                <dt>纪年</dt>
+                <dd>玩家每次选择一项行动，文明便推进一年。年份不是倒计时；它记录本代文明在三恒星环境中坚持了多久。</dd>
               </div>
               <div>
-                <dt>流程</dt>
-                <dd>每轮先掷出 Rand，后台另掷隐藏 spec；行动后结算系统压力。打压行动可把一方发展转移给另一方。</dd>
+                <dt>变量</dt>
+                <dd>SC 与 BE 分别代表科学和神学，最高为 20000；POP 是人口，ECO 是经济，秩序反映社会承压能力。终局会综合检查这些变量。</dd>
+              </div>
+              <div>
+                <dt>年流程</dt>
+                <dd>每年先掷出 Rand，并后台掷出隐藏 spec。恒星灾变、普通事件与隐藏彩蛋先结算，随后执行玩家行动，最后结算系统压力。</dd>
+              </div>
+              <div>
+                <dt>治理</dt>
+                <dd>发展行动可推动科学、神学、人口或经济；均衡治理缓和两条知识线的互斥；打压行动会牺牲一方，把发展空间转移给另一方。</dd>
               </div>
               <div>
                 <dt>危机</dt>
-                <dd>ECO 为 0 时进入经济危机，非财政行动锁死，SC/BE 正向发展冻结，只能重启财政。</dd>
+                <dd>ECO 归零会触发财政危机，非财政行动锁死，SC/BE 正向发展冻结；此时需要使用“炉边谈话”重启财政。</dd>
               </div>
               <div>
                 <dt>EERF</dt>
-                <dd>建造和升级 EERF 会消耗经济与发展值，但可提高下一轮文明初始人口，并保存一小部分 SC/BE。</dd>
+                <dd>EERF 是跨文明火种工程。建造和升级会消耗当代资源；文明毁灭后，它保存一部分人口与 SC/BE，并在下一代启动时降一级。</dd>
               </div>
               <div>
-                <dt>毁灭</dt>
-                <dd>部分 Rand 会触发三日灾变，文明会等待玩家重启文明；毁灭不是终点，终局结算才会结束游戏。</dd>
+                <dt>灾变</dt>
+                <dd>部分 Rand 会触发硬灾变并毁灭当前文明。文明毁灭不是游戏终点；玩家需重启文明，由下一代继续走向终局。</dd>
               </div>
               <div>
                 <dt>结局</dt>
-                <dd>终局条件满足后可手动结算；SC/BE 抵达上限会自动结算 A/B；隐藏 C 只会在连续 2 次文明毁灭都满足信仰断代时自动结算。</dd>
+                <dd>多数终局满足条件后只点亮“脱离苦海”，由玩家决定是否结算。SC/BE 抵达上限会自动结算 A/B；隐藏 C 只在连续 2 次文明毁灭都满足信仰断代时自动结算。</dd>
               </div>
             </dl>
             <section class="archive-panel" aria-label="文明档案">

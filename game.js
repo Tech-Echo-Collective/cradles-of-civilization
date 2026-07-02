@@ -91,28 +91,28 @@ const ACTIONS = {
     label: "均衡治理",
     type: "progress",
     delta: { sc: 95, be: 95, pop: 1100, eco: 4000, stability: 8 },
-    text: "政治是妥协的艺术。百花齐放，百家争鸣。我看没什么，起码挺热闹。",
+    text: "政治是妥协的艺术。由此，百花齐放，百家争鸣；\n我看没什么，起码挺热闹。",
     chronicleText: "学院和神殿互相让出一步，文明暂时学会用两种语言说话。"
   },
   order: {
     label: "维持秩序",
     type: "special",
     delta: { sc: -6, be: 22, pop: -160, eco: -11500, stability: 18 },
-    text: "先让街灯亮起来，再争论谁拥有星空。",
+    text: "您自由了。\n——《悲惨世界》，1862年",
     chronicleText: "巡夜队、粮票与临时法院重新挤压混乱，经济为秩序让路。"
   },
   suppressBelief: {
     label: "打压神学",
     type: "special",
     delta: { sc: 125, be: -125, pop: -420, eco: -8800, stability: -8 },
-    text: "拆掉神坛，修成观测台。",
+    text: "陛下，我不需要上帝这个假设。\n——皮埃尔·西蒙·拉普拉斯，1802年",
     chronicleText: "学院夺回祭坛、税粮与钟楼，神学退却，科学获得一段残酷的清场。"
   },
   suppressScience: {
     label: "打压科学",
     type: "special",
     delta: { sc: -125, be: 125, pop: 120, eco: -6200, stability: 3 },
-    text: "收起望远镜，先听钟声。",
+    text: "不管怎么说，它依然在转动！\n——伽利略·伽利莱，1632年",
     chronicleText: "祭司接管测量器与工坊账簿，科学退却，神学获得一段安静的扩张。"
   },
   hibernate: {
@@ -150,7 +150,7 @@ const ACTIONS = {
     type: "special",
     delta: { sc: -45, be: -35, pop: -800, eco: -65000, stability: -4 },
     text: "E.E.R.F.极端环境抵抗设施在地下开工。子子孙孙无穷匮也，而山不加增，何苦而不平？",
-    chronicleText: "极端环境抵抗设施在地下开工，地表文明为下一轮火种支付第一笔代价。",
+    chronicleText: "极端环境抵抗设施在地下开工，地表文明为下一代火种支付第一笔代价。",
     effect() {
       state.eerfLevel = Math.max(state.eerfLevel, 1);
     }
@@ -201,7 +201,7 @@ const ACTIONS = {
     canRunWithZeroPopulation: true,
     delta: {},
     text: "神又说，要有光。于是又有了光。",
-    chronicleText: "幸存者打开 EERF 和废墟档案，下一轮文明从火种中醒来。"
+    chronicleText: "幸存者打开 EERF 和废墟档案，下一代文明从火种中醒来。"
   },
   settleEnding: {
     label: "脱离苦海",
@@ -299,7 +299,7 @@ function createNewState() {
     specialNotice: null,
     history: [],
     currentCivilization: createCivilizationStats(1, 0, initialSnapshot),
-    weather: "等待第一轮观测",
+    weather: "等待第一年观测",
     ending: "我们依旧存在。",
     log: [
       {
@@ -630,13 +630,13 @@ function advanceRound(actionId) {
   state.lastTone = type;
   addLog({
     type,
-    title: `第 ${state.turn} 轮｜Rand ${formatRand(rand)}｜${state.weather}`,
+    title: `第 ${state.turn} 年｜Rand ${formatRand(rand)}｜${state.weather}`,
     text: [
       event.text,
       specialEvent?.text,
       actionResult.text,
       describeSystemPressure(pressureDelta),
-      populationWasLocked ? "只生一个好，政府来养老。本轮所有人口变化均被回滚。" : ""
+      populationWasLocked ? "只生一个好，政府来养老。本年所有人口变化均被回滚。" : ""
     ]
       .filter(Boolean)
       .join(" "),
@@ -822,6 +822,33 @@ function doomEvent(rand, current) {
     };
   }
 
+  if (rand >= 1848 && rand <= 1862) {
+    return {
+      destroy: true,
+      type: "disaster",
+      title: "地壳回潮",
+      text: "远古海床重新隆起，城市像沉船一样被埋进盐壳和石灰岩。"
+    };
+  }
+
+  if (rand >= 4520 && rand <= 4536) {
+    return {
+      destroy: true,
+      type: "disaster",
+      title: "黑星凌日",
+      text: "一颗恒星在另一颗恒星前方变暗，潮汐和辐射同时失序，历法彻底失效。"
+    };
+  }
+
+  if (rand >= 8840 && rand <= 8857) {
+    return {
+      destroy: true,
+      type: "disaster",
+      title: "寒潮纪元",
+      text: "长夜提前降临，冰层越过赤道，火种和粮仓在同一周内熄灭。"
+    };
+  }
+
   if (rand > 0 && rand % 769 === 0) {
     return {
       destroy: true,
@@ -910,8 +937,8 @@ function specialEventFor(spec, rng) {
       type: "special",
       title: "Gender Equality - 两性平等",
       text: slowsGrowth
-        ? "女孩们只想玩乐。\n——辛迪·劳帕，1983年。\n人口增长策略转向审慎，本轮文明内人口增速变为原来的 2/3。"
-        : "新的家庭制度释放劳动与生育潜能，本轮文明内人口增速变为原来的 5/4。",
+        ? "女孩们只想玩乐。\n——辛迪·劳帕，1983年。\n人口增长策略转向审慎，本代文明内人口增速变为原来的 2/3。"
+        : "新的家庭制度释放劳动与生育潜能，本代文明内人口增速变为原来的 5/4。",
       delta: {},
       effect() {
         state.populationGrowthMultiplier = roundStat(state.populationGrowthMultiplier * factor);
@@ -923,7 +950,7 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "Union We Stand - 团结永存",
-      text: "所有派系暂时站在同一条防线上，本轮文明内发展与打压效率 ×2。",
+      text: "所有派系暂时站在同一条防线上，本代文明内发展与打压效率 ×2。",
       delta: {},
       effect() {
         state.controlEfficiencyMultiplier = roundStat(state.controlEfficiencyMultiplier * 2);
@@ -935,7 +962,7 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "Divide and Fall - 分崩离析",
-      text: "共同体碎裂。本轮文明内，玩家行动无法再控制 SC、BE、人口或经济的发展。",
+      text: "共同体碎裂。本代文明内，玩家行动无法再控制 SC、BE、人口或经济的发展。",
       delta: {},
       effect() {
         state.controlLocked = true;
@@ -990,7 +1017,7 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "Independence and Freedom - 独立自由",
-      text: "独立宣言扩散进学院和神殿，本轮文明内 SC/BE 正向增速 ×1.15。",
+      text: "独立宣言扩散进学院和神殿，本代文明内 SC/BE 正向增速 ×1.15。",
       delta: {},
       effect() {
         state.knowledgeGrowthMultiplier = roundStat(state.knowledgeGrowthMultiplier * 1.15);
@@ -1107,7 +1134,7 @@ function baseEvent(rand) {
     },
     {
       title: "星象安静",
-      text: "这一轮没有宏大的灾变，普通人的手艺和耐心反而推进了文明。",
+      text: "这一年没有宏大的灾变，普通人的手艺和耐心反而推进了文明。",
       delta: { sc: 36, be: 36, pop: 1500, eco: 5000, stability: 3 }
     },
     {
@@ -1319,7 +1346,7 @@ function collapseCivilization(event, before, rand) {
 
   addLog({
     type: "disaster",
-    title: `第 ${state.turn} 轮｜Rand ${formatRand(rand)}｜${event.title}`,
+    title: `第 ${state.turn} 年｜Rand ${formatRand(rand)}｜${event.title}`,
     text: `${event.text} 第 ${oldCount} 号文明在${event.title}中毁灭了，该文明进化至${scienceEra(before.sc)}。文明的种子仍在，等待重启文明。EERF 保存人口 ${formatNumber(restartPopulation)} 与少量知识。`,
     delta: diff(before, snapshot())
   });
@@ -1356,7 +1383,7 @@ function restartCivilizationFromPending() {
 
   addLog({
     type: "special",
-    title: `第 ${state.turn} 轮｜重启文明`,
+    title: `第 ${state.turn} 年｜重启文明`,
     text: `第 ${state.count} 号文明从 EERF 和废墟档案里醒来。`,
     delta: diff(before, snapshot())
   });
@@ -1790,7 +1817,7 @@ function renderLog() {
   if (!state.log.length) {
     const empty = document.createElement("li");
     empty.className = "progress";
-    empty.innerHTML = "<strong>编年史空白</strong><p>下一轮行动会写入新的记录。</p>";
+    empty.innerHTML = "<strong>编年史空白</strong><p>下一年行动会写入新的记录。</p>";
     dom.logList.append(empty);
     return;
   }
@@ -1831,7 +1858,7 @@ function renderArchive() {
       ? `特殊：${entry.specialEvents.slice(0, 2).join("、")}`
       : "特殊：无";
     item.innerHTML = `
-      <strong>第 ${entry.civilization} 号文明｜${formatNumber(entry.turns)} 轮</strong>
+      <strong>第 ${entry.civilization} 号文明｜${formatNumber(entry.turns)} 年</strong>
       <p>${entry.collapseCause || "未知终止"}｜${peak}</p>
       <p>${specials}</p>
     `;
@@ -1855,10 +1882,10 @@ function eerfStatusText() {
   }
 
   const level = state.eerfLevel || 0;
-  if (level <= 0) return `无地下种子库；下一轮初始人口 ${formatNumber(BASE_RESTART_POP)}`;
+  if (level <= 0) return `无地下种子库；下一代初始人口 ${formatNumber(BASE_RESTART_POP)}`;
   const estimate = computeRestartPopulation(snapshot());
   const knowledge = computeRestartKnowledge(snapshot());
-  return `灾后火种等级 ${level}；下一轮初始人口约 ${formatNumber(estimate)}；SC/BE 约 ${formatNumber(knowledge.sc)}/${formatNumber(knowledge.be)}`;
+  return `灾后火种等级 ${level}；下一代初始人口约 ${formatNumber(estimate)}；SC/BE 约 ${formatNumber(knowledge.sc)}/${formatNumber(knowledge.be)}`;
 }
 
 function drawSky() {
@@ -2509,7 +2536,7 @@ function loadState() {
     migrated.lastRand = Number.isFinite(Number(migrated.lastRand))
       ? clamp(Math.round(Number(migrated.lastRand)), 0, 9999)
       : null;
-    migrated.weather = String(migrated.weather || "等待第一轮观测");
+    migrated.weather = String(migrated.weather || "等待第一年观测");
     migrated.ending = String(migrated.ending || "文明尚未抵达终局");
     migrated.lastTone = String(migrated.lastTone || "quiet");
     migrated.specialNotice = migrated.specialNotice && typeof migrated.specialNotice === "object"
