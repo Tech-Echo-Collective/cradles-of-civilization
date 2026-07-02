@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>文明摇篮：终局</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body class="ending-body">
+    <main class="ending-shell" aria-label="文明摇篮终局">
+      <section class="ending-scene">
+        <h1 id="endingTitle">终局</h1>
+        <div class="ending-copy" id="endingCopy"></div>
+        <button id="restartButton" type="button">新世界</button>
+      </section>
+    </main>
+
+    <script src="endings.js"></script>
+    <script>
+      "use strict";
+
+      const GAME_STORE_KEY = "three-sun-chronicle:v1";
+      const ENDING_STORE_KEY = "three-sun-chronicle:ending:v1";
+      const endingTitle = document.querySelector("#endingTitle");
+      const endingCopy = document.querySelector("#endingCopy");
+      const restartButton = document.querySelector("#restartButton");
+
+      function readStoredEnding() {
+        try {
+          const raw = localStorage.getItem(ENDING_STORE_KEY);
+          return raw ? JSON.parse(raw) : null;
+        } catch {
+          return null;
+        }
+      }
+
+      function clearGame() {
+        try {
+          localStorage.removeItem(GAME_STORE_KEY);
+          localStorage.removeItem(ENDING_STORE_KEY);
+        } catch {
+          // Storage is optional for the static build.
+        }
+      }
+
+      const storedEnding = readStoredEnding();
+      const queryEnding = new URLSearchParams(window.location.search).get("ending");
+      const endingId = queryEnding || storedEnding?.id || "A";
+      const ending = window.THREE_SUN_ENDINGS?.[endingId] || {
+        name: `${endingId}结局`,
+        paragraphs: ["终局资料缺失。"],
+        quote: ""
+      };
+
+      document.title = `文明摇篮：${ending.name}`;
+      endingTitle.innerHTML = "";
+      ending.name.split("/").forEach((line) => {
+        const titleLine = document.createElement("span");
+        titleLine.className = "ending-title-line";
+        titleLine.textContent = line;
+        endingTitle.append(titleLine);
+      });
+      endingCopy.innerHTML = "";
+
+      ending.paragraphs.forEach((line) => {
+        const paragraph = document.createElement("p");
+        paragraph.textContent = line;
+        endingCopy.append(paragraph);
+      });
+
+      if (ending.quote) {
+        const quote = document.createElement("p");
+        quote.className = "ending-quote";
+        const italic = document.createElement("em");
+        const [quoteText, ...attributionParts] = ending.quote.split("——");
+        const quoteLine = document.createElement("span");
+        quoteLine.className = "quote-line";
+        quoteLine.textContent = quoteText;
+        italic.append(quoteLine);
+        if (attributionParts.length) {
+          const attribution = document.createElement("span");
+          attribution.className = "quote-attribution";
+          attribution.textContent = `——${attributionParts.join("——")}`;
+          italic.append(attribution);
+        }
+        quote.append(italic);
+        endingCopy.append(quote);
+      }
+
+      restartButton.addEventListener("click", () => {
+        clearGame();
+        window.location.href = new URL("index.html", window.location.href).href;
+      });
+    </script>
+  </body>
+</html>
