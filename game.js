@@ -414,13 +414,16 @@ function init() {
   syncUtilityButtonCopy();
   syncInspirationButtonCopy();
   const restoredState = loadState();
-  state = restoredState || createNewState();
-  state.loadedFromSave = Boolean(restoredState);
-  bindEvents();
-  if (state.finished && state.finalEnding?.id) {
-    goToEndingPage(state.finalEnding.id);
-    return;
+  if (restoredState?.finished) {
+    clearSavedRun();
+    clearStoredEnding();
+    state = createNewState();
+    saveState();
+  } else {
+    state = restoredState || createNewState();
+    state.loadedFromSave = Boolean(restoredState);
   }
+  bindEvents();
   if (maybeFinishGame({ kind: "load", trigger: "载入存档" })) return;
   updateEnding();
   render();
@@ -1932,11 +1935,36 @@ function prepareActionDelta(action, rawDelta, crisisAtRoundStart = false) {
     delta.pop *= controlEfficiency;
   }
 
+  if (actionPopulationWouldBreakFloor(action, delta.pop)) {
+    return {
+      locked: true,
+      delta: {},
+      text: `${action.label} 会让人口跌破最低可持续线 ${formatNumber(minimumSustainablePopulation())} POP。`
+    };
+  }
+
   return {
     locked: false,
     delta,
     text: action.chronicleText || action.text
   };
+}
+
+function projectedActionPopulationDelta(rawDelta = {}) {
+  if (typeof rawDelta.pop !== "number") return 0;
+
+  let popDelta = rawDelta.pop;
+  if (popDelta > 0) popDelta *= state.populationGrowthMultiplier || 1;
+  popDelta *= state.controlEfficiencyMultiplier || 1;
+  return popDelta;
+}
+
+function actionPopulationWouldBreakFloor(action, popDelta) {
+  if (!action || action.canRunWithZeroPopulation || typeof popDelta !== "number" || popDelta >= 0) {
+    return false;
+  }
+
+  return state.pop + popDelta < minimumSustainablePopulation();
 }
 
 function enforcePopulationLock() {
@@ -2432,7 +2460,7 @@ function finishGame(endingId, context = {}) {
     delta: diff(finalSnapshot, finalSnapshot)
   });
   saveFinalEnding();
-  saveState();
+  clearSavedRun();
   goToEndingPage(endingId);
 }
 
@@ -2455,6 +2483,14 @@ function saveFinalEnding() {
 function clearStoredEnding() {
   try {
     localStorage.removeItem(ENDING_STORE_KEY);
+  } catch {
+    // Storage may be unavailable in private contexts.
+  }
+}
+
+function clearSavedRun() {
+  try {
+    localStorage.removeItem(STORE_KEY);
   } catch {
     // Storage may be unavailable in private contexts.
   }
@@ -2585,7 +2621,8 @@ function renderActionButtons() {
     }
     if (!disabled && action && !action.crisisOnly && !action.restartOnly && !action.settleOnly) {
       const rawDelta = typeof action.delta === "function" ? action.delta(state) : action.delta;
-      disabled = Number(rawDelta.eco || 0) < 0 && state.eco < Math.abs(rawDelta.eco || 0);
+      disabled = (Number(rawDelta.eco || 0) < 0 && state.eco < Math.abs(rawDelta.eco || 0)) ||
+        actionPopulationWouldBreakFloor(action, projectedActionPopulationDelta(rawDelta));
     }
     button.disabled = disabled;
     button.setAttribute("aria-disabled", disabled ? "true" : "false");
