@@ -801,7 +801,14 @@ function advanceRound(actionId) {
   const event = eventFor(rand, before);
 
   if (event.destroy) {
-    if (!collapseCivilization(event, before, rand)) {
+    const collapseSnapshot = completeEerfActionBeforeDisaster(action, crisisAtRoundStart) || before;
+    const disasterEvent = collapseSnapshot === before
+      ? event
+      : {
+          ...event,
+          text: `EERF 工程赶在灾变抵达前完成最后一次封门。${event.text}`
+        };
+    if (!collapseCivilization(disasterEvent, collapseSnapshot, rand)) {
       state.rngState = rng.state;
       saveState();
       render();
@@ -960,13 +967,17 @@ function computeSystemPressure(current) {
   const sciencePressure = Math.max(0, scienceEraLevel - 2) * (1 - harmony * 0.88);
   const beliefPressure = Math.max(0, beliefEraLevel - 2) * (1 - harmony * 0.88);
   const harmonyLift = harmony > 0.72 ? Math.round((harmony - 0.72) * 46) : 0;
+  const orderRatio = clamp(current.stability, 0, 100) / 100;
+  const orderScienceLift = Math.max(0, Math.round((orderRatio - 0.44) * 30));
+  const beliefSuppression = Math.round(beliefPressure * (2.4 + beRatio * 9) * (1 - orderRatio * 0.28));
   const scPressure = clamp(
-    harmonyLift - Math.round(beliefPressure * (3 + beRatio * 14)),
+    harmonyLift + orderScienceLift - beliefSuppression,
     -95,
-    18
+    34
   );
+  const scienceSuppression = Math.round(sciencePressure * (3 + scRatio * 14) + scRatio * orderRatio * 12);
   const bePressure = clamp(
-    harmonyLift - Math.round(sciencePressure * (3 + scRatio * 14)),
+    harmonyLift - scienceSuppression,
     -95,
     18
   );
@@ -990,14 +1001,24 @@ function computeSystemPressure(current) {
   );
 
   const ecoPressure = computeSolowEconomyPressure(current, carryingCapacity, harmony, rivalry);
+  const orderPressure = computeOrderPressure(current, carryingCapacity, harmony, rivalry);
 
   return {
     sc: scPressure,
     be: bePressure,
     pop: popPressure,
     eco: ecoPressure,
-    stability: clamp(Math.round(harmony * 4 - rivalry * 5 - Math.max(0, current.pop - carryingCapacity) / 60000), -8, 5)
+    stability: orderPressure
   };
+}
+
+function computeOrderPressure(current, carryingCapacity, harmony, rivalry) {
+  const scRatio = current.sc / CAP;
+  const beRatio = current.be / CAP;
+  const overloadPenalty = Math.max(0, current.pop - carryingCapacity) / 42000;
+  const povertyPenalty = current.eco < current.pop * 0.22 ? 5 : 0;
+  const doctrineOrderTarget = 42 + beRatio * 58 + harmony * 12 - scRatio * 14 - rivalry * 6 - overloadPenalty - povertyPenalty;
+  return clamp(Math.round((doctrineOrderTarget - current.stability) / 10), -8, 9);
 }
 
 function computeSolowEconomyPressure(current, carryingCapacity, harmony, rivalry) {
@@ -1061,9 +1082,10 @@ function computeSolowEconomyPressure(current, carryingCapacity, harmony, rivalry
 function describeSystemPressure(delta) {
   const populationStress = delta.pop < -1000 ? "人口承载压力正在回收扩张。" : "";
   const economyStress = delta.eco < -3000 ? "经济维护成本吞噬了部分产出。" : "";
-  const harmonyBonus = delta.stability > 0 ? "科学与神学的相对均衡提高了秩序。" : "";
+  const orderBonus = delta.sc > 0 ? "秩序让学院、工坊与档案系统更快运转。" : "";
+  const doctrineOrder = delta.stability > 0 ? "神学共同体正在把松散人群重新编入秩序。" : "";
   const knowledgeStress = delta.sc < 0 || delta.be < 0 ? "知识结构的互斥开始显现。" : "";
-  return [populationStress, economyStress, harmonyBonus, knowledgeStress].filter(Boolean).join(" ");
+  return [populationStress, economyStress, orderBonus, doctrineOrder, knowledgeStress].filter(Boolean).join(" ");
 }
 
 function describeChronicleState(before, after, event, action) {
@@ -1948,6 +1970,24 @@ function prepareActionDelta(action, rawDelta, crisisAtRoundStart = false) {
     delta,
     text: action.chronicleText || action.text
   };
+}
+
+function completeEerfActionBeforeDisaster(action, crisisAtRoundStart = false) {
+  if (!isEerfConstructionAction(action)) return null;
+
+  const rawDelta = typeof action.delta === "function" ? action.delta(state) : action.delta;
+  const actionResult = prepareActionDelta(action, rawDelta, crisisAtRoundStart);
+  if (actionResult.locked) return null;
+
+  applyDelta(actionResult.delta, { freezeKnowledge: crisisAtRoundStart });
+  if (typeof action.effect === "function") {
+    action.effect();
+  }
+  return snapshot();
+}
+
+function isEerfConstructionAction(action) {
+  return action === ACTIONS.buildEerf || action === ACTIONS.upgradeEerf;
 }
 
 function projectedActionPopulationDelta(rawDelta = {}) {
