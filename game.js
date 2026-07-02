@@ -413,8 +413,15 @@ function init() {
   syncActionButtonCopy();
   syncUtilityButtonCopy();
   syncInspirationButtonCopy();
-  const restoredState = loadState();
-  if (restoredState?.finished) {
+  const querySeed = seedFromUrl();
+  const restoredState = querySeed ? null : loadState();
+  if (querySeed) {
+    clearSavedRun();
+    clearStoredEnding();
+    state = createNewState(querySeed);
+    saveState();
+    removeSeedFromUrl();
+  } else if (restoredState?.finished) {
     clearSavedRun();
     clearStoredEnding();
     state = createNewState();
@@ -428,6 +435,27 @@ function init() {
   updateEnding();
   render();
   drawSky();
+}
+
+function seedFromUrl() {
+  try {
+    const url = new URL(window.location.href);
+    const seed = url.searchParams.get("seed");
+    return seed && seed.trim() ? seed.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+function removeSeedFromUrl() {
+  try {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("seed")) return;
+    url.searchParams.delete("seed");
+    window.history?.replaceState?.({}, "", url.href);
+  } catch {
+    // URL cleanup is cosmetic; the seed has already been consumed.
+  }
 }
 
 function cacheDom() {

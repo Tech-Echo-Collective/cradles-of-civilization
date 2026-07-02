@@ -16,6 +16,16 @@
           <span>新世界</span>
           <span class="inline-shortcut" aria-hidden="true">Shift+N</span>
         </button>
+        <form class="seed-form ending-seed-form" id="endingSeedForm" autocomplete="off">
+          <label for="endingSeedInput">指定种子</label>
+          <div>
+            <input id="endingSeedInput" name="seed" inputmode="numeric" pattern="[0-9]*" placeholder="例如 1058">
+            <button id="endingSeedStartButton" type="submit" aria-label="使用指定种子开始，快捷键 Enter">
+              <span>开始</span>
+              <span class="inline-shortcut" aria-hidden="true">Enter</span>
+            </button>
+          </div>
+        </form>
       </section>
     </main>
 
@@ -29,6 +39,8 @@
       const endingCopy = document.querySelector("#endingCopy");
       const endingReward = document.querySelector("#endingReward");
       const restartButton = document.querySelector("#restartButton");
+      const endingSeedForm = document.querySelector("#endingSeedForm");
+      const endingSeedInput = document.querySelector("#endingSeedInput");
 
       function readStoredEnding() {
         try {
@@ -102,6 +114,20 @@
         window.location.href = new URL("index.html", window.location.href).href;
       }
 
+      function restartGameWithSeed(event) {
+        event.preventDefault();
+        const seedText = endingSeedInput.value.trim();
+        if (!seedText) {
+          restartGame();
+          return;
+        }
+
+        clearGame();
+        const url = new URL("index.html", window.location.href);
+        url.searchParams.set("seed", seedText);
+        window.location.href = url.href;
+      }
+
       function shouldIgnoreShortcut(event) {
         if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.repeat) return true;
         const target = event.target;
@@ -118,6 +144,7 @@
       }
 
       restartButton.addEventListener("click", restartGame);
+      endingSeedForm.addEventListener("submit", restartGameWithSeed);
       window.addEventListener("keydown", (event) => {
         if (shouldIgnoreShortcut(event)) return;
         if (event.key.toLowerCase() !== "n" || !event.shiftKey) return;
