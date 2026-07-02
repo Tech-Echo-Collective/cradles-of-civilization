@@ -19,6 +19,13 @@ const SCIENCE_RESTART_CAPS = [0, 750, 1450, 2200, 3000, 3800];
 const BELIEF_RESTART_RATE_MULTIPLIER = 1.08;
 const BELIEF_RESTART_CAPS = [0, 820, 1600, 2450, 3350, 4200];
 const C_AUTO_STREAK = 2;
+const C_STAGNANT_CIVILIZATION_STREAK = 3;
+const STAGNANT_CIVILIZATION_MIN_GAINS = {
+  sc: 80,
+  be: 80,
+  pop: 900,
+  eco: 15000
+};
 const INSPIRATION_REWARD_ENDING = "A";
 const INSPIRATION_REWARD_AMOUNT = 1;
 const INSPIRATION_STEP = 0.05;
@@ -325,6 +332,7 @@ function createNewState() {
     pendingRestart: null,
     endingCandidate: null,
     cEndingStreak: 0,
+    cStagnantCivilizationStreak: 0,
     finished: false,
     finalEnding: null,
     inspiration: loadInspirationProgress(),
@@ -359,6 +367,11 @@ function createCivilizationStats(civilization, startTurn, initialSnapshot = {}) 
     civilization,
     startTurn,
     turns: 0,
+    initialSc: snap.sc,
+    initialBe: snap.be,
+    initialPop: snap.pop,
+    initialEco: snap.eco,
+    initialStability: snap.stability,
     peakSc: snap.sc,
     peakBe: snap.be,
     peakPop: snap.pop,
@@ -831,7 +844,7 @@ function advanceRound(actionId) {
     if (!collapseCivilization(
       {
         title: "人口断代",
-        text: "从何时开始，文明掐死了自己的最后一个婴儿。万籁俱寂，一切必须重新开始。",
+        text: "从何时开始，文明掐死了自己的最后一个婴儿？万籁俱寂，一切重新开始。",
         type: "disaster"
       },
       before,
@@ -883,10 +896,10 @@ function advanceRound(actionId) {
   const after = snapshot();
   updateCivilizationStats(after, specialEvent?.title || null);
   const totalDelta = diff(before, after);
+  state.weather = [event.title, specialEvent?.title, action.label].filter(Boolean).join("；");
   const type = event.type === "special" || specialEvent || action.type === "special" || actionResult.locked
     ? "special"
     : "progress";
-  state.weather = [event.title, specialEvent?.title, action.label].filter(Boolean).join("；");
   state.lastTone = type;
   addLog({
     type,
@@ -1066,7 +1079,7 @@ function eventFor(rand, current) {
     return {
       type: "special",
       title: "微粒封锁假说",
-      text: "最先进的实验同时失败，学者怀疑宇宙本身在挤压文明的上限。",
+      text: "最先进的实验同时失败，前沿学者们耳语道，物理学不存在了。",
       delta: { sc: -50, be: 50, pop: -1200, eco: -18000, stability: -9 }
     };
   }
@@ -1075,7 +1088,7 @@ function eventFor(rand, current) {
     return {
       type: "special",
       title: "不信者税",
-      text: "天意如此，不信者自当征收重税。",
+      text: "不信者自当征收重税，神殿的账本上写满了他们的名字；天意如此。",
       delta: { sc: -50, be: 50, pop: -1600, eco: -22000, stability: -7 }
     };
   }
@@ -1084,7 +1097,7 @@ function eventFor(rand, current) {
     return {
       type: "special",
       title: "双相启示",
-      text: "公式与祷文在同一块石碑上闭合，文明短暂理解了自己的双重心脏。",
+      text: "公式与祷文不过是一体两面，经文和论文亦不过是双生的姊妹。这天，学者和祭司第一次在同一份日历上签名。",
       delta: { sc: 50, be: 50, pop: 4200, eco: 18000, stability: 10 }
     };
   }
@@ -1935,6 +1948,10 @@ function collapseCivilization(event, before, rand) {
   state.history.unshift(archived);
   state.history = state.history.slice(0, 12);
 
+  if (maybeFinishStagnantCivilizationCEnding(archived, before, rand)) {
+    return true;
+  }
+
   state.pendingRestart = {
     oldCount,
     nextCount: oldCount + 1,
@@ -2224,6 +2241,51 @@ function updateHiddenCEndingStreak(context = {}, current = snapshot()) {
   }
 
   return false;
+}
+
+function maybeFinishStagnantCivilizationCEnding(archived, current = snapshot(), rand = state.lastRand) {
+  if (!updateStagnantCivilizationCEndingStreak(archived)) return false;
+
+  finishGame("C", {
+    kind: "stagnant-civilizations",
+    trigger: `连续 ${C_STAGNANT_CIVILIZATION_STREAK} 代文明重启后均陷入停滞`,
+    rand,
+    snapshot: current
+  });
+  return true;
+}
+
+function updateStagnantCivilizationCEndingStreak(archived) {
+  if (state.finished || state.endingCandidate?.id) {
+    state.cStagnantCivilizationStreak = 0;
+    return false;
+  }
+
+  if (!isStagnantCivilization(archived)) {
+    state.cStagnantCivilizationStreak = 0;
+    return false;
+  }
+
+  state.cStagnantCivilizationStreak = Math.min(
+    C_STAGNANT_CIVILIZATION_STREAK,
+    Math.max(0, Math.round(state.cStagnantCivilizationStreak || 0)) + 1
+  );
+  return state.cStagnantCivilizationStreak >= C_STAGNANT_CIVILIZATION_STREAK;
+}
+
+function isStagnantCivilization(archived) {
+  if (!archived || archived.turns < 2) return false;
+
+  const gains = {
+    sc: finiteOr(archived.peakSc, 0) - finiteOr(archived.initialSc, 0),
+    be: finiteOr(archived.peakBe, 0) - finiteOr(archived.initialBe, 0),
+    pop: finiteOr(archived.peakPop, 0) - finiteOr(archived.initialPop, 0),
+    eco: finiteOr(archived.peakEco, 0) - finiteOr(archived.initialEco, 0)
+  };
+
+  return Object.entries(STAGNANT_CIVILIZATION_MIN_GAINS).every(([key, threshold]) => {
+    return gains[key] < threshold;
+  });
 }
 
 function resolveAutomaticEnding(context = {}, current = snapshot(), endingId = null) {
@@ -3303,6 +3365,11 @@ function loadState() {
       migrated.endingCandidate = null;
     }
     migrated.cEndingStreak = clamp(Math.round(finiteOr(migrated.cEndingStreak, 0)), 0, C_AUTO_STREAK);
+    migrated.cStagnantCivilizationStreak = clamp(
+      Math.round(finiteOr(migrated.cStagnantCivilizationStreak ?? migrated.cStagnationStreak, 0)),
+      0,
+      C_STAGNANT_CIVILIZATION_STREAK
+    );
     migrated.finished = Boolean(migrated.finished);
     migrated.finalEnding = migrated.finalEnding && typeof migrated.finalEnding === "object"
       ? migrated.finalEnding
@@ -3317,6 +3384,11 @@ function loadState() {
     migrated.currentCivilization = parsed.currentCivilization && typeof parsed.currentCivilization === "object"
       ? { ...fallbackCivilization, ...parsed.currentCivilization }
       : fallbackCivilization;
+    migrated.currentCivilization.initialSc = finiteOr(migrated.currentCivilization.initialSc, fallbackCivilization.initialSc);
+    migrated.currentCivilization.initialBe = finiteOr(migrated.currentCivilization.initialBe, fallbackCivilization.initialBe);
+    migrated.currentCivilization.initialPop = finiteOr(migrated.currentCivilization.initialPop, fallbackCivilization.initialPop);
+    migrated.currentCivilization.initialEco = finiteOr(migrated.currentCivilization.initialEco, fallbackCivilization.initialEco);
+    migrated.currentCivilization.initialStability = finiteOr(migrated.currentCivilization.initialStability, fallbackCivilization.initialStability);
     migrated.currentCivilization.peakSc = Math.max(finiteOr(migrated.currentCivilization.peakSc, 0), migrated.sc);
     migrated.currentCivilization.peakBe = Math.max(finiteOr(migrated.currentCivilization.peakBe, 0), migrated.be);
     migrated.currentCivilization.peakPop = Math.max(finiteOr(migrated.currentCivilization.peakPop, 0), migrated.pop);
