@@ -311,12 +311,13 @@ h2 {
 }
 
 .action-button {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: flex-start;
   gap: 10px;
   min-height: 96px;
-  padding: 11px 12px;
+  padding: 13px 58px 13px 12px;
   color: var(--ink);
   background: #202637;
   border: 1px solid #364057;
@@ -346,6 +347,12 @@ h2 {
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
 }
 
+.section-head button.shortcut-flash,
+#restartButton.shortcut-flash {
+  border-color: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
+}
+
 .action-button:disabled {
   color: #727b8e;
   background: #161b26;
@@ -357,6 +364,30 @@ h2 {
 .action-button:disabled .button-mark {
   color: #111721;
   background: #586174;
+}
+
+.shortcut-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-grid;
+  place-items: center;
+  min-width: 28px;
+  height: 24px;
+  padding: 0 7px;
+  color: #dfe7f2;
+  background: rgba(8, 12, 18, 0.64);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.action-button:disabled .shortcut-badge {
+  color: #6f7a8c;
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .crisis-action:not(:disabled) {
@@ -471,8 +502,13 @@ h2 {
 }
 
 .section-head button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   min-width: 74px;
   min-height: 32px;
+  padding: 0 9px;
   color: var(--ink);
   background: #242b3b;
   border: 1px solid #384259;
@@ -484,6 +520,22 @@ h2 {
 .section-head button:focus-visible {
   background: #2f3850;
   outline: none;
+}
+
+.inline-shortcut {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  height: 20px;
+  padding: 0 6px;
+  color: #dfe7f2;
+  background: rgba(8, 12, 18, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 5px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 #logList {
@@ -662,6 +714,10 @@ h2 {
 }
 
 #restartButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   justify-self: start;
   min-width: 112px;
   min-height: 42px;

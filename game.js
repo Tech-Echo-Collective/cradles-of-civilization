@@ -215,26 +215,31 @@ const ACTIONS = {
 };
 
 const ACTION_SHORTCUTS = [
-  { key: "s", actionId: "science" },
-  { key: "b", actionId: "belief" },
-  { key: "e", actionId: "economy" },
-  { key: "p", actionId: "population" },
-  { key: "r", actionId: "restartCivilization" },
-  { key: "b", shiftKey: true, actionId: "balance" },
-  { key: "h", actionId: "hibernate" },
-  { key: "o", actionId: "recovery" }
+  { key: "s", actionId: "science", label: "S" },
+  { key: "b", actionId: "belief", label: "B" },
+  { key: "p", actionId: "population", label: "P" },
+  { key: "b", shiftKey: true, actionId: "balance", label: "Shift+B" },
+  { key: "z", actionId: "order", label: "Z" },
+  { key: "1", actionId: "suppressBelief", label: "1" },
+  { key: "2", actionId: "suppressScience", label: "2" },
+  { key: "h", actionId: "hibernate", label: "H" },
+  { key: "e", actionId: "economy", label: "E" },
+  { key: "f", actionId: "buildEerf", label: "F" },
+  { key: "u", actionId: "upgradeEerf", label: "U" },
+  { key: "o", actionId: "recovery", label: "O" },
+  { key: "r", actionId: "restartCivilization", label: "R" },
+  { key: "t", actionId: "settleEnding", label: "T" }
 ];
 
-const ACTION_SHORTCUT_LABELS = {
-  science: "S",
-  belief: "B",
-  economy: "E",
-  population: "P",
-  restartCivilization: "R",
-  balance: "Shift+B",
-  hibernate: "H",
-  recovery: "O"
-};
+const ACTION_SHORTCUT_LABELS = ACTION_SHORTCUTS.reduce((labels, shortcut) => {
+  labels[shortcut.actionId] = shortcut.label;
+  return labels;
+}, {});
+
+const UTILITY_SHORTCUTS = [
+  { key: "l", shiftKey: true, buttonId: "clearLogButton", label: "Shift+L", run: clearChronicle },
+  { key: "n", shiftKey: true, buttonId: "newGameButton", label: "Shift+N", run: startNewGame }
+];
 
 const dom = {};
 let state = null;
@@ -361,6 +366,7 @@ function updateCivilizationStats(snapshotValue = snapshot(), specialEventTitle =
 function init() {
   cacheDom();
   syncActionButtonCopy();
+  syncUtilityButtonCopy();
   const restoredState = loadState();
   state = restoredState || createNewState();
   state.loadedFromSave = Boolean(restoredState);
@@ -423,7 +429,45 @@ function syncActionButtonCopy() {
     const accessibleName = shortcut ? `${action.label}，快捷键 ${shortcut}` : action.label;
     button.title = accessibleName;
     button.setAttribute("aria-label", accessibleName);
+    syncShortcutBadge(button, shortcut, "shortcut-badge");
   });
+}
+
+function syncUtilityButtonCopy() {
+  UTILITY_SHORTCUTS.forEach((shortcut) => {
+    const button = document.querySelector(`#${shortcut.buttonId}`);
+    if (!button) return;
+
+    const baseLabel = button.dataset.baseLabel || button.textContent.trim();
+    button.dataset.baseLabel = baseLabel;
+    button.textContent = "";
+
+    const label = document.createElement("span");
+    label.textContent = baseLabel;
+    button.append(label);
+    syncShortcutBadge(button, shortcut.label, "inline-shortcut");
+
+    const accessibleName = `${baseLabel}，快捷键 ${shortcut.label}`;
+    button.title = accessibleName;
+    button.setAttribute("aria-label", accessibleName);
+    button.setAttribute("aria-keyshortcuts", shortcut.label);
+  });
+}
+
+function syncShortcutBadge(button, label, className) {
+  const existing = Array.from(button.children).find((child) => child.classList.contains(className));
+  if (!label) {
+    existing?.remove();
+    button.removeAttribute("aria-keyshortcuts");
+    return;
+  }
+
+  const badge = existing || document.createElement("span");
+  badge.className = className;
+  badge.setAttribute("aria-hidden", "true");
+  badge.textContent = label;
+  if (!existing) button.append(badge);
+  button.setAttribute("aria-keyshortcuts", label);
 }
 
 function bindEvents() {
@@ -431,19 +475,9 @@ function bindEvents() {
     button.addEventListener("click", () => advanceRound(button.dataset.action));
   });
 
-  dom.newGameButton.addEventListener("click", () => {
-    clearStoredEnding();
-    state = createNewState();
-    saveState();
-    render();
-  });
+  dom.newGameButton.addEventListener("click", startNewGame);
 
-  dom.clearLogButton.addEventListener("click", () => {
-    state.log = [];
-    saveState();
-    if (dom.saveStatus) dom.saveStatus.textContent = saveStatusText();
-    renderLog();
-  });
+  dom.clearLogButton.addEventListener("click", clearChronicle);
 
   window.addEventListener("resize", () => {
     renderSkyFrame(performance.now());
@@ -456,6 +490,8 @@ function handleShortcut(event) {
   if (shouldIgnoreShortcut(event)) return;
 
   const key = event.key.toLowerCase();
+  if (handleUtilityShortcut(event, key)) return;
+
   const shortcut = ACTION_SHORTCUTS.find((item) => {
     return item.key === key && Boolean(item.shiftKey) === event.shiftKey;
   });
@@ -467,6 +503,35 @@ function handleShortcut(event) {
   event.preventDefault();
   flashShortcutButton(button);
   advanceRound(shortcut.actionId);
+}
+
+function handleUtilityShortcut(event, key) {
+  const shortcut = UTILITY_SHORTCUTS.find((item) => {
+    return item.key === key && Boolean(item.shiftKey) === event.shiftKey;
+  });
+  if (!shortcut) return false;
+
+  const button = document.querySelector(`#${shortcut.buttonId}`);
+  if (!button || button.disabled) return false;
+
+  event.preventDefault();
+  flashShortcutButton(button);
+  shortcut.run();
+  return true;
+}
+
+function startNewGame() {
+  clearStoredEnding();
+  state = createNewState();
+  saveState();
+  render();
+}
+
+function clearChronicle() {
+  state.log = [];
+  saveState();
+  if (dom.saveStatus) dom.saveStatus.textContent = saveStatusText();
+  renderLog();
 }
 
 function shouldIgnoreShortcut(event) {

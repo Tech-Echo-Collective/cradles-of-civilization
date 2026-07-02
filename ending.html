@@ -11,7 +11,10 @@
       <section class="ending-scene">
         <h1 id="endingTitle">终局</h1>
         <div class="ending-copy" id="endingCopy"></div>
-        <button id="restartButton" type="button">新世界</button>
+        <button id="restartButton" type="button" aria-label="新世界，快捷键 Shift+N" aria-keyshortcuts="Shift+N">
+          <span>新世界</span>
+          <span class="inline-shortcut" aria-hidden="true">Shift+N</span>
+        </button>
       </section>
     </main>
 
@@ -87,9 +90,33 @@
         endingCopy.append(quote);
       }
 
-      restartButton.addEventListener("click", () => {
+      function restartGame() {
         clearGame();
         window.location.href = new URL("index.html", window.location.href).href;
+      }
+
+      function shouldIgnoreShortcut(event) {
+        if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.repeat) return true;
+        const target = event.target;
+        if (!target || target === document.body) return false;
+        const tagName = target.tagName;
+        return target.isContentEditable || tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT";
+      }
+
+      function flashRestartButton() {
+        restartButton.classList.remove("shortcut-flash");
+        void restartButton.offsetWidth;
+        restartButton.classList.add("shortcut-flash");
+        window.setTimeout(() => restartButton.classList.remove("shortcut-flash"), 180);
+      }
+
+      restartButton.addEventListener("click", restartGame);
+      window.addEventListener("keydown", (event) => {
+        if (shouldIgnoreShortcut(event)) return;
+        if (event.key.toLowerCase() !== "n" || !event.shiftKey) return;
+        event.preventDefault();
+        flashRestartButton();
+        restartGame();
       });
     </script>
   </body>
