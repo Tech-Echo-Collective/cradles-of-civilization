@@ -304,8 +304,8 @@ function normalizeSeed(value) {
   return seed > 0 ? seed : 1;
 }
 
-function createNewState() {
-  const seed = normalizeSeed(Date.now());
+function createNewState(seedValue = Date.now()) {
+  const seed = normalizeSeed(seedValue);
   const initialSnapshot = {
     sc: 240,
     be: 360,
@@ -456,6 +456,9 @@ function cacheDom() {
   dom.specialText = document.querySelector("#specialText");
   dom.specialDelta = document.querySelector("#specialDelta");
   dom.seedValue = document.querySelector("#seedValue");
+  dom.seedForm = document.querySelector("#seedForm");
+  dom.seedInput = document.querySelector("#seedInput");
+  dom.seedStartButton = document.querySelector("#seedStartButton");
   dom.saveStatus = document.querySelector("#saveStatus");
   dom.inspirationStatus = document.querySelector("#inspirationStatus");
   dom.inspirationCost = document.querySelector("#inspirationCost");
@@ -552,6 +555,7 @@ function bindEvents() {
   });
 
   dom.newGameButton.addEventListener("click", startNewGame);
+  dom.seedForm?.addEventListener("submit", startNewGameFromSeed);
 
   dom.clearLogButton.addEventListener("click", clearChronicle);
 
@@ -617,8 +621,24 @@ function handleInspirationShortcut(event, key) {
 }
 
 function startNewGame() {
+  startNewGameWithSeed(Date.now());
+}
+
+function startNewGameFromSeed(event) {
+  event.preventDefault();
+  const seedText = dom.seedInput?.value.trim() || "";
+  if (!seedText) {
+    startNewGame();
+    return;
+  }
+
+  startNewGameWithSeed(seedText);
+}
+
+function startNewGameWithSeed(seedValue) {
   clearStoredEnding();
-  state = createNewState();
+  state = createNewState(seedValue);
+  if (dom.seedInput) dom.seedInput.value = "";
   saveState();
   render();
 }

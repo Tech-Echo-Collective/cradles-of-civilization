@@ -205,6 +205,16 @@
               <h2>规则</h2>
               <button id="newGameButton" type="button">新世界</button>
             </div>
+            <form class="seed-form" id="seedForm" autocomplete="off">
+              <label for="seedInput">指定种子</label>
+              <div>
+                <input id="seedInput" name="seed" inputmode="numeric" pattern="[0-9]*" placeholder="例如 1058">
+                <button id="seedStartButton" type="submit" aria-label="使用指定种子开始，快捷键 Enter">
+                  <span>开始</span>
+                  <span class="inline-shortcut" aria-hidden="true">Enter</span>
+                </button>
+              </div>
+            </form>
             <dl>
               <div>
                 <dt>种子</dt>
