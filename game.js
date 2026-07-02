@@ -12,9 +12,9 @@ const ENDING_STORE_KEY = "three-sun-chronicle:ending:v1";
 const ENDING_PAGE = "ending.html";
 const RNG_MOD = 2147483647;
 const RNG_MUL = 48271;
-const KNOWLEDGE_RESTART_RATES = [0, 0.02, 0.038, 0.058, 0.08, 0.105];
-const KNOWLEDGE_RESTART_CAPS = [0, 420, 860, 1380, 2050, 2800];
-const C_AUTO_STREAK = 3;
+const KNOWLEDGE_RESTART_RATES = [0, 0.026, 0.05, 0.074, 0.102, 0.135];
+const KNOWLEDGE_RESTART_CAPS = [0, 520, 1050, 1650, 2400, 3300];
+const C_AUTO_STREAK = 2;
 const ENDING_THRESHOLDS = {
   dominanceRatio: 1.28,
   reformHigh: 18500,
@@ -23,8 +23,8 @@ const ENDING_THRESHOLDS = {
   balancedKnowledge: 14500,
   middleScience: 12500,
   lowKnowledge: 7000,
-  bronzeScience: 2600,
-  faithfulCollapse: 9000,
+  bronzeScience: 1800,
+  faithfulCollapse: 12000,
   exodusPopulation: 50000,
   exodusEconomy: 120000,
   promisedEconomy: 150000,
@@ -786,7 +786,7 @@ function eventFor(rand, current) {
 }
 
 function doomEvent(rand, current) {
-  if (rand < 86) {
+  if (rand < 130) {
     return {
       destroy: true,
       type: "disaster",
@@ -795,7 +795,7 @@ function doomEvent(rand, current) {
     };
   }
 
-  if (rand >= 2980 && rand <= 3016) {
+  if (rand >= 2968 && rand <= 3024) {
     return {
       destroy: true,
       type: "disaster",
@@ -804,7 +804,7 @@ function doomEvent(rand, current) {
     };
   }
 
-  if (rand >= 7388 && rand <= 7417) {
+  if (rand >= 7375 && rand <= 7429) {
     return {
       destroy: true,
       type: "disaster",
@@ -813,7 +813,16 @@ function doomEvent(rand, current) {
     };
   }
 
-  if (rand > 0 && rand % 997 === 0) {
+  if (rand >= 6140 && rand <= 6165) {
+    return {
+      destroy: true,
+      type: "disaster",
+      title: "烈焰长夜",
+      text: "天空在同一天内经历正午与深夜，热浪和冰霜轮流碾过地表。"
+    };
+  }
+
+  if (rand > 0 && rand % 769 === 0) {
     return {
       destroy: true,
       type: "disaster",
@@ -1359,10 +1368,10 @@ function computeRestartPopulation(snapshotValue) {
   const level = state.eerfLevel || 0;
   if (level <= 0) return BASE_RESTART_POP;
 
-  const preserveRates = [0, 0.035, 0.07, 0.11, 0.165, 0.24];
-  const base = BASE_RESTART_POP + level * 1250;
+  const preserveRates = [0, 0.045, 0.085, 0.13, 0.19, 0.28];
+  const base = BASE_RESTART_POP + level * 1450;
   const preserved = Math.round(snapshotValue.pop * preserveRates[level]);
-  return clamp(base + preserved, BASE_RESTART_POP, 82000);
+  return clamp(base + preserved, BASE_RESTART_POP, 95000);
 }
 
 function computeRestartKnowledge(snapshotValue) {
