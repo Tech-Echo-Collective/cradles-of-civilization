@@ -6,6 +6,7 @@ const DEFAULT_ECO = 50000;
 const ECO_METER_CAP = 300000;
 const EERF_MAX_LEVEL = 5;
 const BASE_RESTART_POP = 2600;
+const MIN_SUSTAINABLE_POP = 1200;
 const SAVE_VERSION = 2;
 const STORE_KEY = "three-sun-chronicle:v1";
 const ENDING_STORE_KEY = "three-sun-chronicle:ending:v1";
@@ -20,11 +21,13 @@ const BELIEF_RESTART_RATE_MULTIPLIER = 1.08;
 const BELIEF_RESTART_CAPS = [0, 820, 1600, 2450, 3350, 4200];
 const C_AUTO_STREAK = 2;
 const C_STAGNANT_CIVILIZATION_STREAK = 3;
+const STAGNANT_LOW_KNOWLEDGE_CEILING = 500;
+const STAGNANT_TAKEOFF_KNOWLEDGE_CEILING = 900;
 const STAGNANT_CIVILIZATION_MIN_GAINS = {
-  sc: 80,
-  be: 80,
-  pop: 900,
-  eco: 15000
+  sc: 220,
+  be: 220,
+  pop: 5200,
+  eco: 45000
 };
 const INSPIRATION_REWARD_ENDING = "A";
 const INSPIRATION_REWARD_AMOUNT = 1;
@@ -160,8 +163,8 @@ const ACTIONS = {
       return {
         sc: -8,
         be: -6,
-        pop: -Math.max(0, Math.round(state.pop * 0.012)),
-        eco: Math.round(16000 + Math.sqrt(Math.max(0, state.pop)) * 68 + state.stability * 160),
+        pop: -Math.max(0, Math.round(state.pop * 0.008)),
+        eco: Math.round(18000 + Math.sqrt(Math.max(0, state.pop)) * 72 + state.stability * 190),
         stability: -1
       };
     },
@@ -204,7 +207,7 @@ const ACTIONS = {
     crisisOnly: true,
     canRunWithZeroPopulation: true,
     delta(state) {
-      const relief = Math.max(18000, Math.round(Math.sqrt(Math.max(1, state.pop)) * 115 + state.stability * 260));
+      const relief = Math.max(24000, Math.round(Math.sqrt(Math.max(1, state.pop)) * 130 + state.stability * 320));
       const seedPopulation = state.pop <= 0 ? 3000 : 0;
       return {
         sc: -25,
@@ -803,15 +806,18 @@ function advanceRound(actionId) {
     return;
   }
 
-  applyDelta(drift, { freezeKnowledge: crisisAtRoundStart });
+  applyDelta(drift, { freezeKnowledge: crisisAtRoundStart, protectPopulationFloor: true });
   if (maybeFinishGame({ kind: "drift", trigger: event.title, rand })) return;
-  applyDelta(event.delta, { freezeKnowledge: crisisAtRoundStart });
+  applyDelta(event.delta, { freezeKnowledge: crisisAtRoundStart, protectPopulationFloor: true });
   if (maybeFinishGame({ kind: "event", trigger: event.title, rand })) return;
 
   const specialEvent = specialEventFor(spec, rng);
   state.rngState = rng.state;
   if (specialEvent) {
-    const specialDelta = applySpecialEvent(specialEvent, { freezeKnowledge: crisisAtRoundStart });
+    const specialDelta = applySpecialEvent(specialEvent, {
+      freezeKnowledge: crisisAtRoundStart,
+      protectPopulationFloor: !specialEvent.piercesPopulationProtection
+    });
     state.specialNotice = {
       title: specialEvent.title,
       text: specialEvent.text,
@@ -928,12 +934,15 @@ function computeDrift(rand, current) {
   const orderNoise = (Math.floor(rand / 1000) % 9) - 4;
   const lowOrderPenalty = current.stability < 30 ? 900 : 0;
   const highOrderBonus = current.stability > 72 ? 650 : 0;
+  const lowEconomyBuffer = current.eco > 0 && current.eco < 42000
+    ? (42000 - current.eco) * 0.032
+    : 0;
 
   return {
     sc: clamp(Math.round(scNoise * 14 + current.sc * 0.004 - current.be * 0.001), -50, 50),
     be: clamp(Math.round(beNoise * 14 + current.be * 0.004 - current.sc * 0.001), -50, 50),
     pop: Math.round(current.pop * (0.004 + current.stability / 18000) + popNoise * 70 - lowOrderPenalty + highOrderBonus),
-    eco: Math.round(Math.sqrt(Math.max(0, current.eco)) * 6 + current.stability * 5 - current.pop * 0.006 - (state.eerfLevel || 0) * 900),
+    eco: Math.round(Math.sqrt(Math.max(0, current.eco)) * 6.5 + current.stability * 7 - current.pop * 0.004 - (state.eerfLevel || 0) * 720 + lowEconomyBuffer),
     stability: orderNoise
   };
 }
@@ -960,39 +969,41 @@ function computeSystemPressure(current) {
   );
 
   const carryingCapacity = civilizationCarryingCapacity(current);
+  const populationRatio = carryingCapacity > 0 ? current.pop / carryingCapacity : 1;
   const economyFactor = current.eco <= 0
-    ? 0.15
-    : clamp(Math.log10(current.eco + 10) / 6, 0.22, 1);
-  const medicineFactor = 0.65 + scRatio * 0.8;
-  const orderFactor = 0.68 + beRatio * 0.64 + harmony * 0.18;
-  const birthRate = 0.0022 + beRatio * 0.0034 + scRatio * 0.0012;
-  const overloadPenalty = current.pop > carryingCapacity
-    ? (current.pop - carryingCapacity) * (0.028 + rivalry * 0.016)
-    : 0;
-  const povertyPenalty = current.eco < current.pop * 0.32
-    ? current.pop * (0.008 + rivalry * 0.006)
+    ? 0.72
+    : 0.82 + clamp(Math.log10(current.eco + 10) / 6, 0, 1) * 0.24;
+  const knowledgePopulationLift = 1 + scRatio * 0.18 + beRatio * 0.16 + harmony * 0.08;
+  const orderPopulationLift = 0.9 + clamp(current.stability, 0, 100) / 500;
+  const logisticRate = 0.012 * economyFactor * knowledgePopulationLift * orderPopulationLift;
+  const logisticPopulation = current.pop * logisticRate * (1 - populationRatio);
+  const povertyPenalty = current.eco < current.pop * 0.22
+    ? current.pop * (0.0028 + rivalry * 0.0024)
     : 0;
   const popPressure = clamp(
-    Math.round(current.pop * birthRate * medicineFactor * orderFactor * economyFactor - overloadPenalty - povertyPenalty),
-    -60000,
-    12000
+    Math.round(logisticPopulation - povertyPenalty),
+    -45000,
+    9000
   );
 
-  const laborBase = Math.sqrt(Math.max(0, current.pop)) * 38;
-  const scienceProductivity = 0.72 + scRatio * 1.45;
-  const beliefOrder = 0.7 + beRatio * 0.8;
+  const laborBase = Math.sqrt(Math.max(0, current.pop)) * 44;
+  const scienceProductivity = 0.76 + scRatio * 1.35;
+  const beliefOrder = 0.74 + beRatio * 0.72;
   const harmonyEconomy = 0.86 + harmony * 0.38;
-  const eerfUpkeep = (state.eerfLevel || 0) * 3500;
-  const treasuryDrag = current.eco > 220000 ? (current.eco - 220000) * 0.1 : 0;
-  const upkeep = current.pop * 0.055 + (current.sc + current.be) * 0.18 + eerfUpkeep + treasuryDrag;
+  const eerfUpkeep = (state.eerfLevel || 0) * 3100;
+  const treasuryDrag = current.eco > 260000 ? (current.eco - 260000) * 0.08 : 0;
+  const upkeep = current.pop * 0.048 + (current.sc + current.be) * 0.16 + eerfUpkeep + treasuryDrag;
   const overloadCost = current.pop > carryingCapacity
-    ? (current.pop - carryingCapacity) * 0.07
+    ? (current.pop - carryingCapacity) * 0.055
     : 0;
-  const rivalryCost = rivalry * (2600 + (current.sc + current.be) * 0.09);
+  const rivalryCost = rivalry * (1850 + (current.sc + current.be) * 0.065);
+  const lowEconomyLift = current.eco > 0 && current.eco < 65000
+    ? (65000 - current.eco) * 0.04
+    : 0;
   const ecoPressure = clamp(
-    Math.round(laborBase * scienceProductivity * beliefOrder * harmonyEconomy - upkeep - overloadCost - rivalryCost),
-    -120000,
-    90000
+    Math.round(laborBase * scienceProductivity * beliefOrder * harmonyEconomy + lowEconomyLift - upkeep - overloadCost - rivalryCost),
+    -90000,
+    95000
   );
 
   return {
@@ -2058,12 +2069,35 @@ function eerfScienceRequirementForLevel(level) {
 function applyDelta(delta, options = {}) {
   const effectiveDelta = applyEconomicCrisisRules(delta, options);
   applyInspirationBonuses(effectiveDelta);
+  if (options.protectPopulationFloor) {
+    effectiveDelta.pop = protectedPopulationDelta(Number(effectiveDelta.pop || 0));
+  }
   state.sc = clamp(roundStat(state.sc + Number(effectiveDelta.sc || 0)), 0, CAP);
   state.be = clamp(roundStat(state.be + Number(effectiveDelta.be || 0)), 0, CAP);
   state.pop = Math.max(0, Math.round(state.pop + (effectiveDelta.pop || 0)));
   state.eco = Math.max(0, Math.round(state.eco + (effectiveDelta.eco || 0)));
   state.stability = clamp(state.stability + Math.round(effectiveDelta.stability || 0), 0, 100);
   return effectiveDelta;
+}
+
+function protectedPopulationDelta(popDelta) {
+  if (!Number.isFinite(popDelta) || popDelta >= 0) return popDelta || 0;
+
+  const floor = minimumSustainablePopulation(snapshot());
+  if (state.pop <= floor) return 0;
+
+  return Math.max(popDelta, floor - state.pop);
+}
+
+function minimumSustainablePopulation(current = snapshot()) {
+  const knowledgeBuffer = clamp((finiteOr(current.sc, 0) + finiteOr(current.be, 0)) / (CAP * 2), 0, 1) * 260;
+  const economyBuffer = clamp(Math.log10(Math.max(1, finiteOr(current.eco, 0)) + 10) / 6, 0, 1) * 220;
+  const orderBuffer = clamp(finiteOr(current.stability, 0), 0, 100) >= 70
+    ? 180
+    : clamp(finiteOr(current.stability, 0), 0, 100) >= 40
+      ? 90
+      : 0;
+  return Math.round(MIN_SUSTAINABLE_POP + knowledgeBuffer + economyBuffer + orderBuffer);
 }
 
 function applyInspirationBonuses(delta = {}) {
@@ -2274,7 +2308,7 @@ function updateStagnantCivilizationCEndingStreak(archived) {
 }
 
 function isStagnantCivilization(archived) {
-  if (!archived || archived.turns < 2) return false;
+  if (!archived || archived.turns < 1) return false;
 
   const gains = {
     sc: finiteOr(archived.peakSc, 0) - finiteOr(archived.initialSc, 0),
@@ -2283,9 +2317,23 @@ function isStagnantCivilization(archived) {
     eco: finiteOr(archived.peakEco, 0) - finiteOr(archived.initialEco, 0)
   };
 
-  return Object.entries(STAGNANT_CIVILIZATION_MIN_GAINS).every(([key, threshold]) => {
+  const peakSc = finiteOr(archived.peakSc, 0);
+  const peakBe = finiteOr(archived.peakBe, 0);
+  const peakEerf = finiteOr(archived.peakEerf, 0);
+  const lowKnowledgeTrap = peakSc <= STAGNANT_LOW_KNOWLEDGE_CEILING &&
+    peakBe <= STAGNANT_LOW_KNOWLEDGE_CEILING;
+  const noKnowledgeTakeoff = peakSc <= STAGNANT_TAKEOFF_KNOWLEDGE_CEILING &&
+    peakBe <= STAGNANT_TAKEOFF_KNOWLEDGE_CEILING &&
+    gains.sc < STAGNANT_CIVILIZATION_MIN_GAINS.sc &&
+    gains.be < STAGNANT_CIVILIZATION_MIN_GAINS.be;
+  const noMaterialTakeoff = gains.pop < STAGNANT_CIVILIZATION_MIN_GAINS.pop &&
+    gains.eco < STAGNANT_CIVILIZATION_MIN_GAINS.eco &&
+    peakEerf <= 0;
+  const allAxesStalled = Object.entries(STAGNANT_CIVILIZATION_MIN_GAINS).every(([key, threshold]) => {
     return gains[key] < threshold;
   });
+
+  return lowKnowledgeTrap || (noKnowledgeTakeoff && noMaterialTakeoff) || allAxesStalled;
 }
 
 function resolveAutomaticEnding(context = {}, current = snapshot(), endingId = null) {
