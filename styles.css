@@ -348,6 +348,7 @@ h2 {
 }
 
 .section-head button.shortcut-flash,
+.inspiration-actions button.shortcut-flash,
 #restartButton.shortcut-flash {
   border-color: rgba(255, 255, 255, 0.8);
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
@@ -613,6 +614,79 @@ h2 {
   line-height: 1.5;
 }
 
+.inspiration-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.inspiration-panel p {
+  color: #cbd5e1;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.inspiration-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.inspiration-actions button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 46px;
+  padding: 8px;
+  color: var(--ink);
+  background: #202637;
+  border: 1px solid #364057;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.inspiration-actions button:hover,
+.inspiration-actions button:focus-visible {
+  background: #2a3247;
+  border-color: #61708e;
+  outline: none;
+}
+
+.inspiration-actions button:disabled {
+  color: #6f7a8c;
+  background: #161b26;
+  border-color: #252d3d;
+  cursor: not-allowed;
+}
+
+.inspiration-name,
+.inspiration-detail {
+  min-width: 0;
+  text-align: left;
+}
+
+.inspiration-name {
+  grid-column: 1;
+  grid-row: 1;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.inspiration-detail {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  color: #aeb9c8;
+  font-size: 0.7rem;
+}
+
+.inspiration-actions .inline-shortcut {
+  grid-column: 2;
+  grid-row: 1;
+}
+
 .archive-panel {
   display: grid;
   gap: 10px;
@@ -711,6 +785,17 @@ h2 {
   padding-left: 24px;
   text-align: left;
   direction: ltr;
+}
+
+.ending-reward {
+  justify-self: start;
+  padding: 7px 10px;
+  color: #f5d579;
+  background: rgba(244, 201, 93, 0.1);
+  border: 1px solid rgba(244, 201, 93, 0.32);
+  border-radius: 7px;
+  font-size: 0.86rem;
+  font-weight: 800;
 }
 
 #restartButton {

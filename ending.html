@@ -11,6 +11,7 @@
       <section class="ending-scene">
         <h1 id="endingTitle">终局</h1>
         <div class="ending-copy" id="endingCopy"></div>
+        <p class="ending-reward" id="endingReward" hidden></p>
         <button id="restartButton" type="button" aria-label="新世界，快捷键 Shift+N" aria-keyshortcuts="Shift+N">
           <span>新世界</span>
           <span class="inline-shortcut" aria-hidden="true">Shift+N</span>
@@ -26,6 +27,7 @@
       const ENDING_STORE_KEY = "three-sun-chronicle:ending:v1";
       const endingTitle = document.querySelector("#endingTitle");
       const endingCopy = document.querySelector("#endingCopy");
+      const endingReward = document.querySelector("#endingReward");
       const restartButton = document.querySelector("#restartButton");
 
       function readStoredEnding() {
@@ -88,6 +90,11 @@
         }
         quote.append(italic);
         endingCopy.append(quote);
+      }
+
+      if (storedEnding?.inspirationReward?.amount) {
+        endingReward.hidden = false;
+        endingReward.textContent = `造物灵感 +${storedEnding.inspirationReward.amount}`;
       }
 
       function restartGame() {

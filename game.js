@@ -9,12 +9,18 @@ const BASE_RESTART_POP = 2600;
 const SAVE_VERSION = 2;
 const STORE_KEY = "three-sun-chronicle:v1";
 const ENDING_STORE_KEY = "three-sun-chronicle:ending:v1";
+const INSPIRATION_STORE_KEY = "three-sun-chronicle:inspiration:v1";
 const ENDING_PAGE = "ending.html";
 const RNG_MOD = 2147483647;
 const RNG_MUL = 48271;
 const KNOWLEDGE_RESTART_RATES = [0, 0.026, 0.05, 0.074, 0.102, 0.135];
 const KNOWLEDGE_RESTART_CAPS = [0, 520, 1050, 1650, 2400, 3300];
 const C_AUTO_STREAK = 2;
+const INSPIRATION_REWARD_ENDING = "A";
+const INSPIRATION_REWARD_AMOUNT = 1;
+const INSPIRATION_STEP = 0.05;
+const INSPIRATION_MAX_LEVEL = 5;
+const INSPIRATION_TIER_SIZE = 5;
 const ENDING_THRESHOLDS = {
   dominanceRatio: 1.28,
   reformHigh: 18500,
@@ -64,6 +70,13 @@ const BELIEF_ERAS = [
   { threshold: 18000, name: "唯有上帝" },
   { threshold: 20000, name: "天国王朝" }
 ];
+
+const INSPIRATION_TRACKS = {
+  science: { label: "科学", stat: "sc", shortLabel: "SC" },
+  belief: { label: "神学", stat: "be", shortLabel: "BE" },
+  economy: { label: "经济", stat: "eco", shortLabel: "ECO" },
+  population: { label: "人口", stat: "pop", shortLabel: "POP" }
+};
 
 const ACTIONS = {
   science: {
@@ -241,6 +254,18 @@ const UTILITY_SHORTCUTS = [
   { key: "n", shiftKey: true, buttonId: "newGameButton", label: "Shift+N", run: startNewGame }
 ];
 
+const INSPIRATION_SHORTCUTS = [
+  { key: "s", shiftKey: true, trackId: "science", label: "Shift+S" },
+  { key: "y", shiftKey: true, trackId: "belief", label: "Shift+Y" },
+  { key: "e", shiftKey: true, trackId: "economy", label: "Shift+E" },
+  { key: "p", shiftKey: true, trackId: "population", label: "Shift+P" }
+];
+
+const INSPIRATION_SHORTCUT_LABELS = INSPIRATION_SHORTCUTS.reduce((labels, shortcut) => {
+  labels[shortcut.trackId] = shortcut.label;
+  return labels;
+}, {});
+
 const dom = {};
 let state = null;
 let frameHandle = 0;
@@ -299,6 +324,7 @@ function createNewState() {
     cEndingStreak: 0,
     finished: false,
     finalEnding: null,
+    inspiration: loadInspirationProgress(),
     lastRand: null,
     lastTone: "quiet",
     specialNotice: null,
@@ -367,6 +393,7 @@ function init() {
   cacheDom();
   syncActionButtonCopy();
   syncUtilityButtonCopy();
+  syncInspirationButtonCopy();
   const restoredState = loadState();
   state = restoredState || createNewState();
   state.loadedFromSave = Boolean(restoredState);
@@ -408,6 +435,9 @@ function cacheDom() {
   dom.specialDelta = document.querySelector("#specialDelta");
   dom.seedValue = document.querySelector("#seedValue");
   dom.saveStatus = document.querySelector("#saveStatus");
+  dom.inspirationStatus = document.querySelector("#inspirationStatus");
+  dom.inspirationCost = document.querySelector("#inspirationCost");
+  dom.inspirationButtons = Array.from(document.querySelectorAll("[data-inspiration]"));
   dom.logList = document.querySelector("#logList");
   dom.archiveList = document.querySelector("#archiveList");
   dom.skyCanvas = document.querySelector("#skyCanvas");
@@ -454,6 +484,30 @@ function syncUtilityButtonCopy() {
   });
 }
 
+function syncInspirationButtonCopy() {
+  dom.inspirationButtons.forEach((button) => {
+    const trackId = button.dataset.inspiration;
+    const track = INSPIRATION_TRACKS[trackId];
+    if (!track) return;
+
+    const shortcut = INSPIRATION_SHORTCUT_LABELS[trackId];
+    button.dataset.baseLabel = track.label;
+    button.innerHTML = "";
+
+    const label = document.createElement("span");
+    label.className = "inspiration-name";
+    label.textContent = track.label;
+    const detail = document.createElement("small");
+    detail.className = "inspiration-detail";
+    button.append(label, detail);
+    syncShortcutBadge(button, shortcut, "inline-shortcut");
+
+    const accessibleName = shortcut ? `${track.label}造物灵感，快捷键 ${shortcut}` : `${track.label}造物灵感`;
+    button.title = accessibleName;
+    button.setAttribute("aria-label", accessibleName);
+  });
+}
+
 function syncShortcutBadge(button, label, className) {
   const existing = Array.from(button.children).find((child) => child.classList.contains(className));
   if (!label) {
@@ -479,6 +533,10 @@ function bindEvents() {
 
   dom.clearLogButton.addEventListener("click", clearChronicle);
 
+  dom.inspirationButtons.forEach((button) => {
+    button.addEventListener("click", () => upgradeInspiration(button.dataset.inspiration));
+  });
+
   window.addEventListener("resize", () => {
     renderSkyFrame(performance.now());
   });
@@ -491,6 +549,7 @@ function handleShortcut(event) {
 
   const key = event.key.toLowerCase();
   if (handleUtilityShortcut(event, key)) return;
+  if (handleInspirationShortcut(event, key)) return;
 
   const shortcut = ACTION_SHORTCUTS.find((item) => {
     return item.key === key && Boolean(item.shiftKey) === event.shiftKey;
@@ -520,6 +579,21 @@ function handleUtilityShortcut(event, key) {
   return true;
 }
 
+function handleInspirationShortcut(event, key) {
+  const shortcut = INSPIRATION_SHORTCUTS.find((item) => {
+    return item.key === key && Boolean(item.shiftKey) === event.shiftKey;
+  });
+  if (!shortcut) return false;
+
+  const button = dom.inspirationButtons.find((candidate) => candidate.dataset.inspiration === shortcut.trackId);
+  if (!button || button.disabled) return false;
+
+  event.preventDefault();
+  flashShortcutButton(button);
+  upgradeInspiration(shortcut.trackId);
+  return true;
+}
+
 function startNewGame() {
   clearStoredEnding();
   state = createNewState();
@@ -532,6 +606,124 @@ function clearChronicle() {
   saveState();
   if (dom.saveStatus) dom.saveStatus.textContent = saveStatusText();
   renderLog();
+}
+
+function upgradeInspiration(trackId) {
+  const track = INSPIRATION_TRACKS[trackId];
+  if (!track) return false;
+
+  const progress = normalizeInspirationProgress(state.inspiration);
+  const currentLevel = progress.upgrades[trackId] || 0;
+  const cost = inspirationUpgradeCost(progress);
+  if (currentLevel >= INSPIRATION_MAX_LEVEL || progress.tokens < cost) return false;
+
+  progress.tokens -= cost;
+  progress.spent += cost;
+  progress.upgrades[trackId] = currentLevel + 1;
+  progress.updatedAt = new Date().toISOString();
+  state.inspiration = progress;
+  addLog({
+    type: "special",
+    title: `造物灵感｜${track.label}增益提升`,
+    text: `${track.label}发展的永久增益提升至 +${formatPercent(inspirationBonusForTrack(trackId, progress) - 1)}。下一次升级费用将按全局升级总数计算。`,
+    delta: {}
+  });
+  saveInspirationProgress(progress);
+  saveState();
+  render();
+  return true;
+}
+
+function defaultInspirationProgress() {
+  return {
+    tokens: 0,
+    earned: 0,
+    spent: 0,
+    upgrades: {
+      science: 0,
+      belief: 0,
+      economy: 0,
+      population: 0
+    },
+    updatedAt: null,
+    lastRewardAt: null
+  };
+}
+
+function normalizeInspirationProgress(source) {
+  const defaults = defaultInspirationProgress();
+  const progress = source && typeof source === "object" ? source : {};
+  const upgrades = progress.upgrades && typeof progress.upgrades === "object" ? progress.upgrades : {};
+  const normalized = {
+    ...defaults,
+    tokens: Math.max(0, Math.round(finiteOr(progress.tokens, defaults.tokens))),
+    earned: Math.max(0, Math.round(finiteOr(progress.earned, defaults.earned))),
+    spent: Math.max(0, Math.round(finiteOr(progress.spent, defaults.spent))),
+    updatedAt: typeof progress.updatedAt === "string" ? progress.updatedAt : null,
+    lastRewardAt: typeof progress.lastRewardAt === "string" ? progress.lastRewardAt : null,
+    upgrades: { ...defaults.upgrades }
+  };
+
+  Object.keys(INSPIRATION_TRACKS).forEach((trackId) => {
+    normalized.upgrades[trackId] = clamp(
+      Math.round(finiteOr(upgrades[trackId], defaults.upgrades[trackId])),
+      0,
+      INSPIRATION_MAX_LEVEL
+    );
+  });
+
+  return normalized;
+}
+
+function loadInspirationProgress() {
+  try {
+    const raw = localStorage.getItem(INSPIRATION_STORE_KEY);
+    return normalizeInspirationProgress(raw ? JSON.parse(raw) : null);
+  } catch {
+    return defaultInspirationProgress();
+  }
+}
+
+function saveInspirationProgress(progress = state.inspiration) {
+  try {
+    localStorage.setItem(INSPIRATION_STORE_KEY, JSON.stringify(normalizeInspirationProgress(progress)));
+  } catch {
+    // Permanent progress is a convenience layer; the game still works without storage.
+  }
+}
+
+function inspirationLevelTotal(progress = state.inspiration) {
+  const normalized = normalizeInspirationProgress(progress);
+  return Object.keys(INSPIRATION_TRACKS).reduce((total, trackId) => {
+    return total + (normalized.upgrades[trackId] || 0);
+  }, 0);
+}
+
+function inspirationUpgradeCost(progress = state.inspiration) {
+  return Math.floor(inspirationLevelTotal(progress) / INSPIRATION_TIER_SIZE) + 1;
+}
+
+function inspirationBonusForTrack(trackId, progress = state.inspiration) {
+  const normalized = normalizeInspirationProgress(progress);
+  return 1 + (normalized.upgrades[trackId] || 0) * INSPIRATION_STEP;
+}
+
+function grantInspirationForEnding(endingId) {
+  if (endingId !== INSPIRATION_REWARD_ENDING) {
+    return { amount: 0, text: "只有 A 结局会生成造物灵感。" };
+  }
+
+  const progress = normalizeInspirationProgress(state.inspiration || loadInspirationProgress());
+  progress.tokens += INSPIRATION_REWARD_AMOUNT;
+  progress.earned += INSPIRATION_REWARD_AMOUNT;
+  progress.lastRewardAt = new Date().toISOString();
+  progress.updatedAt = progress.lastRewardAt;
+  state.inspiration = progress;
+  saveInspirationProgress(progress);
+  return {
+    amount: INSPIRATION_REWARD_AMOUNT,
+    text: `A 结局生成 ${INSPIRATION_REWARD_AMOUNT} 点造物灵感。`
+  };
 }
 
 function shouldIgnoreShortcut(event) {
@@ -701,6 +893,7 @@ function advanceRound(actionId) {
       specialEvent?.text,
       actionResult.text,
       describeSystemPressure(pressureDelta),
+      describeChronicleState(before, after, event, action),
       populationWasLocked ? "只生一个好，政府来养老。本年所有人口变化均被回滚。" : ""
     ]
       .filter(Boolean)
@@ -803,6 +996,52 @@ function describeSystemPressure(delta) {
   return [populationStress, economyStress, harmonyBonus, knowledgeStress].filter(Boolean).join(" ");
 }
 
+function describeChronicleState(before, after, event, action) {
+  const notes = [];
+  const beforeScienceEra = scienceEra(before.sc);
+  const afterScienceEra = scienceEra(after.sc);
+  const beforeBeliefEra = beliefEra(before.be);
+  const afterBeliefEra = beliefEra(after.be);
+  const harmony = knowledgeHarmony(after.sc, after.be);
+
+  if (beforeScienceEra !== afterScienceEra) {
+    notes.push(`科学史进入${afterScienceEra}。`);
+  }
+  if (beforeBeliefEra !== afterBeliefEra) {
+    notes.push(`神学史进入${afterBeliefEra}。`);
+  }
+
+  if (after.eco <= after.pop * 0.18 && after.pop > 0) {
+    notes.push("粮仓和账本之间的距离正在变得危险。");
+  } else if (after.eco >= 180000) {
+    notes.push("财政盈余让统治者第一次相信明年可以被规划。");
+  }
+
+  if (after.stability <= 24) {
+    notes.push("地方城邦开始以自己的钟声代替中央命令。");
+  } else if (after.stability >= 82) {
+    notes.push("秩序严密到连谣言都要排队通过街口。");
+  }
+
+  if (harmony >= 0.86 && after.sc + after.be >= 6000) {
+    notes.push("学院与神殿仍在争吵，但他们已经在使用同一份日历。");
+  } else if (after.sc > after.be * 1.65 && after.sc >= 5000) {
+    notes.push("望远镜的影子盖过祭坛，城市开始用证据审判传统。");
+  } else if (after.be > after.sc * 1.65 && after.be >= 5000) {
+    notes.push("钟声盖过仪器噪音，疑问被重新命名为诱惑。");
+  }
+
+  if ((state.eerfLevel || 0) >= 4) {
+    notes.push("地下火种工程已经成为另一种国家。");
+  }
+
+  if (event?.title && action?.label && notes.length < 2 && (state.turn + event.title.length + action.label.length) % 5 === 0) {
+    notes.push("史官在页边写下：这一年没有答案，只有更精确的问题。");
+  }
+
+  return notes.slice(0, 2).join(" ");
+}
+
 function civilizationCarryingCapacity(current) {
   const scRatio = current.sc / CAP;
   const beRatio = current.be / CAP;
@@ -847,7 +1086,191 @@ function eventFor(rand, current) {
     };
   }
 
+  const contextual = contextualEventFor(rand, current);
+  if (contextual && rand % 4 !== 1) return contextual;
+
   return baseEvent(rand);
+}
+
+function contextualEventFor(rand, current) {
+  const candidates = [];
+  const scEraLevel = eraIndexFor(current.sc, SCIENCE_ERAS);
+  const beEraLevel = eraIndexFor(current.be, BELIEF_ERAS);
+  const harmony = knowledgeHarmony(current.sc, current.be);
+  const scDominant = current.sc > current.be * 1.35;
+  const beDominant = current.be > current.sc * 1.35;
+
+  if (scEraLevel >= 5) {
+    candidates.push(
+      {
+        title: "蒸汽管线",
+        text: "工坊把热量从地底引向街区，机器第一次像城市的血管一样搏动。",
+        delta: { sc: 50, be: -12, pop: 900, eco: 16000, stability: -1 }
+      },
+      {
+        title: "轨道学校",
+        text: "孩子们在黑板上计算三颗恒星的影子，旧神话被改写成作业。",
+        delta: { sc: 50, be: -18, pop: 300, eco: -6000, stability: 2 }
+      }
+    );
+  }
+
+  if (scEraLevel >= 8) {
+    candidates.push(
+      {
+        title: "反应堆试车",
+        text: "地下反应堆点亮了一整片城市，也让每一位官员学会恐惧仪表盘。",
+        delta: { sc: 50, be: -20, pop: -700, eco: 26000, stability: -4 }
+      },
+      {
+        title: "计算中心",
+        text: "纸带、继电器和早期算法接管粮仓调度，迷信第一次输给了排队论。",
+        delta: { sc: 50, be: -16, pop: 1200, eco: 22000, stability: 3 }
+      }
+    );
+  }
+
+  if (beEraLevel >= 5) {
+    candidates.push(
+      {
+        title: "巡礼季",
+        text: "数万人沿着恒星升落的方向步行，市集、神殿和粮仓一同膨胀。",
+        delta: { sc: -18, be: 50, pop: 2600, eco: 9000, stability: 5 }
+      },
+      {
+        title: "誓约法庭",
+        text: "祭司把争端写进誓约，人们服从判决，但学院开始小声抗议。",
+        delta: { sc: -22, be: 50, pop: 500, eco: -3000, stability: 9 }
+      }
+    );
+  }
+
+  if (beEraLevel >= 8) {
+    candidates.push(
+      {
+        title: "圣城税册",
+        text: "捐献、赎罪券和粮票被装订在同一本账册里，秩序变得昂贵而稳定。",
+        delta: { sc: -28, be: 50, pop: 1100, eco: 18000, stability: 7 }
+      },
+      {
+        title: "钟楼合唱",
+        text: "每座钟楼在同一刻发声，恐慌被压低，怀疑也被压低。",
+        delta: { sc: -24, be: 50, pop: 1800, eco: -5000, stability: 11 }
+      }
+    );
+  }
+
+  if (harmony >= 0.82 && current.sc + current.be >= 7000) {
+    candidates.push(
+      {
+        title: "学院神殿联合会",
+        text: "学者和祭司共享同一份历法，争论没有停止，但预算终于能通过。",
+        delta: { sc: 50, be: 50, pop: 2400, eco: 21000, stability: 8 }
+      },
+      {
+        title: "双语档案",
+        text: "同一场灾难被写成论文，也被写成祷文，后人第一次读懂两种恐惧。",
+        delta: { sc: 44, be: 44, pop: 800, eco: 7000, stability: 6 }
+      }
+    );
+  }
+
+  if (scDominant && current.sc >= 5000) {
+    candidates.push(
+      {
+        title: "拆庙取铜",
+        text: "观测器需要更多金属，旧神像被熔进望远镜底座。",
+        delta: { sc: 50, be: -42, pop: -500, eco: 13000, stability: -7 }
+      },
+      {
+        title: "无神论讲坛",
+        text: "教授们公开嘲笑神迹，学生们鼓掌，街角的老人们沉默。",
+        delta: { sc: 50, be: -38, pop: -300, eco: -4000, stability: -6 }
+      }
+    );
+  }
+
+  if (beDominant && current.be >= 5000) {
+    candidates.push(
+      {
+        title: "禁书清点",
+        text: "审查官把一批星图锁进地下室，钥匙交给唱诗班保管。",
+        delta: { sc: -44, be: 50, pop: 200, eco: -6000, stability: 5 }
+      },
+      {
+        title: "苦修大队",
+        text: "年轻人离开工坊进入修院，城市安静下来，机器也安静下来。",
+        delta: { sc: -36, be: 50, pop: -900, eco: -9000, stability: 8 }
+      }
+    );
+  }
+
+  if (current.pop >= 60000) {
+    candidates.push(
+      {
+        title: "环城温室",
+        text: "温室沿着城墙向外扩张，更多人口被养活，也有更多人口需要被养活。",
+        delta: { sc: 28, be: 14, pop: 5200, eco: -14000, stability: -3 }
+      },
+      {
+        title: "排水暴动",
+        text: "拥挤的地下街区为了水渠爆发冲突，行政官用粮票买来一夜安静。",
+        delta: { sc: 8, be: 24, pop: -2600, eco: -18000, stability: -10 }
+      }
+    );
+  }
+
+  if (current.eco <= 35000) {
+    candidates.push(
+      {
+        title: "债券风波",
+        text: "城邦把未来三十年的税写成纸片出售，纸片比粮食更快贬值。",
+        delta: { sc: -12, be: 18, pop: -900, eco: -14000, stability: -8 }
+      },
+      {
+        title: "黑市粮仓",
+        text: "地下粮仓拒绝开门，价格比恒星轨道更难预测。",
+        delta: { sc: -6, be: 20, pop: -1800, eco: -9000, stability: -9 }
+      }
+    );
+  }
+
+  if (current.stability <= 30) {
+    candidates.push(
+      {
+        title: "城邦互疑",
+        text: "每座城都怀疑下一座城偷走了恒纪元，贸易线被临时关停。",
+        delta: { sc: -18, be: 12, pop: -1200, eco: -20000, stability: -6 }
+      },
+      {
+        title: "街垒夜谈",
+        text: "人们在街垒后讨论明天由谁统治，没人讨论明天由谁播种。",
+        delta: { sc: 10, be: 10, pop: -900, eco: -11000, stability: -5 }
+      }
+    );
+  }
+
+  if ((state.eerfLevel || 0) >= 2) {
+    candidates.push(
+      {
+        title: "火种演习",
+        text: "EERF 进行整夜演习，地表城市骂它浪费，地下工程师假装没听见。",
+        delta: { sc: 28, be: 12, pop: -500, eco: -12000, stability: 4 }
+      },
+      {
+        title: "地下档案校订",
+        text: "上一代人的错误被重新编号，下一代人的课本因此变厚。",
+        delta: { sc: 42, be: 30, pop: 200, eco: -8000, stability: 3 }
+      }
+    );
+  }
+
+  if (!candidates.length) return null;
+
+  return {
+    type: "progress",
+    ...candidates[Math.floor(rand / 7) % candidates.length]
+  };
 }
 
 function doomEvent(rand, current) {
@@ -1211,6 +1634,121 @@ function baseEvent(rand) {
       title: "轨道共振",
       text: "天体运行短暂呈现规律，历法、神谕和工程计划同时变得可信。",
       delta: { sc: 50, be: 32, pop: 1200, eco: 9000, stability: 7 }
+    },
+    {
+      title: "盐湖退潮",
+      text: "盐湖露出一圈旧码头，商人带回矿盐，祭司带回远古咒语。",
+      delta: { sc: 26, be: 18, pop: 900, eco: 14000, stability: 2 }
+    },
+    {
+      title: "迁徙争执",
+      text: "观测队要求向北，长老会要求向东，最后车队在原地消耗了整整一季。",
+      delta: { sc: 16, be: 22, pop: -1200, eco: -10000, stability: -6 }
+    },
+    {
+      title: "井水变甜",
+      text: "地下水脉短暂恢复，谣言说这是神迹，工程师说这是地层压力。",
+      delta: { sc: 20, be: 34, pop: 3100, eco: 6000, stability: 5 }
+    },
+    {
+      title: "抄写院失火",
+      text: "一场小火烧掉了半座抄写院，幸存的书页反而被抄得更快。",
+      delta: { sc: -18, be: 50, pop: -300, eco: -7000, stability: -2 }
+    },
+    {
+      title: "青铜钟裂",
+      text: "城中央的青铜钟在寒夜中裂开，人们第一次听见自己心跳的声音。",
+      delta: { sc: 12, be: 40, pop: -700, eco: -5000, stability: -3 }
+    },
+    {
+      title: "测绘队归来",
+      text: "失踪三年的测绘队带回新地图，也带回一串没人敢看的死亡名单。",
+      delta: { sc: 50, be: 8, pop: -900, eco: 11000, stability: -1 }
+    },
+    {
+      title: "粮仓审计",
+      text: "账本被重新计算，少了一些神迹，多了一些库存。",
+      delta: { sc: 32, be: -10, pop: 600, eco: 17000, stability: 4 }
+    },
+    {
+      title: "祭日市场",
+      text: "祭日吸引了远方部落，祈祷、交易和盗窃在同一条街上发生。",
+      delta: { sc: 6, be: 38, pop: 1800, eco: 13000, stability: -1 }
+    },
+    {
+      title: "恒星色变",
+      text: "一颗太阳呈现异常红光，学院增设观测班，民间增设忏悔日。",
+      delta: { sc: 48, be: 42, pop: -500, eco: -9000, stability: -5 }
+    },
+    {
+      title: "旧王陵开启",
+      text: "王陵里没有永生秘密，只有金器、霉菌和一份相当准确的历法。",
+      delta: { sc: 40, be: 24, pop: -600, eco: 19000, stability: 1 }
+    },
+    {
+      title: "煤烟争议",
+      text: "工坊烟囱遮住了祷告时的星光，城里第一次为天空的所有权争吵。",
+      delta: { sc: 50, be: -24, pop: -400, eco: 18000, stability: -7 }
+    },
+    {
+      title: "修道院药圃",
+      text: "修道院把草药配方交给医师，医师承认这次确实有效。",
+      delta: { sc: 34, be: 36, pop: 2600, eco: 5000, stability: 4 }
+    },
+    {
+      title: "税吏失踪",
+      text: "负责征粮的税吏在夜里消失，第二天所有人都声称没有看见。",
+      delta: { sc: -4, be: 10, pop: 400, eco: -16000, stability: -8 }
+    },
+    {
+      title: "木星般的影子",
+      text: "天空出现一片缓慢移动的巨大阴影，孩子们把它画进课本边角。",
+      delta: { sc: 46, be: 30, pop: -300, eco: -6000, stability: -2 }
+    },
+    {
+      title: "港口复工",
+      text: "干涸河床重新容纳浅船，商路像旧伤口一样被重新撕开。",
+      delta: { sc: 24, be: 8, pop: 1500, eco: 22000, stability: 3 }
+    },
+    {
+      title: "孤儿院扩建",
+      text: "灾年留下的孩子被集中抚养，他们很快学会同时背诵公式和祷文。",
+      delta: { sc: 22, be: 28, pop: 2400, eco: -11000, stability: 6 }
+    },
+    {
+      title: "钟表匠罢工",
+      text: "钟表匠拒绝继续修理互相矛盾的时间，城里的预约系统崩溃了。",
+      delta: { sc: -10, be: 20, pop: -400, eco: -13000, stability: -5 }
+    },
+    {
+      title: "夜校开课",
+      text: "白天种地的人夜里学习几何，白天祷告的人夜里学习账簿。",
+      delta: { sc: 50, be: 22, pop: 900, eco: -4000, stability: 2 }
+    },
+    {
+      title: "赦免令",
+      text: "逃亡者被允许返回城市，条件是交出武器、粮票和一半故事。",
+      delta: { sc: 6, be: 34, pop: 3000, eco: 4000, stability: 8 }
+    },
+    {
+      title: "矿井歌声",
+      text: "矿工在深处发现稳定岩层，歌声沿着竖井传到地表。",
+      delta: { sc: 38, be: 16, pop: 700, eco: 21000, stability: 2 }
+    },
+    {
+      title: "干热风",
+      text: "风像从炉膛里吹来，地表作物卷曲，地下课堂却坐满了人。",
+      delta: { sc: 30, be: 28, pop: -2400, eco: -15000, stability: -6 }
+    },
+    {
+      title: "铸币改革",
+      text: "新币上没有国王头像，只刻着三颗太阳和一行小到看不清的税率。",
+      delta: { sc: 18, be: -4, pop: 500, eco: 24000, stability: 3 }
+    },
+    {
+      title: "城墙加高",
+      text: "城墙又高了一层，外面的人看不见粮仓，里面的人看不见地平线。",
+      delta: { sc: 10, be: 26, pop: 600, eco: -12000, stability: 9 }
     }
   ];
 
@@ -1480,12 +2018,24 @@ function computeRestartKnowledge(snapshotValue) {
 
 function applyDelta(delta, options = {}) {
   const effectiveDelta = applyEconomicCrisisRules(delta, options);
+  applyInspirationBonuses(effectiveDelta);
   state.sc = clamp(roundStat(state.sc + Number(effectiveDelta.sc || 0)), 0, CAP);
   state.be = clamp(roundStat(state.be + Number(effectiveDelta.be || 0)), 0, CAP);
   state.pop = Math.max(0, Math.round(state.pop + (effectiveDelta.pop || 0)));
   state.eco = Math.max(0, Math.round(state.eco + (effectiveDelta.eco || 0)));
   state.stability = clamp(state.stability + Math.round(effectiveDelta.stability || 0), 0, 100);
   return effectiveDelta;
+}
+
+function applyInspirationBonuses(delta = {}) {
+  const progress = normalizeInspirationProgress(state.inspiration);
+  Object.entries(INSPIRATION_TRACKS).forEach(([trackId, track]) => {
+    const key = track.stat;
+    if (typeof delta[key] !== "number" || delta[key] <= 0) return;
+    delta[key] *= inspirationBonusForTrack(trackId, progress);
+  });
+  state.inspiration = progress;
+  return delta;
 }
 
 function updateEnding() {
@@ -1688,6 +2238,7 @@ function finishGame(endingId, context = {}) {
 
   const ending = endingCopyFor(endingId);
   const finalSnapshot = context.snapshot || snapshot();
+  const inspirationReward = grantInspirationForEnding(endingId);
   state.finished = true;
   state.finalEnding = {
     id: endingId,
@@ -1697,6 +2248,7 @@ function finishGame(endingId, context = {}) {
     rand: Number.isFinite(Number(context.rand)) ? context.rand : state.lastRand,
     trigger: context.trigger || state.weather,
     snapshot: { ...finalSnapshot },
+    inspirationReward,
     createdAt: new Date().toISOString()
   };
   state.weather = context.trigger || state.weather;
@@ -1704,7 +2256,7 @@ function finishGame(endingId, context = {}) {
   addLog({
     type: "special",
     title: `${ending.name}｜终局达成`,
-    text: `第 ${state.count} 号文明在 ${state.finalEnding.trigger || "未知触发"} 后抵达终局。游戏结束。`,
+    text: `第 ${state.count} 号文明在 ${state.finalEnding.trigger || "未知触发"} 后抵达终局。游戏结束。${inspirationReward.amount ? ` ${inspirationReward.text}` : ""}`,
     delta: diff(finalSnapshot, finalSnapshot)
   });
   saveFinalEnding();
@@ -1825,6 +2377,7 @@ function render() {
   dom.endingLabel.textContent = state.ending;
   dom.seedValue.textContent = state.seed;
   if (dom.saveStatus) dom.saveStatus.textContent = saveStatusText();
+  renderInspiration();
   renderActionButtons();
   renderLog();
   renderArchive();
@@ -1859,6 +2412,38 @@ function renderActionButtons() {
     }
     button.disabled = disabled;
     button.setAttribute("aria-disabled", disabled ? "true" : "false");
+  });
+}
+
+function renderInspiration() {
+  const progress = normalizeInspirationProgress(state.inspiration);
+  state.inspiration = progress;
+  const cost = inspirationUpgradeCost(progress);
+  const totalLevel = inspirationLevelTotal(progress);
+
+  if (dom.inspirationStatus) {
+    dom.inspirationStatus.textContent = `造物灵感 ${formatNumber(progress.tokens)}｜已获 ${formatNumber(progress.earned)}｜总升级 ${formatNumber(totalLevel)}`;
+  }
+  if (dom.inspirationCost) {
+    dom.inspirationCost.textContent = `下一次升级费用 ${formatNumber(cost)}；所有路线共享费用阶梯。`;
+  }
+
+  dom.inspirationButtons.forEach((button) => {
+    const trackId = button.dataset.inspiration;
+    const track = INSPIRATION_TRACKS[trackId];
+    if (!track) return;
+
+    const level = progress.upgrades[trackId] || 0;
+    const detail = button.querySelector(".inspiration-detail");
+    if (detail) {
+      detail.textContent = `Lv.${level}/${INSPIRATION_MAX_LEVEL}｜+${formatPercent(level * INSPIRATION_STEP)}`;
+    }
+
+    const disabled = level >= INSPIRATION_MAX_LEVEL || progress.tokens < cost || state.finished;
+    const shortcut = INSPIRATION_SHORTCUT_LABELS[trackId];
+    button.disabled = disabled;
+    button.setAttribute("aria-disabled", disabled ? "true" : "false");
+    button.title = `${track.label}造物灵感：Lv.${level}/${INSPIRATION_MAX_LEVEL}，下一次费用 ${cost}，快捷键 ${shortcut}`;
   });
 }
 
@@ -1925,11 +2510,28 @@ function renderArchive() {
     item.innerHTML = `
       <strong>第 ${entry.civilization} 号文明｜${formatNumber(entry.turns)} 年</strong>
       <p>${entry.collapseCause || "未知终止"}｜${peak}</p>
+      <p>${archiveSummary(entry)}</p>
       <p>${specials}</p>
     `;
     fragment.append(item);
   });
   dom.archiveList.append(fragment);
+}
+
+function archiveSummary(entry) {
+  const sc = finiteOr(entry.peakSc, 0);
+  const be = finiteOr(entry.peakBe, 0);
+  const pop = finiteOr(entry.peakPop, 0);
+  const eco = finiteOr(entry.peakEco, 0);
+  const turns = finiteOr(entry.turns, 0);
+
+  if (sc >= 14000 && be >= 14000) return "档案评语：他们同时修建学院与神殿，直到天空把两者一起擦去。";
+  if (sc > be * 1.6 && sc >= 8000) return "档案评语：这是一代仰赖仪器的人，死前仍试图把灾难写成公式。";
+  if (be > sc * 1.6 && be >= 8000) return "档案评语：这是一代仰赖祷文的人，死前仍相信毁灭另有安排。";
+  if (pop >= 90000) return "档案评语：人口曾像潮水一样涨起，最后也像潮水一样退去。";
+  if (eco >= 180000) return "档案评语：他们富有得足以购买明天，却没能购买第二个太阳系。";
+  if (turns <= 30) return "档案评语：这代文明短得像一次错误预报。";
+  return "档案评语：他们没有赢过三颗太阳，但把下一次失败准备得更像开始。";
 }
 
 function deltaHtml(delta = {}) {
@@ -2673,6 +3275,7 @@ function loadState() {
     migrated.finalEnding = migrated.finalEnding && typeof migrated.finalEnding === "object"
       ? migrated.finalEnding
       : null;
+    migrated.inspiration = loadInspirationProgress();
     if (migrated.finished && !migrated.finalEnding?.id) {
       migrated.finished = false;
       migrated.finalEnding = null;
@@ -2722,6 +3325,13 @@ function formatNumber(value) {
   return new Intl.NumberFormat("zh-CN", {
     maximumFractionDigits: hasFraction ? 4 : 0
   }).format(number);
+}
+
+function formatPercent(value) {
+  return new Intl.NumberFormat("zh-CN", {
+    maximumFractionDigits: 1,
+    style: "percent"
+  }).format(finiteOr(value, 0));
 }
 
 function formatRand(value) {

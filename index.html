@@ -215,6 +215,10 @@
                 <dd id="saveStatus">自动保存开启</dd>
               </div>
               <div>
+                <dt>造物</dt>
+                <dd>只有 A 结局会生成 1 点造物灵感；灵感用于购买永久发展增益。每累计 5 级全局升级，下一次费用 +1，各路线不会重置费用。</dd>
+              </div>
+              <div>
                 <dt>纪年</dt>
                 <dd>玩家每次选择一项行动，文明便推进一年。年份不是倒计时；它记录本代文明在三恒星环境中坚持了多久。</dd>
               </div>
@@ -224,7 +228,7 @@
               </div>
               <div>
                 <dt>年流程</dt>
-                <dd>每年先掷出 Rand，并后台掷出隐藏 spec。恒星灾变、普通事件与隐藏彩蛋先结算，随后执行玩家行动，最后结算系统压力。</dd>
+                <dd>每年先掷出 Rand，并后台掷出隐藏 spec。恒星灾变、状态事件、普通事件与隐藏彩蛋先结算，随后执行玩家行动，最后结算系统压力。</dd>
               </div>
               <div>
                 <dt>治理</dt>
@@ -247,6 +251,19 @@
                 <dd>多数终局满足条件后只点亮“脱离苦海”，由玩家决定是否结算。SC/BE 抵达上限会自动结算 A/B；隐藏 C 只在连续 2 次文明毁灭都满足信仰断代时自动结算。</dd>
               </div>
             </dl>
+            <section class="inspiration-panel" aria-label="造物灵感">
+              <div>
+                <h2>造物灵感</h2>
+                <p id="inspirationStatus">造物灵感 0｜已获 0｜总升级 0</p>
+                <p id="inspirationCost">下一次升级费用 1；所有路线共享费用阶梯。</p>
+              </div>
+              <div class="inspiration-actions">
+                <button type="button" data-inspiration="science">科学</button>
+                <button type="button" data-inspiration="belief">神学</button>
+                <button type="button" data-inspiration="economy">经济</button>
+                <button type="button" data-inspiration="population">人口</button>
+              </div>
+            </section>
             <section class="archive-panel" aria-label="文明档案">
               <h2>文明档案</h2>
               <ol id="archiveList"></ol>
