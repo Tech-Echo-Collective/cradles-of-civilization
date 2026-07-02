@@ -13,8 +13,11 @@ const INSPIRATION_STORE_KEY = "three-sun-chronicle:inspiration:v1";
 const ENDING_PAGE = "ending.html";
 const RNG_MOD = 2147483647;
 const RNG_MUL = 48271;
-const KNOWLEDGE_RESTART_RATES = [0, 0.026, 0.05, 0.074, 0.102, 0.135];
-const KNOWLEDGE_RESTART_CAPS = [0, 520, 1050, 1650, 2400, 3300];
+const EERF_SCIENCE_REQUIREMENTS = [0, 0, 2000, 4000, 8000, 16000];
+const SCIENCE_RESTART_RATES = [0, 0.03, 0.06, 0.09, 0.125, 0.165];
+const SCIENCE_RESTART_CAPS = [0, 750, 1450, 2200, 3000, 3800];
+const BELIEF_RESTART_RATE_MULTIPLIER = 1.08;
+const BELIEF_RESTART_CAPS = [0, 820, 1600, 2450, 3350, 4200];
 const C_AUTO_STREAK = 2;
 const INSPIRATION_REWARD_ENDING = "A";
 const INSPIRATION_REWARD_AMOUNT = 1;
@@ -1036,7 +1039,7 @@ function describeChronicleState(before, after, event, action) {
   }
 
   if (event?.title && action?.label && notes.length < 2 && (state.turn + event.title.length + action.label.length) % 5 === 0) {
-    notes.push("史官在页边写下：这一年没有答案，只有更精确的问题。");
+    notes.push("这一年没有答案，只有更精确的问题。");
   }
 
   return notes.slice(0, 2).join(" ");
@@ -1801,7 +1804,7 @@ function prepareActionDelta(action, rawDelta, crisisAtRoundStart = false) {
     return {
       locked: true,
       delta: {},
-      text: `${action.label} 被各自为政的城邦吞没，1991 后的文明不再响应玩家控制。`
+      text: `${action.label} 被各自为政的城邦吞没，文明不再响应玩家控制。`
     };
   }
 
@@ -1827,6 +1830,18 @@ function prepareActionDelta(action, rawDelta, crisisAtRoundStart = false) {
       delta: {},
       text: "EERF 已达到当前技术能支持的最高等级。"
     };
+  }
+
+  if (action === ACTIONS.upgradeEerf) {
+    const nextLevel = Math.min(EERF_MAX_LEVEL, (state.eerfLevel || 0) + 1);
+    const requirement = eerfScienceRequirementForLevel(nextLevel);
+    if (state.sc < requirement) {
+      return {
+        locked: true,
+        delta: {},
+        text: `升级至 EERF ${nextLevel} 级需要 SC ${formatNumber(requirement)}。`
+      };
+    }
   }
 
   const delta = { ...rawDelta };
@@ -2008,12 +2023,19 @@ function computeRestartKnowledge(snapshotValue) {
   const level = state.eerfLevel || 0;
   if (level <= 0) return { sc: 0, be: 0 };
 
-  const rate = KNOWLEDGE_RESTART_RATES[level] || 0;
-  const cap = KNOWLEDGE_RESTART_CAPS[level] || 0;
+  const scienceRate = SCIENCE_RESTART_RATES[level] || 0;
+  const beliefRate = scienceRate * BELIEF_RESTART_RATE_MULTIPLIER;
+  const scienceCap = SCIENCE_RESTART_CAPS[level] || 0;
+  const beliefCap = BELIEF_RESTART_CAPS[level] || 0;
   return {
-    sc: clamp(Math.round(level * 35 + snapshotValue.sc * rate), 0, cap),
-    be: clamp(Math.round(level * 35 + snapshotValue.be * rate), 0, cap)
+    sc: clamp(Math.round(level * 35 + snapshotValue.sc * scienceRate), 0, scienceCap),
+    be: clamp(Math.round(level * 35 + snapshotValue.be * beliefRate), 0, beliefCap)
   };
+}
+
+function eerfScienceRequirementForLevel(level) {
+  if (level <= 1) return 0;
+  return EERF_SCIENCE_REQUIREMENTS[level] ?? Infinity;
 }
 
 function applyDelta(delta, options = {}) {
@@ -2404,7 +2426,12 @@ function renderActionButtons() {
     }
     if (!disabled && action === ACTIONS.upgradeEerf) {
       const rawDelta = typeof action.delta === "function" ? action.delta(state) : action.delta;
-      disabled = state.eerfLevel <= 0 || state.eerfLevel >= EERF_MAX_LEVEL || state.eco < Math.abs(rawDelta.eco || 0);
+      const nextLevel = Math.min(EERF_MAX_LEVEL, (state.eerfLevel || 0) + 1);
+      const requirement = eerfScienceRequirementForLevel(nextLevel);
+      disabled = state.eerfLevel <= 0 ||
+        state.eerfLevel >= EERF_MAX_LEVEL ||
+        state.sc < requirement ||
+        state.eco < Math.abs(rawDelta.eco || 0);
     }
     if (!disabled && action && !action.crisisOnly && !action.restartOnly && !action.settleOnly) {
       const rawDelta = typeof action.delta === "function" ? action.delta(state) : action.delta;
@@ -2525,13 +2552,14 @@ function archiveSummary(entry) {
   const eco = finiteOr(entry.peakEco, 0);
   const turns = finiteOr(entry.turns, 0);
 
-  if (sc >= 14000 && be >= 14000) return "档案评语：他们同时修建学院与神殿，直到天空把两者一起擦去。";
-  if (sc > be * 1.6 && sc >= 8000) return "档案评语：这是一代仰赖仪器的人，死前仍试图把灾难写成公式。";
-  if (be > sc * 1.6 && be >= 8000) return "档案评语：这是一代仰赖祷文的人，死前仍相信毁灭另有安排。";
-  if (pop >= 90000) return "档案评语：人口曾像潮水一样涨起，最后也像潮水一样退去。";
-  if (eco >= 180000) return "档案评语：他们富有得足以购买明天，却没能购买第二个太阳系。";
-  if (turns <= 30) return "档案评语：这代文明短得像一次错误预报。";
-  return "档案评语：他们没有赢过三颗太阳，但把下一次失败准备得更像开始。";
+  if (sc >= 14000 && be >= 14000) return "新时代的地上天国就此被灾难无情抹去。后人哀之而不鉴之，亦使后人而复哀后人也。";
+  if (sc > be * 1.6 && sc >= 8000) return "直到死去的瞬间，他们依然认为是自己的计算发生了错误。";
+  if (be > sc * 1.6 && be >= 8000) return "直到死前最后一刻，他们依然认为是自己的信仰陷入了歧途。";
+  if (pop >= 90000) return "他们跺脚，足以引发地震；他们呼吸，足以改变气候。当然，太阳不在乎。";
+  if (eco >= 180000) return "鼎铛玉石，金块珠砾，弃掷逦迤。秦人视之，亦不甚惜。";
+  if (turns <= 30) return "我知道，尘世如露水般短暂；然而，然而。";
+  if (sc >= 14000 && eco >= 100000) return "欢迎来到加州旅馆，如此可爱的地方，如此美丽的容颜。";
+  return "他们没有成就、没有胜利、没有活下来。历史的潮水会抹去他们的踪迹，所有的踪迹。";
 }
 
 function deltaHtml(delta = {}) {
@@ -2549,10 +2577,14 @@ function eerfStatusText() {
   }
 
   const level = state.eerfLevel || 0;
-  if (level <= 0) return `无地下种子库；下一代初始人口 ${formatNumber(BASE_RESTART_POP)}`;
+  if (level <= 0) return `尚未修建EERF；下一代初始人口 ${formatNumber(BASE_RESTART_POP)}`;
   const estimate = computeRestartPopulation(snapshot());
   const knowledge = computeRestartKnowledge(snapshot());
-  return `灾后火种等级 ${level}；下一代初始人口约 ${formatNumber(estimate)}；SC/BE 约 ${formatNumber(knowledge.sc)}/${formatNumber(knowledge.be)}`;
+  const nextLevel = Math.min(EERF_MAX_LEVEL, level + 1);
+  const nextRequirement = level < EERF_MAX_LEVEL
+    ? `；下一级需 SC ${formatNumber(eerfScienceRequirementForLevel(nextLevel))}`
+    : "；已达满级";
+  return `灾后火种等级 ${level}；下一代初始人口约 ${formatNumber(estimate)}；SC/BE 约 ${formatNumber(knowledge.sc)}/${formatNumber(knowledge.be)}${nextRequirement}`;
 }
 
 function drawSky() {
