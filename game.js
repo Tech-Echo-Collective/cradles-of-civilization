@@ -12,7 +12,7 @@ const MIN_SUSTAINABLE_POP = 1200;
 const SAVE_VERSION = 3;
 const STORE_KEY = "three-sun-chronicle:v1";
 const ENDING_STORE_KEY = "three-sun-chronicle:ending:v1";
-const INSPIRATION_STORE_KEY = "three-sun-chronicle:inspiration:v1";
+const ENDING_STATS_STORE_KEY = "three-sun-chronicle:ending-stats:v1";
 const ENDING_PAGE = "ending.html";
 const RNG_MOD = 2147483647;
 const RNG_MUL = 48271;
@@ -35,19 +35,8 @@ const SCIENCE_RESTART_CAPS = [0, 750, 1450, 2200, 3000, 3800];
 const BELIEF_RESTART_RATE_MULTIPLIER = 1.08;
 const BELIEF_RESTART_CAPS = [0, 820, 1600, 2450, 3350, 4200];
 const C_AUTO_STREAK = 2;
-const C_STAGNANT_CIVILIZATION_STREAK = 5;
-const C_EARLY_ERA_BREAKTHROUGH = 1200;
-const INSPIRATION_REWARD_ENDING = "A";
-const INSPIRATION_REWARD_AMOUNT = 1;
-const INSPIRATION_STEP = 0.05;
-const INSPIRATION_MAX_LEVEL = 5;
-const INSPIRATION_TIER_SIZE = 5;
-const INSPIRATION_MASTERY_BONUSES = {
-  science: { sc: 2000, scTrend: 25 },
-  belief: { be: 2000, beTrend: 25 },
-  economy: { eco: 40000 },
-  population: { pop: 12000 }
-};
+const C_STAGNANT_CIVILIZATION_STREAK = 4;
+const C_EARLY_ERA_BREAKTHROUGH = 1500;
 const SKY_FRAME_INTERVAL_MS = 96;
 const SKY_SAFARI_FRAME_INTERVAL_MS = 160;
 const SKY_MAX_DEVICE_PIXEL_RATIO = 1.25;
@@ -72,12 +61,13 @@ const ENDING_THRESHOLDS = {
   lowKnowledge: 7000,
   bronzeScience: 1800,
   faithfulCollapse: 12000,
-  exodusPopulation: 50000,
-  exodusEconomy: 120000,
-  promisedEconomy: 150000,
-  promisedPopulation: 60000,
+  exodusPopulation: 10000,
+  exodusEconomy: 95000,
+  promisedEconomy: 125000,
+  promisedPopulation: 30000,
+  authoritarianPopulation: 10000,
   orderHigh: 82,
-  collapseCycle: 8
+  collapseCycle: 7
 };
 
 const SCIENCE_ERAS = [
@@ -111,13 +101,6 @@ const BELIEF_ERAS = [
   { threshold: 18000, name: "唯有上帝" },
   { threshold: 20000, name: "天国王朝" }
 ];
-
-const INSPIRATION_TRACKS = {
-  science: { label: "科学", stat: "sc", shortLabel: "SC" },
-  belief: { label: "神学", stat: "be", shortLabel: "BE" },
-  economy: { label: "经济", stat: "eco", shortLabel: "ECO" },
-  population: { label: "人口", stat: "pop", shortLabel: "POP" }
-};
 
 const ACTIONS = {
   science: {
@@ -295,18 +278,6 @@ const UTILITY_SHORTCUTS = [
   { key: "n", shiftKey: true, buttonId: "newGameButton", label: "Shift+N", run: startNewGame }
 ];
 
-const INSPIRATION_SHORTCUTS = [
-  { key: "s", shiftKey: true, trackId: "science", label: "Shift+S" },
-  { key: "y", shiftKey: true, trackId: "belief", label: "Shift+Y" },
-  { key: "e", shiftKey: true, trackId: "economy", label: "Shift+E" },
-  { key: "p", shiftKey: true, trackId: "population", label: "Shift+P" }
-];
-
-const INSPIRATION_SHORTCUT_LABELS = INSPIRATION_SHORTCUTS.reduce((labels, shortcut) => {
-  labels[shortcut.trackId] = shortcut.label;
-  return labels;
-}, {});
-
 const dom = {};
 let state = null;
 let frameHandle = 0;
@@ -338,13 +309,12 @@ function normalizeSeed(value) {
 
 function createNewState(seedValue = Date.now()) {
   const seed = normalizeSeed(seedValue);
-  const inspiration = loadInspirationProgress();
-  const masteryBonus = inspirationStartingBonuses(inspiration);
+  const endingStats = loadEndingStats();
   const initialSnapshot = {
-    sc: clamp(240 + masteryBonus.sc, 0, CAP),
-    be: clamp(360 + masteryBonus.be, 0, CAP),
-    pop: 7600 + masteryBonus.pop,
-    eco: DEFAULT_ECO + masteryBonus.eco,
+    sc: 240,
+    be: 360,
+    pop: 7600,
+    eco: DEFAULT_ECO,
     stability: 52
   };
   return {
@@ -359,8 +329,8 @@ function createNewState(seedValue = Date.now()) {
     populationGrowthMultiplier: 1,
     knowledgeGrowthMultiplier: 1,
     controlEfficiencyMultiplier: 1,
-    scTrend: 12 + masteryBonus.scTrend,
-    beTrend: 16 + masteryBonus.beTrend,
+    scTrend: 12,
+    beTrend: 16,
     controlLocked: false,
     autoRunUntilCollapse: false,
     populationLockTurns: 0,
@@ -375,7 +345,7 @@ function createNewState(seedValue = Date.now()) {
     cStagnantCivilizationStreak: 0,
     finished: false,
     finalEnding: null,
-    inspiration,
+    endingStats,
     lastRand: null,
     lastTone: "quiet",
     specialNotice: null,
@@ -449,7 +419,6 @@ function init() {
   cacheDom();
   syncActionButtonCopy();
   syncUtilityButtonCopy();
-  syncInspirationButtonCopy();
   const querySeed = seedFromUrl();
   const restoredState = querySeed ? null : loadState();
   if (querySeed) {
@@ -532,9 +501,8 @@ function cacheDom() {
   dom.saveStatus = document.querySelector("#saveStatus");
   dom.endingWatchList = document.querySelector("#endingWatchList");
   dom.eerfDetailList = document.querySelector("#eerfDetailList");
-  dom.inspirationStatus = document.querySelector("#inspirationStatus");
-  dom.inspirationCost = document.querySelector("#inspirationCost");
-  dom.inspirationButtons = Array.from(document.querySelectorAll("[data-inspiration]"));
+  dom.endingStatsStatus = document.querySelector("#endingStatsStatus");
+  dom.endingStatsList = document.querySelector("#endingStatsList");
   dom.logList = document.querySelector("#logList");
   dom.logFilterButtons = Array.from(document.querySelectorAll("[data-log-filter]"));
   dom.archiveList = document.querySelector("#archiveList");
@@ -583,30 +551,6 @@ function syncUtilityButtonCopy() {
   });
 }
 
-function syncInspirationButtonCopy() {
-  dom.inspirationButtons.forEach((button) => {
-    const trackId = button.dataset.inspiration;
-    const track = INSPIRATION_TRACKS[trackId];
-    if (!track) return;
-
-    const shortcut = INSPIRATION_SHORTCUT_LABELS[trackId];
-    button.dataset.baseLabel = track.label;
-    button.innerHTML = "";
-
-    const label = document.createElement("span");
-    label.className = "inspiration-name";
-    label.textContent = track.label;
-    const detail = document.createElement("small");
-    detail.className = "inspiration-detail";
-    button.append(label, detail);
-    syncShortcutBadge(button, shortcut, "inline-shortcut");
-
-    const accessibleName = shortcut ? `${track.label}造物灵感，快捷键 ${shortcut}` : `${track.label}造物灵感`;
-    button.title = accessibleName;
-    button.setAttribute("aria-label", accessibleName);
-  });
-}
-
 function syncShortcutBadge(button, label, className) {
   const existing = Array.from(button.children).find((child) => child.classList.contains(className));
   if (!label) {
@@ -634,10 +578,6 @@ function bindEvents() {
   dom.clearLogButton.addEventListener("click", clearChronicle);
   dom.logFilterButtons.forEach((button) => {
     button.addEventListener("click", () => setLogFilter(button.dataset.logFilter || "all"));
-  });
-
-  dom.inspirationButtons.forEach((button) => {
-    button.addEventListener("click", () => upgradeInspiration(button.dataset.inspiration));
   });
 
   window.addEventListener("resize", scheduleSkyResize);
@@ -679,7 +619,6 @@ function handleShortcut(event) {
 
   const key = event.key.toLowerCase();
   if (handleUtilityShortcut(event, key)) return;
-  if (handleInspirationShortcut(event, key)) return;
 
   const shortcut = ACTION_SHORTCUTS.find((item) => {
     return item.key === key && Boolean(item.shiftKey) === event.shiftKey;
@@ -706,21 +645,6 @@ function handleUtilityShortcut(event, key) {
   event.preventDefault();
   flashShortcutButton(button);
   shortcut.run();
-  return true;
-}
-
-function handleInspirationShortcut(event, key) {
-  const shortcut = INSPIRATION_SHORTCUTS.find((item) => {
-    return item.key === key && Boolean(item.shiftKey) === event.shiftKey;
-  });
-  if (!shortcut) return false;
-
-  const button = dom.inspirationButtons.find((candidate) => candidate.dataset.inspiration === shortcut.trackId);
-  if (!button || button.disabled) return false;
-
-  event.preventDefault();
-  flashShortcutButton(button);
-  upgradeInspiration(shortcut.trackId);
   return true;
 }
 
@@ -752,7 +676,7 @@ function startNewGameWithSeed(seedValue) {
 
 function confirmNewWorld() {
   if (!hasActiveRun()) return true;
-  return window.confirm("当前文明进度会被新世界覆盖，造物灵感仍会保留。继续？");
+  return window.confirm("当前文明进度会被新世界覆盖，终局统计仍会保留。继续？");
 }
 
 function hasActiveRun() {
@@ -775,174 +699,75 @@ function setLogFilter(filter) {
   renderLog();
 }
 
-function upgradeInspiration(trackId) {
-  const track = INSPIRATION_TRACKS[trackId];
-  if (!track) return false;
-
-  const progress = normalizeInspirationProgress(state.inspiration);
-  const currentLevel = progress.upgrades[trackId] || 0;
-  const cost = inspirationUpgradeCost(progress);
-  if (currentLevel >= INSPIRATION_MAX_LEVEL || progress.tokens < cost) return false;
-
-  progress.tokens -= cost;
-  progress.spent += cost;
-  progress.upgrades[trackId] = currentLevel + 1;
-  progress.updatedAt = new Date().toISOString();
-  state.inspiration = progress;
-  addLog({
-    type: "special",
-    title: `造物灵感｜${track.label}增益提升`,
-    text: `${track.label}发展的永久增益已更新：${inspirationBenefitText(trackId, progress)}。下一次升级费用将按全局升级总数计算。`,
-    delta: {}
-  });
-  saveInspirationProgress(progress);
-  saveState();
-  render();
-  return true;
-}
-
-function defaultInspirationProgress() {
+function defaultEndingStats() {
   return {
-    tokens: 0,
-    earned: 0,
-    spent: 0,
-    upgrades: {
-      science: 0,
-      belief: 0,
-      economy: 0,
-      population: 0
-    },
-    updatedAt: null,
-    lastRewardAt: null
+    total: 0,
+    endings: Object.fromEntries(Object.keys(window.THREE_SUN_ENDINGS || {}).map((id) => [id, 0])),
+    lastEnding: null,
+    updatedAt: null
   };
 }
 
-function normalizeInspirationProgress(source) {
-  const defaults = defaultInspirationProgress();
-  const progress = source && typeof source === "object" ? source : {};
-  const upgrades = progress.upgrades && typeof progress.upgrades === "object" ? progress.upgrades : {};
+function normalizeEndingStats(source) {
+  const defaults = defaultEndingStats();
+  const stats = source && typeof source === "object" ? source : {};
+  const endings = stats.endings && typeof stats.endings === "object" ? stats.endings : {};
   const normalized = {
     ...defaults,
-    tokens: Math.max(0, Math.round(finiteOr(progress.tokens, defaults.tokens))),
-    earned: Math.max(0, Math.round(finiteOr(progress.earned, defaults.earned))),
-    spent: Math.max(0, Math.round(finiteOr(progress.spent, defaults.spent))),
-    updatedAt: typeof progress.updatedAt === "string" ? progress.updatedAt : null,
-    lastRewardAt: typeof progress.lastRewardAt === "string" ? progress.lastRewardAt : null,
-    upgrades: { ...defaults.upgrades }
+    total: Math.max(0, Math.round(finiteOr(stats.total, defaults.total))),
+    endings: { ...defaults.endings },
+    lastEnding: typeof stats.lastEnding === "string" ? stats.lastEnding : null,
+    updatedAt: typeof stats.updatedAt === "string" ? stats.updatedAt : null
   };
 
-  Object.keys(INSPIRATION_TRACKS).forEach((trackId) => {
-    normalized.upgrades[trackId] = clamp(
-      Math.round(finiteOr(upgrades[trackId], defaults.upgrades[trackId])),
-      0,
-      INSPIRATION_MAX_LEVEL
-    );
+  Object.keys(defaults.endings).forEach((endingId) => {
+    normalized.endings[endingId] = Math.max(0, Math.round(finiteOr(endings[endingId], 0)));
   });
-
+  normalized.total = Math.max(
+    normalized.total,
+    Object.values(normalized.endings).reduce((sum, count) => sum + count, 0)
+  );
   return normalized;
 }
 
-function loadInspirationProgress() {
+function loadEndingStats() {
   try {
-    const raw = localStorage.getItem(INSPIRATION_STORE_KEY);
-    return normalizeInspirationProgress(raw ? JSON.parse(raw) : null);
+    const raw = localStorage.getItem(ENDING_STATS_STORE_KEY);
+    return normalizeEndingStats(raw ? JSON.parse(raw) : null);
   } catch {
-    return defaultInspirationProgress();
+    return defaultEndingStats();
   }
 }
 
-function saveInspirationProgress(progress = state.inspiration) {
+function saveEndingStats(stats = state.endingStats) {
   try {
-    localStorage.setItem(INSPIRATION_STORE_KEY, JSON.stringify(normalizeInspirationProgress(progress)));
+    localStorage.setItem(ENDING_STATS_STORE_KEY, JSON.stringify(normalizeEndingStats(stats)));
   } catch {
-    // Permanent progress is a convenience layer; the game still works without storage.
+    // Persistent statistics are optional; a browser can still run the game without storage.
   }
 }
 
-function inspirationLevelTotal(progress = state.inspiration) {
-  const normalized = normalizeInspirationProgress(progress);
-  return Object.keys(INSPIRATION_TRACKS).reduce((total, trackId) => {
-    return total + (normalized.upgrades[trackId] || 0);
-  }, 0);
-}
-
-function inspirationUpgradeCost(progress = state.inspiration) {
-  return Math.floor(inspirationLevelTotal(progress) / INSPIRATION_TIER_SIZE) + 1;
-}
-
-function inspirationBonusForTrack(trackId, progress = state.inspiration) {
-  const normalized = normalizeInspirationProgress(progress);
-  return 1 + (normalized.upgrades[trackId] || 0) * INSPIRATION_STEP;
-}
-
-function inspirationLevelForTrack(trackId, progress = state?.inspiration) {
-  const normalized = normalizeInspirationProgress(progress);
-  return normalized.upgrades[trackId] || 0;
-}
-
-function inspirationStartingBonuses(progress = loadInspirationProgress()) {
-  const normalized = normalizeInspirationProgress(progress);
-  const bonus = { sc: 0, be: 0, pop: 0, eco: 0, scTrend: 0, beTrend: 0 };
-  Object.entries(INSPIRATION_MASTERY_BONUSES).forEach(([trackId, values]) => {
-    if ((normalized.upgrades[trackId] || 0) < INSPIRATION_MAX_LEVEL) return;
-    Object.entries(values).forEach(([key, value]) => {
-      bonus[key] += value;
-    });
-  });
-  return bonus;
-}
-
-function knowledgeInspirationTrackForKey(key) {
-  if (key === "sc") return "science";
-  if (key === "be") return "belief";
-  return null;
-}
-
-function knowledgeTrendInspirationMultiplier(key, progress = state?.inspiration) {
-  const trackId = knowledgeInspirationTrackForKey(key);
-  return trackId ? inspirationBonusForTrack(trackId, progress) : 1;
-}
-
-function applyKnowledgeTrendInspiration(key, value, progress = state?.inspiration) {
-  const number = finiteOr(value, 0);
-  if (number <= 0) return number;
-  return number * knowledgeTrendInspirationMultiplier(key, progress);
-}
-
-function inspirationBenefitText(trackId, progress = state?.inspiration) {
-  const level = inspirationLevelForTrack(trackId, progress);
-  const percent = formatPercent(level * INSPIRATION_STEP);
-  const mastered = level >= INSPIRATION_MAX_LEVEL;
-  if (trackId === "science") {
-    return `Lv.${level}/${INSPIRATION_MAX_LEVEL}｜科学趋势 +${percent}${mastered ? "｜新世界 SC +2000 / 趋势 +25" : ""}`;
+function recordEndingCompletion(endingId) {
+  const stats = normalizeEndingStats(state.endingStats || loadEndingStats());
+  if (!Object.prototype.hasOwnProperty.call(stats.endings, endingId)) {
+    stats.endings[endingId] = 0;
   }
-  if (trackId === "belief") {
-    return `Lv.${level}/${INSPIRATION_MAX_LEVEL}｜神学趋势 +${percent}${mastered ? "｜新世界 BE +2000 / 趋势 +25" : ""}`;
-  }
-  if (trackId === "economy") {
-    return `Lv.${level}/${INSPIRATION_MAX_LEVEL}｜ECO +${percent}${mastered ? "｜新世界 ECO +40000" : ""}`;
-  }
-  if (trackId === "population") {
-    return `Lv.${level}/${INSPIRATION_MAX_LEVEL}｜POP +${percent}${mastered ? "｜新世界 POP +12000" : ""}`;
-  }
-  return `Lv.${level}/${INSPIRATION_MAX_LEVEL}`;
+  stats.endings[endingId] += 1;
+  stats.total += 1;
+  stats.lastEnding = endingId;
+  stats.updatedAt = new Date().toISOString();
+  state.endingStats = stats;
+  saveEndingStats(stats);
+  return stats;
 }
 
-function grantInspirationForEnding(endingId) {
-  if (endingId !== INSPIRATION_REWARD_ENDING) {
-    return { amount: 0, text: "只有 A 结局会生成造物灵感。" };
-  }
-
-  const progress = normalizeInspirationProgress(state.inspiration || loadInspirationProgress());
-  progress.tokens += INSPIRATION_REWARD_AMOUNT;
-  progress.earned += INSPIRATION_REWARD_AMOUNT;
-  progress.lastRewardAt = new Date().toISOString();
-  progress.updatedAt = progress.lastRewardAt;
-  state.inspiration = progress;
-  saveInspirationProgress(progress);
+function endingStatsSummary(stats = state?.endingStats) {
+  const normalized = normalizeEndingStats(stats || loadEndingStats());
+  const unique = Object.values(normalized.endings).filter((count) => count > 0).length;
   return {
-    amount: INSPIRATION_REWARD_AMOUNT,
-    text: `A 结局生成 ${INSPIRATION_REWARD_AMOUNT} 点造物灵感。`
+    ...normalized,
+    unique,
+    totalEndings: Object.keys(normalized.endings).length
   };
 }
 
@@ -1202,7 +1027,7 @@ function evolveKnowledgeTrend(key, previousTrend, current, context) {
   const actionImpulseRaw = context.actionResult?.locked
     ? 0
     : actionTrendShift(context.action, key) + knowledgeTrendImpulse(context.actionResult?.delta, key, 0.04, 16);
-  const actionImpulse = applyKnowledgeTrendInspiration(key, actionImpulseRaw);
+  const actionImpulse = actionImpulseRaw;
   const noise = knowledgeTrendNoise(context.rand || state.lastRand || 0, key);
   const crisisDrag = current.eco <= 0 ? -28 : 0;
   const next = previousTrend * 0.68 + target * 0.22 + eventImpulse + actionImpulse + noise + crisisDrag;
@@ -1233,7 +1058,7 @@ function knowledgeTrendTarget(key, current) {
       -125,
       150
     );
-    return applyKnowledgeTrendInspiration(key, target);
+    return target;
   }
 
   const anxietyLift = current.eco > 0 && current.eco < current.pop * 0.28 ? 18 : 0;
@@ -1250,7 +1075,7 @@ function knowledgeTrendTarget(key, current) {
     -125,
     150
   );
-  return applyKnowledgeTrendInspiration(key, target);
+  return target;
 }
 
 function fallbackKnowledgeTrend(key, current) {
@@ -2608,7 +2433,6 @@ function eerfScienceRequirementForLevel(level) {
 
 function applyDelta(delta, options = {}) {
   const effectiveDelta = applyEconomicCrisisRules(delta, options);
-  applyInspirationBonuses(effectiveDelta);
   if (options.protectPopulationFloor) {
     effectiveDelta.pop = protectedPopulationDelta(Number(effectiveDelta.pop || 0));
   }
@@ -2638,17 +2462,6 @@ function minimumSustainablePopulation(current = snapshot()) {
       ? 90
       : 0;
   return Math.round(MIN_SUSTAINABLE_POP + knowledgeBuffer + economyBuffer + orderBuffer);
-}
-
-function applyInspirationBonuses(delta = {}) {
-  const progress = normalizeInspirationProgress(state.inspiration);
-  Object.entries(INSPIRATION_TRACKS).forEach(([trackId, track]) => {
-    const key = track.stat;
-    if (typeof delta[key] !== "number" || delta[key] <= 0) return;
-    delta[key] *= inspirationBonusForTrack(trackId, progress);
-  });
-  state.inspiration = progress;
-  return delta;
 }
 
 function updateEnding() {
@@ -2775,7 +2588,7 @@ function resolveEnding(context = {}, current = snapshot()) {
     current.sc < thresholds.exodusKnowledge &&
     current.be <= thresholds.lowKnowledge &&
     current.stability >= thresholds.orderHigh &&
-    current.pop >= 25000
+    current.pop >= thresholds.authoritarianPopulation
   ) {
     return "H";
   }
@@ -2901,7 +2714,7 @@ function finishGame(endingId, context = {}) {
 
   const ending = endingCopyFor(endingId);
   const finalSnapshot = context.snapshot || snapshot();
-  const inspirationReward = grantInspirationForEnding(endingId);
+  const endingStats = recordEndingCompletion(endingId);
   state.finished = true;
   state.finalEnding = {
     id: endingId,
@@ -2913,7 +2726,7 @@ function finishGame(endingId, context = {}) {
     trigger: context.trigger || state.weather,
     snapshot: { ...finalSnapshot },
     peakSnapshot: runPeakSnapshot(finalSnapshot),
-    inspirationReward,
+    endingStats,
     createdAt: new Date().toISOString()
   };
   state.weather = context.trigger || state.weather;
@@ -2921,7 +2734,7 @@ function finishGame(endingId, context = {}) {
   addLog({
     type: "special",
     title: `${ending.name}｜终局达成`,
-    text: `第 ${state.count} 号文明在 ${state.finalEnding.trigger || "未知触发"} 后抵达终局。游戏结束。${inspirationReward.amount ? ` ${inspirationReward.text}` : ""}`,
+    text: `第 ${state.count} 号文明在 ${state.finalEnding.trigger || "未知触发"} 后抵达终局。游戏结束。终局统计已更新。`,
     delta: diff(finalSnapshot, finalSnapshot)
   });
   saveFinalEnding();
@@ -3080,7 +2893,7 @@ function render() {
   if (dom.saveStatus) dom.saveStatus.textContent = saveStatusText();
   renderEndingWatch();
   renderEerfDetails();
-  renderInspiration();
+  renderEndingStats();
   renderActionButtons();
   renderLog();
   renderArchive();
@@ -3204,7 +3017,7 @@ function endingWatchItems() {
         maximumRequirement("SC 上限", current.sc, thresholds.exodusKnowledge - 1),
         maximumRequirement("BE", current.be, thresholds.lowKnowledge),
         minimumRequirement("秩序", current.stability, thresholds.orderHigh),
-        minimumRequirement("POP", current.pop, 25000)
+        minimumRequirement("POP", current.pop, thresholds.authoritarianPopulation)
       ]
     }
   ];
@@ -3355,36 +3168,27 @@ function actionRawDelta(action) {
   return typeof action.delta === "function" ? action.delta(state) : (action.delta || {});
 }
 
-function renderInspiration() {
-  const progress = normalizeInspirationProgress(state.inspiration);
-  state.inspiration = progress;
-  const cost = inspirationUpgradeCost(progress);
-  const totalLevel = inspirationLevelTotal(progress);
-
-  if (dom.inspirationStatus) {
-    dom.inspirationStatus.textContent = `造物灵感 ${formatNumber(progress.tokens)}｜已获 ${formatNumber(progress.earned)}｜总升级 ${formatNumber(totalLevel)}`;
+function renderEndingStats() {
+  const summary = endingStatsSummary(state.endingStats);
+  state.endingStats = summary;
+  if (dom.endingStatsStatus) {
+    const last = summary.lastEnding
+      ? `${summary.lastEnding}｜${shortEndingName(summary.lastEnding)}`
+      : "尚无";
+    dom.endingStatsStatus.textContent = `已达成 ${formatNumber(summary.unique)}/${formatNumber(summary.totalEndings)} 种｜总计 ${formatNumber(summary.total)} 次｜最近 ${last}`;
   }
-  if (dom.inspirationCost) {
-    dom.inspirationCost.textContent = `下一次升级费用 ${formatNumber(cost)}；所有路线共享费用阶梯。`;
-  }
+  if (!dom.endingStatsList) return;
 
-  dom.inspirationButtons.forEach((button) => {
-    const trackId = button.dataset.inspiration;
-    const track = INSPIRATION_TRACKS[trackId];
-    if (!track) return;
-
-    const level = progress.upgrades[trackId] || 0;
-    const detail = button.querySelector(".inspiration-detail");
-    if (detail) {
-      detail.textContent = inspirationBenefitText(trackId, progress);
-    }
-
-    const disabled = level >= INSPIRATION_MAX_LEVEL || progress.tokens < cost || state.finished;
-    const shortcut = INSPIRATION_SHORTCUT_LABELS[trackId];
-    button.disabled = disabled;
-    button.setAttribute("aria-disabled", disabled ? "true" : "false");
-    button.title = `${track.label}造物灵感：${inspirationBenefitText(trackId, progress)}，下一次费用 ${cost}，快捷键 ${shortcut}`;
+  dom.endingStatsList.innerHTML = "";
+  const fragment = document.createDocumentFragment();
+  Object.keys(window.THREE_SUN_ENDINGS || {}).forEach((endingId) => {
+    const item = document.createElement("li");
+    const count = summary.endings[endingId] || 0;
+    item.className = count > 0 ? "achieved" : "";
+    item.textContent = `${endingId} ${shortEndingName(endingId)} ×${formatNumber(count)}`;
+    fragment.append(item);
   });
+  dom.endingStatsList.append(fragment);
 }
 
 function renderSpecialNotice() {
@@ -4301,7 +4105,7 @@ function loadState() {
     migrated.finalEnding = migrated.finalEnding && typeof migrated.finalEnding === "object"
       ? migrated.finalEnding
       : null;
-    migrated.inspiration = loadInspirationProgress();
+    migrated.endingStats = loadEndingStats();
     if (migrated.finished && !migrated.finalEnding?.id) {
       migrated.finished = false;
       migrated.finalEnding = null;

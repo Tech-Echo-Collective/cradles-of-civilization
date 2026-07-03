@@ -11,7 +11,6 @@
       <section class="ending-scene">
         <h1 id="endingTitle">终局</h1>
         <div class="ending-copy" id="endingCopy"></div>
-        <p class="ending-reward" id="endingReward" hidden></p>
         <section class="ending-recap" aria-label="终局复盘">
           <h2>本局复盘</h2>
           <dl id="endingRecapList"></dl>
@@ -42,7 +41,6 @@
       const ENDING_STORE_KEY = "three-sun-chronicle:ending:v1";
       const endingTitle = document.querySelector("#endingTitle");
       const endingCopy = document.querySelector("#endingCopy");
-      const endingReward = document.querySelector("#endingReward");
       const endingRecapList = document.querySelector("#endingRecapList");
       const copyChallengeButton = document.querySelector("#copyChallengeButton");
       const restartButton = document.querySelector("#restartButton");
@@ -111,11 +109,6 @@
         endingCopy.append(quote);
       }
 
-      if (storedEnding?.inspirationReward?.amount) {
-        endingReward.hidden = false;
-        endingReward.textContent = `造物灵感 +${storedEnding.inspirationReward.amount}`;
-      }
-
       function formatNumber(value) {
         return new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 0 }).format(Number(value) || 0);
       }
@@ -123,11 +116,16 @@
       function renderRecap() {
         const snapshot = storedEnding?.snapshot || {};
         const peak = storedEnding?.peakSnapshot || snapshot;
+        const endingStats = storedEnding?.endingStats || {};
+        const unique = endingStats.endings
+          ? Object.values(endingStats.endings).filter((count) => count > 0).length
+          : 0;
         const rows = [
           ["种子", storedEnding?.seed ?? "未知"],
           ["文明", storedEnding?.civilization ? `第 ${formatNumber(storedEnding.civilization)} 号` : "未知"],
           ["年份", storedEnding?.turn ? `${formatNumber(storedEnding.turn)} 年` : "未知"],
           ["触发", storedEnding?.trigger || ending.name],
+          ["终局统计", endingStats.total ? `已达成 ${formatNumber(unique)} 种 / 总计 ${formatNumber(endingStats.total)} 次` : "尚未记录"],
           ["终值", `SC ${formatNumber(snapshot.sc)} / BE ${formatNumber(snapshot.be)} / POP ${formatNumber(snapshot.pop)} / ECO ${formatNumber(snapshot.eco)} / 秩序 ${formatNumber(snapshot.stability)}`],
           ["峰值", `SC ${formatNumber(peak.sc)} / BE ${formatNumber(peak.be)} / POP ${formatNumber(peak.pop)} / ECO ${formatNumber(peak.eco)} / EERF ${formatNumber(peak.eerf)}`]
         ];

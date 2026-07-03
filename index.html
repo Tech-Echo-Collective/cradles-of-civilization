@@ -258,8 +258,8 @@
                 <dd id="saveStatus">自动保存开启</dd>
               </div>
               <div>
-                <dt>造物</dt>
-                <dd>只有 A 结局会生成 1 点造物灵感；灵感用于购买永久发展增益。科学/神学灵感会强化对应趋势，经济/人口灵感会强化对应增长；单线 Lv.5 会在新世界提供开局遗产。每累计 5 级全局升级，下一次费用 +1，各路线不会重置费用。</dd>
+                <dt>终局统计</dt>
+                <dd>游戏不再提供跨局数值增益。每次抵达终局只记录结局种类与达成次数，后续可作为成就系统基础。</dd>
               </div>
               <div>
                 <dt>纪年</dt>
@@ -291,7 +291,7 @@
               </div>
               <div>
                 <dt>结局</dt>
-                <dd>多数终局满足条件后只点亮“脱离苦海”，由玩家决定是否结算；候选终局只属于当前这代文明，本代毁灭后即失效。SC/BE 抵达上限会自动结算 A/B；隐藏 C 会在连续 2 次信仰断代毁灭，或连续 3 代文明重启后仍处于低知识、低发展停滞时自动结算。</dd>
+                <dd>多数终局满足条件后只点亮“脱离苦海”，由玩家决定是否结算；候选终局只属于当前这代文明，本代毁灭后即失效。若多个终局同时满足，按 D/E/A/B/F/H/G 的优先级取最先命中的一个；SC/BE 抵达上限会自动结算 A/B；隐藏 C 会在连续 2 次信仰断代毁灭，或连续 4 代文明毁灭时 SC 与 BE 均未突破 1500 时自动结算。</dd>
               </div>
             </dl>
             <section class="watch-panel" aria-label="终局观测">
@@ -302,18 +302,12 @@
               <h2>EERF 火种预估</h2>
               <dl id="eerfDetailList"></dl>
             </section>
-            <section class="inspiration-panel" aria-label="造物灵感">
+            <section class="ending-stats-panel" aria-label="终局统计">
               <div>
-                <h2>造物灵感</h2>
-                <p id="inspirationStatus">造物灵感 0｜已获 0｜总升级 0</p>
-                <p id="inspirationCost">下一次升级费用 1；所有路线共享费用阶梯。</p>
+                <h2>终局统计</h2>
+                <p id="endingStatsStatus">已达成 0/8 种｜总计 0 次｜最近 尚无</p>
               </div>
-              <div class="inspiration-actions">
-                <button type="button" data-inspiration="science">科学</button>
-                <button type="button" data-inspiration="belief">神学</button>
-                <button type="button" data-inspiration="economy">经济</button>
-                <button type="button" data-inspiration="population">人口</button>
-              </div>
+              <ol id="endingStatsList" class="ending-stats-list"></ol>
             </section>
             <section class="archive-panel" aria-label="文明档案">
               <h2>文明档案</h2>
