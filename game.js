@@ -35,15 +35,8 @@ const SCIENCE_RESTART_CAPS = [0, 750, 1450, 2200, 3000, 3800];
 const BELIEF_RESTART_RATE_MULTIPLIER = 1.08;
 const BELIEF_RESTART_CAPS = [0, 820, 1600, 2450, 3350, 4200];
 const C_AUTO_STREAK = 2;
-const C_STAGNANT_CIVILIZATION_STREAK = 3;
-const STAGNANT_LOW_KNOWLEDGE_CEILING = 500;
-const STAGNANT_TAKEOFF_KNOWLEDGE_CEILING = 900;
-const STAGNANT_CIVILIZATION_MIN_GAINS = {
-  sc: 220,
-  be: 220,
-  pop: 5200,
-  eco: 45000
-};
+const C_STAGNANT_CIVILIZATION_STREAK = 5;
+const C_EARLY_ERA_BREAKTHROUGH = 1200;
 const INSPIRATION_REWARD_ENDING = "A";
 const INSPIRATION_REWARD_AMOUNT = 1;
 const INSPIRATION_STEP = 0.05;
@@ -67,6 +60,8 @@ const SKY_MAX_STARS = 68;
 const SKY_SAFARI_MAX_STARS = 46;
 const SKY_MAX_POP_LIGHTS = 74;
 const SKY_SAFARI_MAX_POP_LIGHTS = 52;
+const DIVIDE_AUTO_ACTION = "balance";
+const DIVIDE_AUTO_DELAY_MS = 180;
 const ENDING_THRESHOLDS = {
   dominanceRatio: 1.28,
   reformHigh: 18500,
@@ -316,6 +311,7 @@ const dom = {};
 let state = null;
 let frameHandle = 0;
 let skyResizeHandle = 0;
+let autoRunHandle = 0;
 let lastSkyFrameAt = 0;
 let currentLogFilter = "all";
 
@@ -366,6 +362,7 @@ function createNewState(seedValue = Date.now()) {
     scTrend: 12 + masteryBonus.scTrend,
     beTrend: 16 + masteryBonus.beTrend,
     controlLocked: false,
+    autoRunUntilCollapse: false,
     populationLockTurns: 0,
     doomCountdown: 0,
     lockedPopulation: null,
@@ -475,6 +472,7 @@ function init() {
   updateEnding();
   render();
   drawSky();
+  scheduleAutoRunIfNeeded();
 }
 
 function seedFromUrl() {
@@ -656,6 +654,26 @@ function scheduleSkyResize() {
   });
 }
 
+function scheduleAutoRunIfNeeded() {
+  if (!state || state.finished || state.awaitingCivilizationRestart || !state.autoRunUntilCollapse) {
+    cancelAutoRun();
+    return;
+  }
+
+  if (autoRunHandle) return;
+  autoRunHandle = window.setTimeout(() => {
+    autoRunHandle = 0;
+    if (!state || state.finished || state.awaitingCivilizationRestart || !state.autoRunUntilCollapse) return;
+    advanceRound(DIVIDE_AUTO_ACTION);
+  }, DIVIDE_AUTO_DELAY_MS);
+}
+
+function cancelAutoRun() {
+  if (!autoRunHandle) return;
+  window.clearTimeout(autoRunHandle);
+  autoRunHandle = 0;
+}
+
 function handleShortcut(event) {
   if (shouldIgnoreShortcut(event)) return;
 
@@ -724,6 +742,7 @@ function startNewGameFromSeed(event) {
 }
 
 function startNewGameWithSeed(seedValue) {
+  cancelAutoRun();
   clearStoredEnding();
   state = createNewState(seedValue);
   if (dom.seedInput) dom.seedInput.value = "";
@@ -945,11 +964,13 @@ function flashShortcutButton(button) {
 
 function advanceRound(actionId) {
   if (state.finished) {
+    cancelAutoRun();
     goToEndingPage(state.finalEnding?.id || "A");
     return;
   }
 
   if (actionId === "restartCivilization") {
+    cancelAutoRun();
     restartCivilizationFromPending();
     saveState();
     render();
@@ -1003,24 +1024,26 @@ function advanceRound(actionId) {
   const specialEvent = specialEventFor(spec, rng);
   state.rngState = rng.state;
   if (specialEvent) {
+    const specialTitle = specialEventTitleWithSpec(specialEvent, spec);
     const specialDelta = applySpecialEvent(specialEvent, {
       freezeKnowledge: crisisAtRoundStart,
       protectPopulationFloor: !specialEvent.piercesPopulationProtection
     });
     state.specialNotice = {
-      title: specialEvent.title,
+      title: specialTitle,
       text: specialEvent.text,
-      delta: specialDelta
+      delta: specialDelta,
+      spec
     };
-    updateCivilizationStats(snapshot(), specialEvent.title);
-    if (maybeFinishGame({ kind: "special", trigger: specialEvent.title, rand })) return;
+    updateCivilizationStats(snapshot(), specialTitle);
+    if (maybeFinishGame({ kind: "special", trigger: specialTitle, rand })) return;
     if (specialEvent.piercesPopulationProtection && state.populationLockTurns > 0) {
       state.lockedPopulation = state.pop;
     }
     if (state.pop <= 0 && specialEvent.piercesPopulationProtection) {
       if (!collapseCivilization(
         {
-          title: specialEvent.title,
+          title: specialTitle,
           text: `${specialEvent.text} EERF 无法替地表人口承受这次屠杀。`,
           type: "disaster"
         },
@@ -1089,7 +1112,8 @@ function advanceRound(actionId) {
 
   updateEnding();
   const after = snapshot();
-  updateCivilizationStats(after, specialEvent?.title || null);
+  const specialTitle = specialEvent ? specialEventTitleWithSpec(specialEvent, spec) : null;
+  updateCivilizationStats(after, specialTitle);
   const trendEvents = updateKnowledgeTrends({
     event,
     specialEvent,
@@ -1099,7 +1123,7 @@ function advanceRound(actionId) {
     rand
   });
   const totalDelta = diff(before, after);
-  state.weather = [event.title, specialEvent?.title, action.label].filter(Boolean).join("；");
+  state.weather = [event.title, specialTitle, action.label].filter(Boolean).join("；");
   const type = event.type === "special" || specialEvent || action.type === "special" || actionResult.locked
     ? "special"
     : "progress";
@@ -1123,6 +1147,7 @@ function advanceRound(actionId) {
 
   saveState();
   render();
+  scheduleAutoRunIfNeeded();
 }
 
 function computeDrift(rand, current) {
@@ -1914,10 +1939,11 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "Divide and Fall - 分崩离析",
-      text: "共同体碎裂。本代文明内，玩家行动无法再控制 SC、BE、人口或经济的发展。",
+      text: "共同体碎裂。本代文明内，玩家行动无法再控制 SC、BE、人口或经济的发展。文明将自行推进，直到本轮毁灭。",
       delta: {},
       effect() {
         state.controlLocked = true;
+        state.autoRunUntilCollapse = true;
       }
     };
   }
@@ -2039,6 +2065,13 @@ function specialEventFor(spec, rng) {
   }
 
   return null;
+}
+
+function specialEventTitleWithSpec(event, spec) {
+  if (!event) return "";
+  return Number.isFinite(Number(spec))
+    ? `${event.title}｜SPEC ${formatSpec(spec)}`
+    : event.title;
 }
 
 function baseEvent(rand) {
@@ -2418,12 +2451,17 @@ function resetCivilizationModifiers() {
   state.knowledgeGrowthMultiplier = 1;
   state.controlEfficiencyMultiplier = 1;
   state.controlLocked = false;
+  state.autoRunUntilCollapse = false;
   state.populationLockTurns = 0;
   state.doomCountdown = 0;
   state.lockedPopulation = null;
+  cancelAutoRun();
 }
 
 function collapseCivilization(event, before, rand) {
+  state.autoRunUntilCollapse = false;
+  cancelAutoRun();
+
   if (maybeFinishGame({ kind: "collapse", trigger: event.title, rand, snapshot: before })) {
     return true;
   }
@@ -2793,7 +2831,7 @@ function maybeFinishStagnantCivilizationCEnding(archived, current = snapshot(), 
 
   finishGame("C", {
     kind: "stagnant-civilizations",
-    trigger: `连续 ${C_STAGNANT_CIVILIZATION_STREAK} 代文明重启后均陷入停滞`,
+    trigger: `连续 ${C_STAGNANT_CIVILIZATION_STREAK} 代文明毁灭时科学与神学均未突破 ${formatNumber(C_EARLY_ERA_BREAKTHROUGH)}`,
     rand,
     snapshot: current
   });
@@ -2821,30 +2859,9 @@ function updateStagnantCivilizationCEndingStreak(archived) {
 function isStagnantCivilization(archived) {
   if (!archived || archived.turns < 1) return false;
 
-  const gains = {
-    sc: finiteOr(archived.peakSc, 0) - finiteOr(archived.initialSc, 0),
-    be: finiteOr(archived.peakBe, 0) - finiteOr(archived.initialBe, 0),
-    pop: finiteOr(archived.peakPop, 0) - finiteOr(archived.initialPop, 0),
-    eco: finiteOr(archived.peakEco, 0) - finiteOr(archived.initialEco, 0)
-  };
-
   const peakSc = finiteOr(archived.peakSc, 0);
   const peakBe = finiteOr(archived.peakBe, 0);
-  const peakEerf = finiteOr(archived.peakEerf, 0);
-  const lowKnowledgeTrap = peakSc <= STAGNANT_LOW_KNOWLEDGE_CEILING &&
-    peakBe <= STAGNANT_LOW_KNOWLEDGE_CEILING;
-  const noKnowledgeTakeoff = peakSc <= STAGNANT_TAKEOFF_KNOWLEDGE_CEILING &&
-    peakBe <= STAGNANT_TAKEOFF_KNOWLEDGE_CEILING &&
-    gains.sc < STAGNANT_CIVILIZATION_MIN_GAINS.sc &&
-    gains.be < STAGNANT_CIVILIZATION_MIN_GAINS.be;
-  const noMaterialTakeoff = gains.pop < STAGNANT_CIVILIZATION_MIN_GAINS.pop &&
-    gains.eco < STAGNANT_CIVILIZATION_MIN_GAINS.eco &&
-    peakEerf <= 0;
-  const allAxesStalled = Object.entries(STAGNANT_CIVILIZATION_MIN_GAINS).every(([key, threshold]) => {
-    return gains[key] < threshold;
-  });
-
-  return lowKnowledgeTrap || (noKnowledgeTakeoff && noMaterialTakeoff) || allAxesStalled;
+  return peakSc < C_EARLY_ERA_BREAKTHROUGH && peakBe < C_EARLY_ERA_BREAKTHROUGH;
 }
 
 function resolveAutomaticEnding(context = {}, current = snapshot(), endingId = null) {
@@ -2879,6 +2896,8 @@ function settleCurrentEnding() {
 
 function finishGame(endingId, context = {}) {
   if (state.finished) return;
+  state.autoRunUntilCollapse = false;
+  cancelAutoRun();
 
   const ending = endingCopyFor(endingId);
   const finalSnapshot = context.snapshot || snapshot();
@@ -3291,6 +3310,10 @@ function actionDisabledReason(action) {
 
   if (state.awaitingCivilizationRestart) {
     return action.restartOnly ? "" : "等待重启文明";
+  }
+
+  if (state.autoRunUntilCollapse && !action.restartOnly) {
+    return "分崩离析自动推演中";
   }
 
   if (action.settleOnly) {
@@ -4186,6 +4209,9 @@ function loadState() {
       ? {
           title: String(migrated.specialNotice.title || "特殊事件"),
           text: String(migrated.specialNotice.text || ""),
+          spec: Number.isFinite(Number(migrated.specialNotice.spec))
+            ? Math.max(1, Math.round(Number(migrated.specialNotice.spec)))
+            : null,
           delta: migrated.specialNotice.delta && typeof migrated.specialNotice.delta === "object"
             ? diff(snapshotForObject({}), snapshotForObject(migrated.specialNotice.delta))
             : {}
@@ -4210,6 +4236,7 @@ function loadState() {
     migrated.knowledgeGrowthMultiplier = finiteOr(migrated.knowledgeGrowthMultiplier, 1);
     migrated.controlEfficiencyMultiplier = finiteOr(migrated.controlEfficiencyMultiplier, 1);
     migrated.controlLocked = Boolean(migrated.controlLocked);
+    migrated.autoRunUntilCollapse = Boolean(migrated.autoRunUntilCollapse || migrated.controlLocked);
     migrated.populationLockTurns = Math.max(0, Math.round(finiteOr(migrated.populationLockTurns, 0)));
     migrated.doomCountdown = Math.max(0, Math.round(finiteOr(migrated.doomCountdown, 0)));
     migrated.lockedPopulation = Number.isFinite(Number(migrated.lockedPopulation))
@@ -4235,6 +4262,9 @@ function loadState() {
       : null;
     if (migrated.awaitingCivilizationRestart && !migrated.pendingRestart) {
       migrated.awaitingCivilizationRestart = false;
+    }
+    if (migrated.awaitingCivilizationRestart || migrated.finished) {
+      migrated.autoRunUntilCollapse = false;
     }
     migrated.endingCandidate = migrated.endingCandidate && typeof migrated.endingCandidate === "object" && migrated.endingCandidate.id
       ? {
@@ -4344,6 +4374,10 @@ function formatRand(value) {
   return String(value).padStart(4, "0");
 }
 
+function formatSpec(value) {
+  return String(Math.max(1, Math.round(finiteOr(value, 0))));
+}
+
 function isPalindrome(text) {
   return text === text.split("").reverse().join("");
 }
@@ -4374,4 +4408,5 @@ window.addEventListener("beforeunload", () => {
   if (state && !state.finished) saveState();
   if (frameHandle) cancelAnimationFrame(frameHandle);
   if (skyResizeHandle) cancelAnimationFrame(skyResizeHandle);
+  cancelAutoRun();
 });
