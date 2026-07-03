@@ -49,6 +49,12 @@ const INSPIRATION_REWARD_AMOUNT = 1;
 const INSPIRATION_STEP = 0.05;
 const INSPIRATION_MAX_LEVEL = 5;
 const INSPIRATION_TIER_SIZE = 5;
+const INSPIRATION_MASTERY_BONUSES = {
+  science: { sc: 2000, scTrend: 25 },
+  belief: { be: 2000, beTrend: 25 },
+  economy: { eco: 40000 },
+  population: { pop: 12000 }
+};
 const ENDING_THRESHOLDS = {
   dominanceRatio: 1.28,
   reformHigh: 18500,
@@ -322,11 +328,13 @@ function normalizeSeed(value) {
 
 function createNewState(seedValue = Date.now()) {
   const seed = normalizeSeed(seedValue);
+  const inspiration = loadInspirationProgress();
+  const masteryBonus = inspirationStartingBonuses(inspiration);
   const initialSnapshot = {
-    sc: 240,
-    be: 360,
-    pop: 7600,
-    eco: DEFAULT_ECO,
+    sc: clamp(240 + masteryBonus.sc, 0, CAP),
+    be: clamp(360 + masteryBonus.be, 0, CAP),
+    pop: 7600 + masteryBonus.pop,
+    eco: DEFAULT_ECO + masteryBonus.eco,
     stability: 52
   };
   return {
@@ -341,8 +349,8 @@ function createNewState(seedValue = Date.now()) {
     populationGrowthMultiplier: 1,
     knowledgeGrowthMultiplier: 1,
     controlEfficiencyMultiplier: 1,
-    scTrend: 12,
-    beTrend: 16,
+    scTrend: 12 + masteryBonus.scTrend,
+    beTrend: 16 + masteryBonus.beTrend,
     controlLocked: false,
     populationLockTurns: 0,
     doomCountdown: 0,
@@ -356,7 +364,7 @@ function createNewState(seedValue = Date.now()) {
     cStagnantCivilizationStreak: 0,
     finished: false,
     finalEnding: null,
-    inspiration: loadInspirationProgress(),
+    inspiration,
     lastRand: null,
     lastTone: "quiet",
     specialNotice: null,
@@ -744,7 +752,7 @@ function upgradeInspiration(trackId) {
   addLog({
     type: "special",
     title: `造物灵感｜${track.label}增益提升`,
-    text: `${track.label}发展的永久增益提升至 +${formatPercent(inspirationBonusForTrack(trackId, progress) - 1)}。下一次升级费用将按全局升级总数计算。`,
+    text: `${track.label}发展的永久增益已更新：${inspirationBenefitText(trackId, progress)}。下一次升级费用将按全局升级总数计算。`,
     delta: {}
   });
   saveInspirationProgress(progress);
@@ -825,6 +833,59 @@ function inspirationUpgradeCost(progress = state.inspiration) {
 function inspirationBonusForTrack(trackId, progress = state.inspiration) {
   const normalized = normalizeInspirationProgress(progress);
   return 1 + (normalized.upgrades[trackId] || 0) * INSPIRATION_STEP;
+}
+
+function inspirationLevelForTrack(trackId, progress = state?.inspiration) {
+  const normalized = normalizeInspirationProgress(progress);
+  return normalized.upgrades[trackId] || 0;
+}
+
+function inspirationStartingBonuses(progress = loadInspirationProgress()) {
+  const normalized = normalizeInspirationProgress(progress);
+  const bonus = { sc: 0, be: 0, pop: 0, eco: 0, scTrend: 0, beTrend: 0 };
+  Object.entries(INSPIRATION_MASTERY_BONUSES).forEach(([trackId, values]) => {
+    if ((normalized.upgrades[trackId] || 0) < INSPIRATION_MAX_LEVEL) return;
+    Object.entries(values).forEach(([key, value]) => {
+      bonus[key] += value;
+    });
+  });
+  return bonus;
+}
+
+function knowledgeInspirationTrackForKey(key) {
+  if (key === "sc") return "science";
+  if (key === "be") return "belief";
+  return null;
+}
+
+function knowledgeTrendInspirationMultiplier(key, progress = state?.inspiration) {
+  const trackId = knowledgeInspirationTrackForKey(key);
+  return trackId ? inspirationBonusForTrack(trackId, progress) : 1;
+}
+
+function applyKnowledgeTrendInspiration(key, value, progress = state?.inspiration) {
+  const number = finiteOr(value, 0);
+  if (number <= 0) return number;
+  return number * knowledgeTrendInspirationMultiplier(key, progress);
+}
+
+function inspirationBenefitText(trackId, progress = state?.inspiration) {
+  const level = inspirationLevelForTrack(trackId, progress);
+  const percent = formatPercent(level * INSPIRATION_STEP);
+  const mastered = level >= INSPIRATION_MAX_LEVEL;
+  if (trackId === "science") {
+    return `Lv.${level}/${INSPIRATION_MAX_LEVEL}｜科学趋势 +${percent}${mastered ? "｜新世界 SC +2000 / 趋势 +25" : ""}`;
+  }
+  if (trackId === "belief") {
+    return `Lv.${level}/${INSPIRATION_MAX_LEVEL}｜神学趋势 +${percent}${mastered ? "｜新世界 BE +2000 / 趋势 +25" : ""}`;
+  }
+  if (trackId === "economy") {
+    return `Lv.${level}/${INSPIRATION_MAX_LEVEL}｜ECO +${percent}${mastered ? "｜新世界 ECO +40000" : ""}`;
+  }
+  if (trackId === "population") {
+    return `Lv.${level}/${INSPIRATION_MAX_LEVEL}｜POP +${percent}${mastered ? "｜新世界 POP +12000" : ""}`;
+  }
+  return `Lv.${level}/${INSPIRATION_MAX_LEVEL}`;
 }
 
 function grantInspirationForEnding(endingId) {
@@ -1092,9 +1153,10 @@ function evolveKnowledgeTrend(key, previousTrend, current, context) {
   const eventImpulse = knowledgeTrendImpulse(context.event?.delta, key, 0.06, 18) +
     knowledgeTrendImpulse(context.specialEvent?.delta, key, 0.05, 32) +
     knowledgeTrendImpulse(context.pressureDelta, key, 0.08, 12);
-  const actionImpulse = context.actionResult?.locked
+  const actionImpulseRaw = context.actionResult?.locked
     ? 0
     : actionTrendShift(context.action, key) + knowledgeTrendImpulse(context.actionResult?.delta, key, 0.04, 16);
+  const actionImpulse = applyKnowledgeTrendInspiration(key, actionImpulseRaw);
   const noise = knowledgeTrendNoise(context.rand || state.lastRand || 0, key);
   const crisisDrag = current.eco <= 0 ? -28 : 0;
   const next = previousTrend * 0.68 + target * 0.22 + eventImpulse + actionImpulse + noise + crisisDrag;
@@ -1112,7 +1174,7 @@ function knowledgeTrendTarget(key, current) {
   const crisisPenalty = current.eco <= 0 ? 86 : 0;
 
   if (key === "sc") {
-    return clamp(
+    const target = clamp(
       8 +
         Math.sqrt(scRatio) * 54 +
         economyIndex * 34 +
@@ -1125,10 +1187,11 @@ function knowledgeTrendTarget(key, current) {
       -125,
       150
     );
+    return applyKnowledgeTrendInspiration(key, target);
   }
 
   const anxietyLift = current.eco > 0 && current.eco < current.pop * 0.28 ? 18 : 0;
-  return clamp(
+  const target = clamp(
     10 +
       Math.sqrt(beRatio) * 50 +
       populationIndex * 22 +
@@ -1141,6 +1204,7 @@ function knowledgeTrendTarget(key, current) {
     -125,
     150
   );
+  return applyKnowledgeTrendInspiration(key, target);
 }
 
 function fallbackKnowledgeTrend(key, current) {
@@ -3258,14 +3322,14 @@ function renderInspiration() {
     const level = progress.upgrades[trackId] || 0;
     const detail = button.querySelector(".inspiration-detail");
     if (detail) {
-      detail.textContent = `Lv.${level}/${INSPIRATION_MAX_LEVEL}｜+${formatPercent(level * INSPIRATION_STEP)}`;
+      detail.textContent = inspirationBenefitText(trackId, progress);
     }
 
     const disabled = level >= INSPIRATION_MAX_LEVEL || progress.tokens < cost || state.finished;
     const shortcut = INSPIRATION_SHORTCUT_LABELS[trackId];
     button.disabled = disabled;
     button.setAttribute("aria-disabled", disabled ? "true" : "false");
-    button.title = `${track.label}造物灵感：Lv.${level}/${INSPIRATION_MAX_LEVEL}，下一次费用 ${cost}，快捷键 ${shortcut}`;
+    button.title = `${track.label}造物灵感：${inspirationBenefitText(trackId, progress)}，下一次费用 ${cost}，快捷键 ${shortcut}`;
   });
 }
 
