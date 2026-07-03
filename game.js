@@ -55,6 +55,10 @@ const INSPIRATION_MASTERY_BONUSES = {
   economy: { eco: 40000 },
   population: { pop: 12000 }
 };
+const SKY_FRAME_INTERVAL_MS = 84;
+const SKY_MAX_DEVICE_PIXEL_RATIO = 1.35;
+const SKY_MAX_STARS = 74;
+const SKY_MAX_POP_LIGHTS = 86;
 const ENDING_THRESHOLDS = {
   dominanceRatio: 1.28,
   reformHigh: 18500,
@@ -303,6 +307,7 @@ const INSPIRATION_SHORTCUT_LABELS = INSPIRATION_SHORTCUTS.reduce((labels, shortc
 const dom = {};
 let state = null;
 let frameHandle = 0;
+let lastSkyFrameAt = 0;
 let currentLogFilter = "all";
 
 class Lcg {
@@ -3458,7 +3463,11 @@ function eerfStatusText() {
 }
 
 function drawSky() {
-  renderSkyFrame(performance.now());
+  const now = performance.now();
+  if (!document.hidden && now - lastSkyFrameAt >= SKY_FRAME_INTERVAL_MS) {
+    lastSkyFrameAt = now;
+    renderSkyFrame(now);
+  }
   frameHandle = requestAnimationFrame(drawSky);
 }
 
@@ -3466,8 +3475,9 @@ function renderSkyFrame(time) {
   const canvas = dom.skyCanvas;
   if (!canvas) return;
   const context = canvas.getContext("2d");
+  if (!context) return;
   const rect = canvas.getBoundingClientRect();
-  const ratio = window.devicePixelRatio || 1;
+  const ratio = Math.min(window.devicePixelRatio || 1, SKY_MAX_DEVICE_PIXEL_RATIO);
   const width = Math.max(320, rect.width);
   const height = Math.max(220, rect.height);
   const targetWidth = Math.floor(width * ratio);
@@ -3869,7 +3879,7 @@ function drawPixelSky(context, width, height, pixel, tone) {
 }
 
 function drawPixelStars(context, width, height, pixel, time) {
-  for (let index = 0; index < 116; index += 1) {
+  for (let index = 0; index < SKY_MAX_STARS; index += 1) {
     const x = snap(((index * 137) % 991) / 991 * width, pixel);
     const y = snap(((index * 211) % 457) / 457 * height * 0.58, pixel);
     const blink = Math.sin(time * 0.001 + index) > 0.2;
@@ -3917,7 +3927,7 @@ function drawPixelSun(context, sun, pixel, time, index) {
   const x = snap(sun.x, pixel);
   const y = snap(sun.y, pixel);
   const radius = Math.max(pixel * 4, snap(sun.r * pixel, pixel));
-  pixelCircle(context, x, y, radius * 3, sun.glow, pixel);
+  drawPixelGlow(context, x, y, radius * 3, sun.glow, pixel);
   pixelCircle(context, x, y, radius, sun.mid, pixel);
   pixelCircle(context, x - pixel * 2, y - pixel * 2, radius * 0.62, sun.core, pixel);
 
@@ -4029,7 +4039,7 @@ function drawPixelTemple(context, x, groundY, pixel, beRatio) {
 }
 
 function drawPixelPopulationLights(context, startX, cityWidth, groundY, pixel, popRatio) {
-  const lights = Math.min(160, Math.round(popRatio * 70));
+  const lights = Math.min(SKY_MAX_POP_LIGHTS, Math.round(popRatio * 54));
   for (let index = 0; index < lights; index += 1) {
     const x = snap(startX + ((index * 41) % Math.max(pixel, cityWidth)), pixel);
     const y = snap(groundY - pixel * 3 - ((index * 29) % (pixel * 28)), pixel);
@@ -4052,6 +4062,12 @@ function drawPixelEerf(context, width, height, pixel) {
     const color = index % 2 ? "#7bd88f" : "#c7d2fe";
     pixelRect(context, x + pixel * (3 + index * 4), y + pixel * 2, pixel * 2, pixel, color, pixel);
   }
+}
+
+function drawPixelGlow(context, centerX, centerY, radius, color, pixel) {
+  const snappedRadius = snap(radius, pixel);
+  pixelRect(context, centerX - snappedRadius, centerY - snappedRadius, snappedRadius * 2, snappedRadius * 2, color, pixel);
+  pixelRect(context, centerX - snappedRadius * 0.62, centerY - snappedRadius * 0.62, snappedRadius * 1.24, snappedRadius * 1.24, color, pixel);
 }
 
 function pixelRect(context, x, y, width, height, color, pixel) {
