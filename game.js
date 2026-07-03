@@ -1537,7 +1537,7 @@ function specialEventFor(spec, rng) {
       type: "special",
       title: "ReUnion - 叛军起义",
       text: `王侯将相，宁有种乎？ \n——陈胜、吴广，公元前209年。\n叛军夺取粮仓与观测站，人口损失 ${formatNumber(loss)}。`,
-      delta: { sc: -30, be: -10, pop: -loss }
+      delta: { sc: -30 * SPECIAL_KNOWLEDGE_SCALE, be: -10 * SPECIAL_KNOWLEDGE_SCALE, pop: -loss }
     };
   }
 
@@ -1741,7 +1741,7 @@ function specialEventFor(spec, rng) {
       type: "special",
       title: "God Not Found - 查无此神",
       text: "我们把天空翻了个遍，没有发现上帝和天使。\n——尤里·加加林，1961年。",
-      delta: { be: -50 }
+      delta: { be: -50 * SPECIAL_KNOWLEDGE_SCALE }
     };
   }
 
