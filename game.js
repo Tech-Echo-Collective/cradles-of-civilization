@@ -55,10 +55,18 @@ const INSPIRATION_MASTERY_BONUSES = {
   economy: { eco: 40000 },
   population: { pop: 12000 }
 };
-const SKY_FRAME_INTERVAL_MS = 84;
-const SKY_MAX_DEVICE_PIXEL_RATIO = 1.35;
-const SKY_MAX_STARS = 74;
-const SKY_MAX_POP_LIGHTS = 86;
+const SKY_FRAME_INTERVAL_MS = 96;
+const SKY_SAFARI_FRAME_INTERVAL_MS = 160;
+const SKY_MAX_DEVICE_PIXEL_RATIO = 1.25;
+const SKY_SAFARI_MAX_DEVICE_PIXEL_RATIO = 1;
+const SKY_MAX_BACKING_WIDTH = 1500;
+const SKY_MAX_BACKING_HEIGHT = 620;
+const SKY_SAFARI_MAX_BACKING_WIDTH = 1080;
+const SKY_SAFARI_MAX_BACKING_HEIGHT = 460;
+const SKY_MAX_STARS = 68;
+const SKY_SAFARI_MAX_STARS = 46;
+const SKY_MAX_POP_LIGHTS = 74;
+const SKY_SAFARI_MAX_POP_LIGHTS = 52;
 const ENDING_THRESHOLDS = {
   dominanceRatio: 1.28,
   reformHigh: 18500,
@@ -307,6 +315,7 @@ const INSPIRATION_SHORTCUT_LABELS = INSPIRATION_SHORTCUTS.reduce((labels, shortc
 const dom = {};
 let state = null;
 let frameHandle = 0;
+let skyResizeHandle = 0;
 let lastSkyFrameAt = 0;
 let currentLogFilter = "all";
 
@@ -633,11 +642,18 @@ function bindEvents() {
     button.addEventListener("click", () => upgradeInspiration(button.dataset.inspiration));
   });
 
-  window.addEventListener("resize", () => {
-    renderSkyFrame(performance.now());
-  });
+  window.addEventListener("resize", scheduleSkyResize);
+  window.addEventListener("orientationchange", scheduleSkyResize);
 
   window.addEventListener("keydown", handleShortcut);
+}
+
+function scheduleSkyResize() {
+  if (skyResizeHandle) cancelAnimationFrame(skyResizeHandle);
+  skyResizeHandle = requestAnimationFrame(() => {
+    skyResizeHandle = 0;
+    renderSkyFrame(performance.now());
+  });
 }
 
 function handleShortcut(event) {
@@ -3472,9 +3488,39 @@ function eerfStatusText() {
   return `灾后火种等级 ${level}；下一代初始人口约 ${formatNumber(estimate)}；SC/BE 约 ${formatNumber(knowledge.sc)}/${formatNumber(knowledge.be)}${nextRequirement}`;
 }
 
+function isSafariBrowser() {
+  const userAgent = typeof navigator === "object" && navigator.userAgent
+    ? navigator.userAgent
+    : "";
+  return /safari/i.test(userAgent) && !/chrome|chromium|crios|fxios|edg|opr|android/i.test(userAgent);
+}
+
+function skyFrameInterval() {
+  return isSafariBrowser() ? SKY_SAFARI_FRAME_INTERVAL_MS : SKY_FRAME_INTERVAL_MS;
+}
+
+function skyCanvasScale(width, height) {
+  const safari = isSafariBrowser();
+  const deviceRatio = Math.min(
+    window.devicePixelRatio || 1,
+    safari ? SKY_SAFARI_MAX_DEVICE_PIXEL_RATIO : SKY_MAX_DEVICE_PIXEL_RATIO
+  );
+  const maxWidth = safari ? SKY_SAFARI_MAX_BACKING_WIDTH : SKY_MAX_BACKING_WIDTH;
+  const maxHeight = safari ? SKY_SAFARI_MAX_BACKING_HEIGHT : SKY_MAX_BACKING_HEIGHT;
+  return Math.max(0.3, Math.min(deviceRatio, maxWidth / Math.max(1, width), maxHeight / Math.max(1, height)));
+}
+
+function skyStarCount() {
+  return isSafariBrowser() ? SKY_SAFARI_MAX_STARS : SKY_MAX_STARS;
+}
+
+function skyPopulationLightCount() {
+  return isSafariBrowser() ? SKY_SAFARI_MAX_POP_LIGHTS : SKY_MAX_POP_LIGHTS;
+}
+
 function drawSky() {
   const now = performance.now();
-  if (!document.hidden && now - lastSkyFrameAt >= SKY_FRAME_INTERVAL_MS) {
+  if (!document.hidden && now - lastSkyFrameAt >= skyFrameInterval()) {
     lastSkyFrameAt = now;
     renderSkyFrame(now);
   }
@@ -3487,11 +3533,11 @@ function renderSkyFrame(time) {
   const context = canvas.getContext("2d");
   if (!context) return;
   const rect = canvas.getBoundingClientRect();
-  const ratio = Math.min(window.devicePixelRatio || 1, SKY_MAX_DEVICE_PIXEL_RATIO);
   const width = Math.max(320, rect.width);
   const height = Math.max(220, rect.height);
-  const targetWidth = Math.floor(width * ratio);
-  const targetHeight = Math.floor(height * ratio);
+  const ratio = skyCanvasScale(width, height);
+  const targetWidth = Math.max(1, Math.floor(width * ratio));
+  const targetHeight = Math.max(1, Math.floor(height * ratio));
 
   if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
     canvas.width = targetWidth;
@@ -3552,7 +3598,8 @@ function drawAtmosphere(context, width, height, time, tone, randFactor) {
 
 function drawStars(context, width, height, time, randFactor) {
   context.save();
-  for (let index = 0; index < 140; index += 1) {
+  const starCount = Math.min(140, skyStarCount());
+  for (let index = 0; index < starCount; index += 1) {
     const x = ((index * 131) % 997) / 997 * width;
     const y = ((index * 197) % 463) / 463 * height * 0.58;
     const pulse = 0.24 + Math.sin(time * 0.0012 + index + randFactor) * 0.18;
@@ -3750,7 +3797,7 @@ function drawRealisticCity(context, width, height, groundY) {
   drawObservatory(context, startX + cityWidth * 0.18, groundY, scRatio);
   drawTempleDome(context, startX + cityWidth * 0.72, groundY, beRatio);
 
-  const popLights = Math.min(150, Math.floor(Math.sqrt(Math.max(0, state.pop)) * 0.42));
+  const popLights = Math.min(skyPopulationLightCount(), Math.floor(Math.sqrt(Math.max(0, state.pop)) * 0.42));
   for (let index = 0; index < popLights; index += 1) {
     const x = startX + ((index * 53) % Math.max(1, cityWidth));
     const y = groundY - 16 - ((index * 29) % 96);
@@ -3889,7 +3936,8 @@ function drawPixelSky(context, width, height, pixel, tone) {
 }
 
 function drawPixelStars(context, width, height, pixel, time) {
-  for (let index = 0; index < SKY_MAX_STARS; index += 1) {
+  const starCount = skyStarCount();
+  for (let index = 0; index < starCount; index += 1) {
     const x = snap(((index * 137) % 991) / 991 * width, pixel);
     const y = snap(((index * 211) % 457) / 457 * height * 0.58, pixel);
     const blink = Math.sin(time * 0.001 + index) > 0.2;
@@ -4049,7 +4097,7 @@ function drawPixelTemple(context, x, groundY, pixel, beRatio) {
 }
 
 function drawPixelPopulationLights(context, startX, cityWidth, groundY, pixel, popRatio) {
-  const lights = Math.min(SKY_MAX_POP_LIGHTS, Math.round(popRatio * 54));
+  const lights = Math.min(skyPopulationLightCount(), Math.round(popRatio * 54));
   for (let index = 0; index < lights; index += 1) {
     const x = snap(startX + ((index * 41) % Math.max(pixel, cityWidth)), pixel);
     const y = snap(groundY - pixel * 3 - ((index * 29) % (pixel * 28)), pixel);
@@ -4325,4 +4373,5 @@ document.addEventListener("DOMContentLoaded", init);
 window.addEventListener("beforeunload", () => {
   if (state && !state.finished) saveState();
   if (frameHandle) cancelAnimationFrame(frameHandle);
+  if (skyResizeHandle) cancelAnimationFrame(skyResizeHandle);
 });
