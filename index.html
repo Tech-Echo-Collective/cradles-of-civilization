@@ -90,6 +90,19 @@
           </article>
         </section>
 
+        <section class="trend-strip" aria-label="知识趋势">
+          <div class="trend-pill science-trend">
+            <span>科学趋势</span>
+            <strong id="scTrendValue">+0/年</strong>
+            <small id="scTrendStage">停滞</small>
+          </div>
+          <div class="trend-pill belief-trend">
+            <span>神学趋势</span>
+            <strong id="beTrendValue">+0/年</strong>
+            <small id="beTrendStage">停滞</small>
+          </div>
+        </section>
+
         <section class="controls" aria-label="玩家行动">
           <button class="action-button" type="button" data-action="science">
             <span class="button-mark">SC</span>
@@ -254,11 +267,11 @@
               </div>
               <div>
                 <dt>变量</dt>
-                <dd>SC 与 BE 分别代表科学和神学，最高为 20000；POP 是人口，按承载力形成 S 型增长；ECO 是经济资本，使用简化 Solow-Cobb-Douglas 模型结算；秩序是组织 Buff：神学增强秩序，秩序增强科学，科学继续压制神学。</dd>
+                <dd>SC 与 BE 分别代表科学和神学，最高为 20000；两者都有趋势值，表示下一年会自然兑现的增产量。POP 是人口，按承载力形成 S 型增长；ECO 是经济资本，使用简化 Solow-Cobb-Douglas 模型结算；秩序是组织 Buff：神学增强秩序，秩序增强科学，科学继续压制神学。</dd>
               </div>
               <div>
                 <dt>年流程</dt>
-                <dd>每年先掷出 Rand，并后台掷出隐藏 spec。恒星灾变、状态事件、普通事件与隐藏彩蛋先结算，随后执行玩家行动，最后结算系统压力；普通随机事件不会把人口扣穿最低可持续线。</dd>
+                <dd>每年先掷出 Rand，并后台掷出隐藏 spec。上一年的 SC/BE 趋势先兑现，恒星灾变、状态事件、普通事件与隐藏彩蛋随后结算，再执行玩家行动，最后结算系统压力并生成下一年的趋势；普通随机事件不会把人口扣穿最低可持续线。</dd>
               </div>
               <div>
                 <dt>治理</dt>
@@ -270,7 +283,7 @@
               </div>
               <div>
                 <dt>EERF</dt>
-                <dd>EERF 是跨文明火种工程。2/3/4/5 级分别需要 SC 2000/4000/8000/16000；建造和升级不能让地表人口跌破最低可持续线；若工程年撞上硬灾变，会先完成封门再结算毁灭。</dd>
+                <dd>EERF 是跨文明火种工程。2/3/4/5 级分别需要 SC 2000/4000/8000/16000；建造和升级不能让地表人口跌破最低可持续线；灾变时会保存人口、少量知识和极少量正向趋势；若工程年撞上硬灾变，会先完成封门再结算毁灭。</dd>
               </div>
               <div>
                 <dt>灾变</dt>

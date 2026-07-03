@@ -9,13 +9,26 @@ const ECO_METER_CAP = 300000;
 const EERF_MAX_LEVEL = 5;
 const BASE_RESTART_POP = 2600;
 const MIN_SUSTAINABLE_POP = 1200;
-const SAVE_VERSION = 2;
+const SAVE_VERSION = 3;
 const STORE_KEY = "three-sun-chronicle:v1";
 const ENDING_STORE_KEY = "three-sun-chronicle:ending:v1";
 const INSPIRATION_STORE_KEY = "three-sun-chronicle:inspiration:v1";
 const ENDING_PAGE = "ending.html";
 const RNG_MOD = 2147483647;
 const RNG_MUL = 48271;
+const KNOWLEDGE_TREND_MIN = -180;
+const KNOWLEDGE_TREND_MAX = 240;
+const KNOWLEDGE_TREND_RESTART_RATES = [0, 0.08, 0.12, 0.16, 0.2, 0.25];
+const KNOWLEDGE_TREND_RESTART_CAPS = [0, 8, 14, 20, 28, 36];
+const KNOWLEDGE_TREND_STAGES = [
+  { id: "collapse", min: -Infinity, label: "断裂" },
+  { id: "decline", min: -60, label: "衰退" },
+  { id: "stalled", min: -15, label: "停滞" },
+  { id: "budding", min: 15, label: "萌芽" },
+  { id: "formed", min: 55, label: "成形" },
+  { id: "expanding", min: 110, label: "扩张" },
+  { id: "surging", min: 190, label: "狂飙" }
+];
 const EERF_SCIENCE_REQUIREMENTS = [0, 0, 2000, 4000, 8000, 16000];
 const SCIENCE_RESTART_RATES = [0, 0.03, 0.06, 0.09, 0.125, 0.165];
 const SCIENCE_RESTART_CAPS = [0, 750, 1450, 2200, 3000, 3800];
@@ -328,6 +341,8 @@ function createNewState(seedValue = Date.now()) {
     populationGrowthMultiplier: 1,
     knowledgeGrowthMultiplier: 1,
     controlEfficiencyMultiplier: 1,
+    scTrend: 12,
+    beTrend: 16,
     controlLocked: false,
     populationLockTurns: 0,
     doomCountdown: 0,
@@ -477,6 +492,10 @@ function cacheDom() {
   dom.eerfMeter = document.querySelector("#eerfMeter");
   dom.scEra = document.querySelector("#scEra");
   dom.beEra = document.querySelector("#beEra");
+  dom.scTrendValue = document.querySelector("#scTrendValue");
+  dom.beTrendValue = document.querySelector("#beTrendValue");
+  dom.scTrendStage = document.querySelector("#scTrendStage");
+  dom.beTrendStage = document.querySelector("#beTrendStage");
   dom.stabilityValue = document.querySelector("#stabilityValue");
   dom.ecoStatus = document.querySelector("#ecoStatus");
   dom.eerfStatus = document.querySelector("#eerfStatus");
@@ -989,6 +1008,14 @@ function advanceRound(actionId) {
   updateEnding();
   const after = snapshot();
   updateCivilizationStats(after, specialEvent?.title || null);
+  const trendEvents = updateKnowledgeTrends({
+    event,
+    specialEvent,
+    action,
+    actionResult,
+    pressureDelta,
+    rand
+  });
   const totalDelta = diff(before, after);
   state.weather = [event.title, specialEvent?.title, action.label].filter(Boolean).join("；");
   const type = event.type === "special" || specialEvent || action.type === "special" || actionResult.locked
@@ -1010,14 +1037,14 @@ function advanceRound(actionId) {
       .join(" "),
     delta: totalDelta
   });
+  trendEvents.forEach(addLog);
 
   saveState();
   render();
 }
 
 function computeDrift(rand, current) {
-  const scNoise = (rand % 19) - 8;
-  const beNoise = (Math.floor(rand / 10) % 19) - 8;
+  const knowledgeTrend = computeKnowledgeTrendDrift(rand);
   const popNoise = (Math.floor(rand / 100) % 41) - 19;
   const orderNoise = (Math.floor(rand / 1000) % 9) - 4;
   const lowOrderPenalty = current.stability < 30 ? 900 : 0;
@@ -1027,12 +1054,193 @@ function computeDrift(rand, current) {
     : 0;
 
   return {
-    sc: clamp(Math.round(scNoise * 14 + current.sc * 0.004 - current.be * 0.001), -50, 50),
-    be: clamp(Math.round(beNoise * 14 + current.be * 0.004 - current.sc * 0.001), -50, 50),
+    sc: knowledgeTrend.sc,
+    be: knowledgeTrend.be,
     pop: Math.round(current.pop * (0.004 + current.stability / 18000) + popNoise * 70 - lowOrderPenalty + highOrderBonus),
     eco: Math.round(Math.sqrt(Math.max(0, current.eco)) * 7 + current.stability * 8 - current.pop * 0.003 - (state.eerfLevel || 0) * 620 + lowEconomyBuffer),
     stability: orderNoise
   };
+}
+
+function computeKnowledgeTrendDrift(rand) {
+  const scJitter = ((rand % 9) - 4) * 2;
+  const beJitter = ((Math.floor(rand / 10) % 9) - 4) * 2;
+  return {
+    sc: Math.round(clamp(finiteOr(state.scTrend, 0) + scJitter, KNOWLEDGE_TREND_MIN, KNOWLEDGE_TREND_MAX)),
+    be: Math.round(clamp(finiteOr(state.beTrend, 0) + beJitter, KNOWLEDGE_TREND_MIN, KNOWLEDGE_TREND_MAX))
+  };
+}
+
+function updateKnowledgeTrends(context = {}) {
+  const beforeTrends = {
+    sc: finiteOr(state.scTrend, 0),
+    be: finiteOr(state.beTrend, 0)
+  };
+  const current = snapshot();
+  const nextTrends = {
+    sc: evolveKnowledgeTrend("sc", beforeTrends.sc, current, context),
+    be: evolveKnowledgeTrend("be", beforeTrends.be, current, context)
+  };
+
+  state.scTrend = nextTrends.sc;
+  state.beTrend = nextTrends.be;
+  return knowledgeTrendChangeEvents(beforeTrends, nextTrends);
+}
+
+function evolveKnowledgeTrend(key, previousTrend, current, context) {
+  const target = knowledgeTrendTarget(key, current);
+  const eventImpulse = knowledgeTrendImpulse(context.event?.delta, key, 0.06, 18) +
+    knowledgeTrendImpulse(context.specialEvent?.delta, key, 0.05, 32) +
+    knowledgeTrendImpulse(context.pressureDelta, key, 0.08, 12);
+  const actionImpulse = context.actionResult?.locked
+    ? 0
+    : actionTrendShift(context.action, key) + knowledgeTrendImpulse(context.actionResult?.delta, key, 0.04, 16);
+  const noise = knowledgeTrendNoise(context.rand || state.lastRand || 0, key);
+  const crisisDrag = current.eco <= 0 ? -28 : 0;
+  const next = previousTrend * 0.68 + target * 0.22 + eventImpulse + actionImpulse + noise + crisisDrag;
+  return Math.round(clamp(next, KNOWLEDGE_TREND_MIN, KNOWLEDGE_TREND_MAX));
+}
+
+function knowledgeTrendTarget(key, current) {
+  const scRatio = current.sc / CAP;
+  const beRatio = current.be / CAP;
+  const harmony = knowledgeHarmony(current.sc, current.be);
+  const rivalry = 1 - harmony;
+  const economyIndex = current.eco <= 0 ? 0 : clamp(Math.log10(current.eco + 10) / 6, 0, 1);
+  const populationIndex = clamp(Math.sqrt(Math.max(0, current.pop)) / 430, 0, 1.35);
+  const orderRatio = clamp(current.stability, 0, 100) / 100;
+  const crisisPenalty = current.eco <= 0 ? 86 : 0;
+
+  if (key === "sc") {
+    return clamp(
+      8 +
+        Math.sqrt(scRatio) * 54 +
+        economyIndex * 34 +
+        populationIndex * 18 +
+        (orderRatio - 0.44) * 38 +
+        harmony * 16 -
+        beRatio * 52 -
+        rivalry * 12 -
+        crisisPenalty,
+      -125,
+      150
+    );
+  }
+
+  const anxietyLift = current.eco > 0 && current.eco < current.pop * 0.28 ? 18 : 0;
+  return clamp(
+    10 +
+      Math.sqrt(beRatio) * 50 +
+      populationIndex * 22 +
+      orderRatio * 40 +
+      harmony * 14 +
+      anxietyLift -
+      scRatio * 58 -
+      rivalry * 10 -
+      crisisPenalty * 0.8,
+    -125,
+    150
+  );
+}
+
+function fallbackKnowledgeTrend(key, current) {
+  return clamp(Math.round(knowledgeTrendTarget(key, current) * 0.35), -24, 42);
+}
+
+function knowledgeTrendImpulse(delta = {}, key, scale, limit) {
+  if (!delta || typeof delta[key] !== "number") return 0;
+  return clamp(delta[key] * scale, -limit, limit);
+}
+
+function actionTrendShift(action, key) {
+  if (action === ACTIONS.science) return key === "sc" ? 18 : -8;
+  if (action === ACTIONS.belief) return key === "be" ? 20 : -7;
+  if (action === ACTIONS.balance) return 12;
+  if (action === ACTIONS.order) return key === "sc" ? 7 : 13;
+  if (action === ACTIONS.suppressBelief) return key === "sc" ? 22 : -30;
+  if (action === ACTIONS.suppressScience) return key === "be" ? 24 : -32;
+  if (action === ACTIONS.hibernate) return 10;
+  if (action === ACTIONS.economy) return key === "sc" ? 7 : 4;
+  if (action === ACTIONS.population) return key === "sc" ? 3 : 6;
+  if (action === ACTIONS.buildEerf) return key === "sc" ? -12 : -10;
+  if (action === ACTIONS.upgradeEerf) return key === "sc" ? -10 : -8;
+  if (action === ACTIONS.recovery) return key === "sc" ? -14 : -9;
+  return 0;
+}
+
+function knowledgeTrendNoise(rand, key) {
+  const offset = key === "sc" ? 37 : 83;
+  return (((Math.floor((rand + offset) / 13) % 5) - 2) * 2);
+}
+
+function knowledgeTrendChangeEvents(beforeTrends, nextTrends) {
+  return [
+    knowledgeTrendChangeEvent("sc", beforeTrends.sc, nextTrends.sc),
+    knowledgeTrendChangeEvent("be", beforeTrends.be, nextTrends.be)
+  ].filter(Boolean);
+}
+
+function knowledgeTrendChangeEvent(key, beforeTrend, nextTrend) {
+  const beforeStage = knowledgeTrendStageFor(beforeTrend);
+  const nextStage = knowledgeTrendStageFor(nextTrend);
+  if (beforeStage.id === nextStage.id) return null;
+
+  const direction = nextStage.index > beforeStage.index ? "upgrade" : "downgrade";
+  const label = key === "sc" ? "科学" : "神学";
+  return {
+    type: direction === "upgrade" ? "progress" : "special",
+    title: `第 ${state.turn} 年｜${label}趋势${direction === "upgrade" ? "升级" : "降级"}｜${nextStage.label}`,
+    text: knowledgeTrendEventText(key, direction, nextStage),
+    delta: {}
+  };
+}
+
+function knowledgeTrendStageFor(value) {
+  const score = finiteOr(value, 0);
+  let selected = KNOWLEDGE_TREND_STAGES[0];
+  KNOWLEDGE_TREND_STAGES.forEach((stage, index) => {
+    if (score >= stage.min) selected = { ...stage, index };
+  });
+  return selected;
+}
+
+function knowledgeTrendEventText(key, direction, stage) {
+  const copy = {
+    sc: {
+      upgrade: {
+        budding: "零散观测被装订成册，学徒开始重复上一代人的实验，科学趋势开始上行。",
+        formed: "学院获得稳定预算，工坊和测绘队开始共享同一套度量衡。",
+        expanding: "学校、工坊和观测台连成制度网络，科学不再依赖少数天才。",
+        surging: "计算、冶炼和观测成为国家本能，科学趋势进入狂飙。"
+      },
+      downgrade: {
+        expanding: "前沿项目被迫收缩，学院把一部分预算还给粮仓和城墙。",
+        formed: "导师散入行政与军队，科学仍在运转，但制度锋芒开始变钝。",
+        budding: "研究传统退回少数书房，工坊继续生产，却不再提出太多问题。",
+        stalled: "仪器无人校准，档案无人整理，科学趋势陷入停滞。",
+        decline: "学院预算被账本、祭坛和恐慌切碎，科学趋势转入衰退。",
+        collapse: "测量传统断裂，公式只剩抄本，科学趋势出现制度性断层。"
+      }
+    },
+    be: {
+      upgrade: {
+        budding: "新的誓约和祭日被写入历法，信仰开始重新组织人群。",
+        formed: "神殿、法庭和粮票共用一套秩序语言，神学趋势开始成形。",
+        expanding: "朝圣路、唱诗班和审判庭彼此呼应，神学网络迅速扩张。",
+        surging: "正统解释压过怀疑，信仰成为社会本能，神学趋势进入狂飙。"
+      },
+      downgrade: {
+        expanding: "圣城的命令传得更慢了，地方神殿开始各自解释灾难。",
+        formed: "誓约仍被遵守，但钟声不再能盖过工坊和市场。",
+        budding: "祭司退回仪式，信众仍在祈祷，却不再等待统一答案。",
+        stalled: "教义争论互相抵消，神学趋势陷入停滞。",
+        decline: "怀疑、贫困和技术官僚撕开旧秩序，神学趋势转入衰退。",
+        collapse: "神殿网络断裂，经文只剩碎片，神学趋势出现制度性断层。"
+      }
+    }
+  };
+
+  return copy[key]?.[direction]?.[stage.id] || `${key === "sc" ? "科学" : "神学"}趋势变为${stage.label}。`;
 }
 
 function computeSystemPressure(current) {
@@ -2139,6 +2347,7 @@ function collapseCivilization(event, before, rand) {
   const restartPopulation = computeRestartPopulation(before);
   const restartKnowledge = computeRestartKnowledge(before);
   const oldEerfLevel = state.eerfLevel || 0;
+  const restartTrends = computeRestartKnowledgeTrends(oldEerfLevel);
   updateCivilizationStats(before);
   const archived = {
     ...state.currentCivilization,
@@ -2159,6 +2368,8 @@ function collapseCivilization(event, before, rand) {
     nextCount: oldCount + 1,
     sc: restartKnowledge.sc,
     be: restartKnowledge.be,
+    scTrend: restartTrends.scTrend,
+    beTrend: restartTrends.beTrend,
     pop: restartPopulation,
     eco: restartPopulation > BASE_RESTART_POP ? Math.round(restartPopulation * 2.2) : 0,
     stability: Math.max(18, Math.floor(before.stability * 0.42)),
@@ -2168,6 +2379,8 @@ function collapseCivilization(event, before, rand) {
   state.awaitingCivilizationRestart = true;
   state.sc = 0;
   state.be = 0;
+  state.scTrend = 0;
+  state.beTrend = 0;
   state.pop = 0;
   state.eco = 0;
   state.stability = Math.max(0, Math.floor(before.stability * 0.2));
@@ -2176,7 +2389,7 @@ function collapseCivilization(event, before, rand) {
   state.lastTone = "disaster";
   state.specialNotice = {
     title: `${event.title}｜文明毁灭`,
-    text: `${event.text} 第 ${oldCount} 号文明进化至${scienceEra(before.sc)}。EERF 将保存人口 ${formatNumber(restartPopulation)} 与少量知识。`,
+    text: `${event.text} 第 ${oldCount} 号文明进化至${scienceEra(before.sc)}。EERF 将保存人口 ${formatNumber(restartPopulation)}、少量知识与少量趋势。`,
     delta: diff(before, snapshot())
   };
   updateEnding();
@@ -2184,7 +2397,7 @@ function collapseCivilization(event, before, rand) {
   addLog({
     type: "disaster",
     title: `第 ${state.turn} 年｜Rand ${formatRand(rand)}｜${event.title}`,
-    text: `${event.text} 第 ${oldCount} 号文明在${event.title}中毁灭了，该文明进化至${scienceEra(before.sc)}。文明的种子仍在，等待重启文明。EERF 保存人口 ${formatNumber(restartPopulation)} 与少量知识。`,
+    text: `${event.text} 第 ${oldCount} 号文明在${event.title}中毁灭了，该文明进化至${scienceEra(before.sc)}。文明的种子仍在，等待重启文明。EERF 保存人口 ${formatNumber(restartPopulation)}、少量知识与少量趋势。`,
     delta: diff(before, snapshot())
   });
 
@@ -2198,6 +2411,8 @@ function restartCivilizationFromPending() {
   const restart = state.pendingRestart;
   state.sc = restart.sc;
   state.be = restart.be;
+  state.scTrend = finiteOr(restart.scTrend, 0);
+  state.beTrend = finiteOr(restart.beTrend, 0);
   state.pop = restart.pop;
   state.eco = restart.eco;
   state.stability = restart.stability;
@@ -2249,6 +2464,17 @@ function computeRestartKnowledge(snapshotValue) {
   return {
     sc: clamp(Math.round(level * 35 + snapshotValue.sc * scienceRate), 0, scienceCap),
     be: clamp(Math.round(level * 35 + snapshotValue.be * beliefRate), 0, beliefCap)
+  };
+}
+
+function computeRestartKnowledgeTrends(level = state.eerfLevel || 0) {
+  if (level <= 0) return { scTrend: 0, beTrend: 0 };
+
+  const rate = KNOWLEDGE_TREND_RESTART_RATES[level] || 0;
+  const cap = KNOWLEDGE_TREND_RESTART_CAPS[level] || 0;
+  return {
+    scTrend: clamp(Math.round(level * 2 + Math.max(0, finiteOr(state.scTrend, 0)) * rate), 0, cap),
+    beTrend: clamp(Math.round(level * 2 + Math.max(0, finiteOr(state.beTrend, 0)) * rate), 0, cap)
   };
 }
 
@@ -2730,6 +2956,7 @@ function render() {
   dom.eerfMeter.style.width = `${((state.eerfLevel || 0) / EERF_MAX_LEVEL) * 100}%`;
   dom.scEra.textContent = scienceEra(state.sc);
   dom.beEra.textContent = beliefEra(state.be);
+  renderKnowledgeTrendStatus();
   dom.stabilityValue.textContent = `秩序 ${state.stability}`;
   dom.ecoStatus.textContent = isEconomicCrisis() ? "经济危机：发展冻结" : "预算、产业与粮仓";
   dom.eerfStatus.textContent = eerfStatusText();
@@ -2759,6 +2986,18 @@ function renderActionButtons() {
     button.disabled = disabled;
     button.setAttribute("aria-disabled", disabled ? "true" : "false");
   });
+}
+
+function renderKnowledgeTrendStatus() {
+  const scTrend = Math.round(finiteOr(state.scTrend, 0));
+  const beTrend = Math.round(finiteOr(state.beTrend, 0));
+  const scStage = knowledgeTrendStageFor(scTrend);
+  const beStage = knowledgeTrendStageFor(beTrend);
+
+  if (dom.scTrendValue) dom.scTrendValue.textContent = `${formatSignedNumber(scTrend)}/年`;
+  if (dom.beTrendValue) dom.beTrendValue.textContent = `${formatSignedNumber(beTrend)}/年`;
+  if (dom.scTrendStage) dom.scTrendStage.textContent = scStage.label;
+  if (dom.beTrendStage) dom.beTrendStage.textContent = beStage.label;
 }
 
 function renderEndingWatch() {
@@ -2915,13 +3154,16 @@ function renderEerfDetails() {
     rows.push(["状态", "等待重启文明"]);
     rows.push(["火种人口", formatNumber(state.pendingRestart.pop)]);
     rows.push(["火种知识", `SC ${formatNumber(state.pendingRestart.sc)} / BE ${formatNumber(state.pendingRestart.be)}`]);
+    rows.push(["火种趋势", `SC ${formatSignedNumber(state.pendingRestart.scTrend || 0)}/年 / BE ${formatSignedNumber(state.pendingRestart.beTrend || 0)}/年`]);
     rows.push(["下一代 EERF", `${formatNumber(state.pendingRestart.eerfLevel)}/${EERF_MAX_LEVEL}`]);
   } else {
     const estimate = computeRestartPopulation(snapshot());
     const knowledge = computeRestartKnowledge(snapshot());
+    const trends = computeRestartKnowledgeTrends(level);
     rows.push(["当前等级", `${formatNumber(level)}/${EERF_MAX_LEVEL}`]);
     rows.push(["毁灭后人口", formatNumber(estimate)]);
     rows.push(["毁灭后知识", `SC ${formatNumber(knowledge.sc)} / BE ${formatNumber(knowledge.be)}`]);
+    rows.push(["毁灭后趋势", `SC ${formatSignedNumber(trends.scTrend)}/年 / BE ${formatSignedNumber(trends.beTrend)}/年`]);
     rows.push(["下一代 EERF", `${formatNumber(Math.max(0, level - 1))}/${EERF_MAX_LEVEL}`]);
     if (level < EERF_MAX_LEVEL) {
       const nextLevel = Math.max(1, level + 1);
@@ -3816,6 +4058,16 @@ function loadState() {
     migrated.pop = Math.max(0, Math.round(finiteOr(migrated.pop, 7600)));
     migrated.eco = Math.max(0, Math.round(finiteOr(migrated.eco, DEFAULT_ECO)));
     migrated.stability = clamp(Math.round(finiteOr(migrated.stability, 52)), 0, 100);
+    migrated.scTrend = clamp(
+      Math.round(finiteOr(migrated.scTrend, fallbackKnowledgeTrend("sc", migrated))),
+      KNOWLEDGE_TREND_MIN,
+      KNOWLEDGE_TREND_MAX
+    );
+    migrated.beTrend = clamp(
+      Math.round(finiteOr(migrated.beTrend, fallbackKnowledgeTrend("be", migrated))),
+      KNOWLEDGE_TREND_MIN,
+      KNOWLEDGE_TREND_MAX
+    );
     migrated.populationGrowthMultiplier = finiteOr(migrated.populationGrowthMultiplier, 1);
     migrated.knowledgeGrowthMultiplier = finiteOr(migrated.knowledgeGrowthMultiplier, 1);
     migrated.controlEfficiencyMultiplier = finiteOr(migrated.controlEfficiencyMultiplier, 1);
@@ -3834,6 +4086,8 @@ function loadState() {
           nextCount: Math.max(1, Math.round(finiteOr(migrated.pendingRestart.nextCount, migrated.count + 1))),
           sc: clamp(roundStat(finiteOr(migrated.pendingRestart.sc, 0)), 0, CAP),
           be: clamp(roundStat(finiteOr(migrated.pendingRestart.be, 0)), 0, CAP),
+          scTrend: clamp(Math.round(finiteOr(migrated.pendingRestart.scTrend, 0)), 0, KNOWLEDGE_TREND_MAX),
+          beTrend: clamp(Math.round(finiteOr(migrated.pendingRestart.beTrend, 0)), 0, KNOWLEDGE_TREND_MAX),
           pop: Math.max(0, Math.round(finiteOr(migrated.pendingRestart.pop, BASE_RESTART_POP))),
           eco: Math.max(0, Math.round(finiteOr(migrated.pendingRestart.eco, 0))),
           stability: clamp(Math.round(finiteOr(migrated.pendingRestart.stability, 18)), 0, 100),
@@ -3931,6 +4185,11 @@ function formatNumber(value) {
   return new Intl.NumberFormat("zh-CN", {
     maximumFractionDigits: hasFraction ? 4 : 0
   }).format(number);
+}
+
+function formatSignedNumber(value) {
+  const number = finiteOr(value, 0);
+  return `${number > 0 ? "+" : ""}${formatNumber(number)}`;
 }
 
 function formatPercent(value) {
