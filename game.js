@@ -21,13 +21,13 @@ const KNOWLEDGE_TREND_MAX = 240;
 const KNOWLEDGE_TREND_RESTART_RATES = [0, 0.08, 0.12, 0.16, 0.2, 0.25];
 const KNOWLEDGE_TREND_RESTART_CAPS = [0, 8, 14, 20, 28, 36];
 const KNOWLEDGE_TREND_STAGES = [
-  { id: "collapse", min: -Infinity, label: "断裂" },
+  { id: "collapse", min: -Infinity, label: "荒无人烟" },
   { id: "decline", min: -60, label: "衰退" },
   { id: "stalled", min: -15, label: "停滞" },
   { id: "budding", min: 15, label: "萌芽" },
   { id: "formed", min: 55, label: "成形" },
   { id: "expanding", min: 110, label: "扩张" },
-  { id: "surging", min: 190, label: "狂飙" }
+  { id: "surging", min: 190, label: "群星璀璨" }
 ];
 const EERF_SCIENCE_REQUIREMENTS = [0, 0, 2000, 4000, 8000, 16000];
 const SCIENCE_RESTART_RATES = [0, 0.03, 0.06, 0.09, 0.125, 0.165];
@@ -90,7 +90,7 @@ const SCIENCE_ERAS = [
   { threshold: 14000, name: "太空时代" },
   { threshold: 16000, name: "星际航行时代" },
   { threshold: 18000, name: "宇宙工程时代" },
-  { threshold: 20000, name: "上限：宇宙灯塔" }
+  { threshold: 20000, name: "戴森球时代" }
 ];
 
 const BELIEF_ERAS = [
@@ -135,7 +135,7 @@ const ACTIONS = {
     label: "扩建聚居地",
     type: "progress",
     delta: { sc: -18, be: 24, pop: 2600, eco: -9500, stability: -5 },
-    text: "居者有其屋，耕者有其田。安得广厦千万间，大庇天下寒士俱欢颜？",
+    text: "居者有其屋，耕者有其田。\n安得广厦千万间，大庇天下寒士俱欢颜？",
     chronicleText: "新的洞穴、温室与地下街区被打开，人口膨胀也带来拥挤。"
   },
   balance: {
@@ -200,7 +200,7 @@ const ACTIONS = {
     label: "建造 EERF",
     type: "special",
     delta: { sc: -45, be: -35, pop: -800, eco: -65000, stability: -4 },
-    text: "E.E.R.F.极端环境抵抗设施在地下开工。子子孙孙无穷匮也，而山不加增，何苦而不平？",
+    text: "E.E.R.F.极端环境抵抗设施在地下开工。\n子子孙孙无穷匮也，而山不加增，何苦而不平？",
     chronicleText: "极端环境抵抗设施在地下开工，地表文明为下一代火种支付第一笔代价。",
     effect() {
       state.eerfLevel = Math.max(state.eerfLevel, 1);
@@ -220,7 +220,7 @@ const ACTIONS = {
         stability: -3
       };
     },
-    text: "风雨不动安如山。呜呼！何时眼前突兀见此屋，吾庐独破受冻死亦足！",
+    text: "风雨不动安如山。\n呜呼！何时眼前突兀见此屋，吾庐独破受冻死亦足！",
     chronicleText: "更深的门、更厚的隔热层、更长的冬眠协议被写入 EERF。",
     effect() {
       state.eerfLevel = Math.min(EERF_MAX_LEVEL, state.eerfLevel + 1);
@@ -260,7 +260,7 @@ const ACTIONS = {
     settleOnly: true,
     canRunWithZeroPopulation: true,
     delta: {},
-    text: "在这一刻，我们必须想象你是幸福的。",
+    text: "必须想象你是幸福的。",
     chronicleText: "文明把当前状态写成最终结局。"
   }
 };
@@ -1277,18 +1277,18 @@ function knowledgeTrendEventText(key, direction, stage) {
   const copy = {
     sc: {
       upgrade: {
-        budding: "零散观测被装订成册，学徒开始重复上一代人的实验，科学趋势开始上行。",
-        formed: "学院获得稳定预算，工坊和测绘队开始共享同一套度量衡。",
-        expanding: "学校、工坊和观测台连成制度网络，科学不再依赖少数天才。",
-        surging: "计算、冶炼和观测成为国家本能，科学趋势进入狂飙。"
+        budding: "物理学的大厦已经基本落成，只剩下两朵乌云遮蔽着。\n——开尔文勋爵，1899年",
+        formed: "万物皆数。\n——毕达哥拉斯，公元前530年",
+        expanding: "我发现了！\n——阿基米德，公元前212年",
+        surging: "现在，我将演示世界运行的规律。\n——牛顿，1687年"
       },
       downgrade: {
         expanding: "前沿项目被迫收缩，学院把一部分预算还给粮仓和城墙。",
         formed: "导师散入行政与军队，科学仍在运转，但制度锋芒开始变钝。",
         budding: "研究传统退回少数书房，工坊继续生产，却不再提出太多问题。",
-        stalled: "仪器无人校准，档案无人整理，科学趋势陷入停滞。",
-        decline: "学院预算被账本、祭坛和恐慌切碎，科学趋势转入衰退。",
-        collapse: "测量传统断裂，公式只剩抄本，科学趋势出现制度性断层。"
+        stalled: "你们可以一眨眼就把他的头砍下来，但那样的头脑一百年再也长不出一个来了！\n——拉格朗日，1794年",
+        decline: "不要弄坏我的圆！\n——阿基米德，公元前212年",
+        collapse: "盛宴已毕。\n——杨振宁，1980年"
       }
     },
     be: {
@@ -1304,7 +1304,7 @@ function knowledgeTrendEventText(key, direction, stage) {
         budding: "祭司退回仪式，信众仍在祈祷，却不再等待统一答案。",
         stalled: "教义争论互相抵消，神学趋势陷入停滞。",
         decline: "怀疑、贫困和技术官僚撕开旧秩序，神学趋势转入衰退。",
-        collapse: "神殿网络断裂，经文只剩碎片，神学趋势出现制度性断层。"
+        collapse: "我的神，我的神！你为什么遗弃我？——《马太福音》27:46"
       }
     }
   };
@@ -2642,6 +2642,11 @@ function maybeFinishGame(context = {}) {
     return true;
   }
 
+  if (!canHoldEndingCandidate(context)) {
+    state.endingCandidate = null;
+    return false;
+  }
+
   const endingId = resolveEnding(context, current);
   updateEndingCandidate(endingId, context, current);
 
@@ -2653,6 +2658,10 @@ function maybeFinishGame(context = {}) {
     snapshot: current
   });
   return true;
+}
+
+function canHoldEndingCandidate(context = {}) {
+  return context.kind !== "collapse" && !state.awaitingCivilizationRestart;
 }
 
 function resolveEnding(context = {}, current = snapshot()) {
@@ -2840,6 +2849,7 @@ function automaticEndingTrigger(endingId, context = {}) {
 }
 
 function settleCurrentEnding() {
+  if (state.awaitingCivilizationRestart) return false;
   if (!state.endingCandidate?.id) return false;
 
   finishGame(state.endingCandidate.id, {
@@ -3263,12 +3273,12 @@ function actionDisabledReason(action) {
   if (!action) return "未知行动";
   if (state.finished) return "游戏已经结束";
 
-  if (action.settleOnly) {
-    return state.endingCandidate?.id ? "" : "尚未出现可结算终局";
-  }
-
   if (state.awaitingCivilizationRestart) {
     return action.restartOnly ? "" : "等待重启文明";
+  }
+
+  if (action.settleOnly) {
+    return state.endingCandidate?.id ? "" : "尚未出现可结算终局";
   }
 
   if (action.restartOnly) return "当前文明仍在运行";
@@ -4198,6 +4208,9 @@ function loadState() {
         }
       : null;
     if (migrated.endingCandidate?.id === "C") {
+      migrated.endingCandidate = null;
+    }
+    if (migrated.awaitingCivilizationRestart) {
       migrated.endingCandidate = null;
     }
     migrated.cEndingStreak = clamp(Math.round(finiteOr(migrated.cEndingStreak, 0)), 0, C_AUTO_STREAK);
