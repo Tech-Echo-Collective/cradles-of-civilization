@@ -1,6 +1,8 @@
 "use strict";
 
 const CAP = 20000;
+const SPECIAL_KNOWLEDGE_SCALE = CAP / 1000;
+const SPECIAL_MATH_SCIENCE_SCALE = 100;
 const SPEC_MAX = 5000;
 const DEFAULT_ECO = 50000;
 const ECO_METER_CAP = 300000;
@@ -1543,12 +1545,13 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "Answers to All - 终极答案",
-      text: "我们不禁驻足思考。生命、宇宙和万物的终极答案，究竟是什么？\n人口被锁定 5 次行动，同时启动毁灭倒计时。",
-      delta: { sc: 100, be: -200 },
+      text: "我们不禁驻足思考。生命、宇宙和万物的终极答案，究竟是什么？\nSC 暴涨，旧神学体系崩塌，EERF 被一次性推至满级。人口被锁定 5 次行动。",
+      delta: { sc: 2000, be: -4000 },
       effect() {
         state.populationLockTurns = 5;
-        state.doomCountdown = 5;
+        state.doomCountdown = 0;
         state.lockedPopulation = state.pop;
+        state.eerfLevel = EERF_MAX_LEVEL;
       }
     };
   }
@@ -1568,11 +1571,11 @@ function specialEventFor(spec, rng) {
 
   if (spec === 2020) {
     const survivorBase = current.pop * 0.6;
-    const newPopulation = Math.round(Math.cbrt(survivorBase));
+    const newPopulation = Math.round(survivorBase);
     return {
       type: "special",
       title: "Plague Inc. - 瘟疫公司",
-      text: "灰烬，灰烬，我们都将倒下。\n——中世纪英国民谣。\n先按 4/5 人口减半、1/5 人口保留得到幸存基数，再执行 p = ∛p。",
+      text: "灰烬，灰烬，我们都将倒下。\n——中世纪英国民谣。\n先按 4/5 人口减半、1/5 人口保留得到幸存基数。",
       delta: { pop: newPopulation - current.pop }
     };
   }
@@ -1582,7 +1585,7 @@ function specialEventFor(spec, rng) {
       type: "special",
       title: "Genesis Birth - 创世出生",
       text: "冬至过了那整三天，耶稣降生在驻马店。",
-      delta: { sc: 10, be: 5, pop: 20000, eco: 5000 }
+      delta: { sc: 10 * SPECIAL_KNOWLEDGE_SCALE, be: 5 * SPECIAL_KNOWLEDGE_SCALE, pop: 20000, eco: 5000 }
     };
   }
 
@@ -1641,29 +1644,33 @@ function specialEventFor(spec, rng) {
       type: "special",
       title: "Revenge Our Loss - 招核男儿",
       text: "亲王亲王御马前，何物随风斩娇颜？",
-      delta: { sc: 20, pop: -800000 }
+      delta: { sc: 20 * SPECIAL_KNOWLEDGE_SCALE, pop: -800000 }
     };
   }
 
   if (spec === 1800) {
-    const target = current.sc <= 300 ? 420 : current.sc;
+    const threshold = 300 * SPECIAL_KNOWLEDGE_SCALE;
+    const goal = 420 * SPECIAL_KNOWLEDGE_SCALE;
+    const target = current.sc <= threshold ? goal : current.sc;
     return {
       type: "special",
       title: "Industrial Revolution - 工业革命",
-      text: current.sc <= 300
-        ? "工厂、滚轮和蒸汽噪声同时启动，科学被推至 420。"
+      text: current.sc <= threshold
+        ? `工厂、滚轮和蒸汽噪声同时启动，科学被推至 ${formatNumber(goal)}。`
         : "工业革命擦过地平线，但当前科学基础已不需要这次补课。",
       delta: { sc: target - current.sc }
     };
   }
 
   if (spec === 476) {
-    const target = current.be <= 300 ? 700 : current.be;
+    const threshold = 300 * SPECIAL_KNOWLEDGE_SCALE;
+    const goal = 700 * SPECIAL_KNOWLEDGE_SCALE;
+    const target = current.be <= threshold ? goal : current.be;
     return {
       type: "special",
       title: "Middle Aged Times - 中古世纪",
-      text: current.be <= 300
-        ? "旧秩序用城墙、钟声和滚轮重组信仰，BE 被推至 700。"
+      text: current.be <= threshold
+        ? `旧秩序用城墙、钟声和滚轮重组信仰，BE 被推至 ${formatNumber(goal)}。`
         : "中古世纪的影子出现了，但神学基础已经更高。",
       delta: { be: target - current.be }
     };
@@ -1697,8 +1704,8 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "No Meaning - 虚无主义",
-      text: "跳舞吧，狂欢吧。一切都没有意义。\n经济损失 30,000，神学增长 30。",
-      delta: { be: 30, eco: -30000 }
+      text: "跳舞吧，狂欢吧。一切都没有意义。\n经济损失 30,000，神学增长 600。",
+      delta: { be: 30 * SPECIAL_KNOWLEDGE_SCALE, eco: -30000 }
     };
   }
 
@@ -1707,7 +1714,7 @@ function specialEventFor(spec, rng) {
       type: "special",
       title: "Great Ratio - π",
       text: "山巅一寺一壶酒。",
-      delta: { sc: 31.4159, eco: 31000 }
+      delta: { sc: 31.4159 * SPECIAL_MATH_SCIENCE_SCALE, eco: 31000 }
     };
   }
 
@@ -1716,7 +1723,7 @@ function specialEventFor(spec, rng) {
       type: "special",
       title: "Nature Goddess - 自然对数",
       text: "自然对数被奉为女神，增长曲线突然变得优雅。",
-      delta: { sc: 27.1828, eco: 27000 }
+      delta: { sc: 27.1828 * SPECIAL_MATH_SCIENCE_SCALE, eco: 27000 }
     };
   }
 
