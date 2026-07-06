@@ -29,7 +29,8 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "msi"],
+    "targets": ["nsis"],
+    "icon": ["icons/icon.ico"],
     "publisher": "Noah Walker",
     "copyright": "Copyright © 2026 Noah Walker. All rights reserved.",
     "category": "Game",
@@ -38,9 +39,6 @@
     "windows": {
       "nsis": {
         "displayLanguageSelector": false
-      },
-      "wix": {
-        "language": ["en-US"]
       }
     }
   }
