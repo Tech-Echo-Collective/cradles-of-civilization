@@ -29,6 +29,7 @@ writeFileSync(
   join(packageDir, "START_HERE.txt"),
   [
     "文明摇篮 / Cradles Of Civilization",
+    "原创企划 / Original concept: Noah Walker",
     "",
     "运行方式：",
     "1. 解压整个文件夹。",
@@ -37,6 +38,17 @@ writeFileSync(
     "",
     "存档说明：",
     "浏览器会把存档保存在本机本浏览器内。把 zip 发给朋友不会带走你的本地存档。",
+    ""
+  ].join("\n")
+);
+
+writeFileSync(
+  join(packageDir, "ORIGINAL_WORK.txt"),
+  [
+    "Cradles Of Civilization / 文明摇篮",
+    "Original concept: Noah Walker",
+    "This package is a static share build generated from the local project.",
+    "If this game is shared further, keep this attribution file with the HTML/CSS/JS files.",
     ""
   ].join("\n")
 );

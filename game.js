@@ -863,7 +863,7 @@ function advanceRound(actionId) {
       delta: specialDelta,
       spec
     };
-    updateCivilizationStats(snapshot(), specialTitle);
+    updateCivilizationStats(snapshot());
     if (maybeFinishGame({ kind: "special", trigger: specialTitle, rand })) return;
     if (specialEvent.piercesPopulationProtection && state.populationLockTurns > 0) {
       state.lockedPopulation = state.pop;
@@ -940,8 +940,7 @@ function advanceRound(actionId) {
 
   updateEnding();
   const after = snapshot();
-  const specialTitle = specialEvent ? specialEventTitleWithSpec(specialEvent, spec) : null;
-  updateCivilizationStats(after, specialTitle);
+  updateCivilizationStats(after);
   const trendEvents = updateKnowledgeTrends({
     event,
     specialEvent,
@@ -951,8 +950,8 @@ function advanceRound(actionId) {
     rand
   });
   const totalDelta = diff(before, after);
-  state.weather = [event.title, specialTitle, action.label].filter(Boolean).join("；");
-  const type = event.type === "special" || specialEvent || action.type === "special" || actionResult.locked
+  state.weather = [event.title, action.label].filter(Boolean).join("；");
+  const type = event.type === "special" || action.type === "special" || actionResult.locked
     ? "special"
     : "progress";
   state.lastTone = type;
@@ -961,7 +960,6 @@ function advanceRound(actionId) {
     title: `第 ${state.turn} 年｜Rand ${formatRand(rand)}｜${state.weather}`,
     text: [
       event.text,
-      specialEvent?.text,
       actionResult.text,
       describeSystemPressure(pressureDelta),
       describeChronicleState(before, after, event, action),
@@ -2551,6 +2549,8 @@ function resolveEnding(context = {}, current = snapshot()) {
   const thresholds = ENDING_THRESHOLDS;
   const scDominance = current.sc >= current.be * thresholds.dominanceRatio;
   const beDominance = current.be >= current.sc * thresholds.dominanceRatio;
+  const scienceOnlyTrack = current.be < thresholds.balancedKnowledge;
+  const beliefOnlyTrack = current.sc < thresholds.balancedKnowledge;
 
   if (
     current.sc >= thresholds.exodusKnowledge &&
@@ -2573,6 +2573,7 @@ function resolveEnding(context = {}, current = snapshot()) {
   if (
     current.sc >= thresholds.reformHigh &&
     current.be >= thresholds.companionKnowledge &&
+    scienceOnlyTrack &&
     scDominance &&
     current.pop >= thresholds.promisedPopulation &&
     current.eco >= thresholds.promisedEconomy &&
@@ -2584,6 +2585,7 @@ function resolveEnding(context = {}, current = snapshot()) {
   if (
     current.be >= thresholds.reformHigh &&
     current.sc >= thresholds.companionKnowledge &&
+    beliefOnlyTrack &&
     beDominance &&
     current.stability >= 62
   ) {
@@ -2693,12 +2695,13 @@ function isStagnantCivilization(archived) {
 }
 
 function resolveAutomaticEnding(context = {}, current = snapshot(), endingId = null) {
+  const thresholds = ENDING_THRESHOLDS;
   if (current.sc >= CAP && current.be >= CAP) {
-    return current.be > current.sc ? "B" : "A";
+    return null;
   }
 
-  if (current.sc >= CAP) return "A";
-  if (current.be >= CAP) return "B";
+  if (current.sc >= CAP && current.be < thresholds.balancedKnowledge) return "A";
+  if (current.be >= CAP && current.sc < thresholds.balancedKnowledge) return "B";
 
   return null;
 }
@@ -2978,6 +2981,7 @@ function endingWatchItems() {
       reqs: [
         minimumRequirement("SC", current.sc, thresholds.reformHigh),
         minimumRequirement("BE", current.be, thresholds.companionKnowledge),
+        maximumRequirement("BE 双高上限", current.be, thresholds.balancedKnowledge - 1),
         minimumRequirement("POP", current.pop, thresholds.promisedPopulation),
         minimumRequirement("ECO", current.eco, thresholds.promisedEconomy),
         minimumRequirement("秩序", current.stability, 55),
@@ -2989,6 +2993,7 @@ function endingWatchItems() {
       reqs: [
         minimumRequirement("BE", current.be, thresholds.reformHigh),
         minimumRequirement("SC", current.sc, thresholds.companionKnowledge),
+        maximumRequirement("SC 双高上限", current.sc, thresholds.balancedKnowledge - 1),
         minimumRequirement("秩序", current.stability, 62),
         ratioRequirement("神学主导", current.be, current.sc * thresholds.dominanceRatio)
       ]
