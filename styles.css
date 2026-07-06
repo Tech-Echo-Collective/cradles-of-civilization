@@ -326,6 +326,7 @@ h2 {
   color: #f0e7c7;
   font-size: 0.92rem;
   line-height: 1.55;
+  white-space: pre-line;
 }
 
 .special-banner .delta-row {

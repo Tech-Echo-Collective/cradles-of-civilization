@@ -1119,7 +1119,7 @@ function knowledgeTrendChangeEvent(key, beforeTrend, nextTrend) {
   const direction = nextStage.index > beforeStage.index ? "upgrade" : "downgrade";
   const label = key === "sc" ? "科学" : "神学";
   return {
-    type: direction === "upgrade" ? "progress" : "special",
+    type: "special",
     title: `第 ${state.turn} 年｜${label}趋势${direction === "upgrade" ? "升级" : "降级"}｜${nextStage.label}`,
     text: knowledgeTrendEventText(key, direction, nextStage),
     delta: {}
@@ -1181,18 +1181,18 @@ function knowledgeTrendEventText(key, direction, stage) {
     },
     be: {
       upgrade: {
-        budding: "新的誓约和祭日被写入历法，信仰开始重新组织人群。",
-        formed: "神殿、法庭和粮票共用一套秩序语言，神学趋势开始成形。",
-        expanding: "朝圣路、唱诗班和审判庭彼此呼应，神学网络迅速扩张。",
-        surging: "正统解释压过怀疑，信仰成为社会本能，神学趋势进入狂飙。"
+        budding: "起初，神创造天地。\n——《创世记》1:1",
+        formed: "凡事都要规规矩矩地按着次序行。\n——《哥林多前书》14:40",
+        expanding: "这福音要传遍天下。\n——《马太福音》24:14",
+        surging: "万膝必向我跪拜，万口必向我承认。\n——《罗马书》14:11"
       },
       downgrade: {
-        expanding: "圣城的命令传得更慢了，地方神殿开始各自解释灾难。",
-        formed: "誓约仍被遵守，但钟声不再能盖过工坊和市场。",
-        budding: "祭司退回仪式，信众仍在祈祷，却不再等待统一答案。",
-        stalled: "教义争论互相抵消，神学趋势陷入停滞。",
-        decline: "怀疑、贫困和技术官僚撕开旧秩序，神学趋势转入衰退。",
-        collapse: "我的神，我的神！你为什么遗弃我？——《马太福音》27:46"
+        expanding: "日光之下，并无新事。\n——《传道书》1:9",
+        formed: "没有异象，民就放肆。\n——《箴言》29:18",
+        budding: "他们的心远离我。\n——《以赛亚书》29:13",
+        stalled: "你们心持两意要到几时呢？\n——《列王纪上》18:21",
+        decline: "我的神，我的神！为什么离弃我？\n——《马太福音》27:46",
+        collapse: "虚空的虚空，凡事都是虚空。\n——《传道书》1:2"
       }
     }
   };
