@@ -34,9 +34,8 @@ const SCIENCE_RESTART_RATES = [0, 0.03, 0.06, 0.09, 0.125, 0.165];
 const SCIENCE_RESTART_CAPS = [0, 750, 1450, 2200, 3000, 3800];
 const BELIEF_RESTART_RATE_MULTIPLIER = 1.08;
 const BELIEF_RESTART_CAPS = [0, 820, 1600, 2450, 3350, 4200];
-const C_AUTO_STREAK = 2;
-const C_STAGNANT_CIVILIZATION_STREAK = 4;
-const C_EARLY_ERA_BREAKTHROUGH = 1500;
+const C_STAGNANT_CIVILIZATION_STREAK = 5;
+const C_EARLY_ERA_BREAKTHROUGH = 1100;
 const SKY_FRAME_INTERVAL_MS = 96;
 const SKY_SAFARI_FRAME_INTERVAL_MS = 160;
 const SKY_MAX_DEVICE_PIXEL_RATIO = 1.25;
@@ -57,8 +56,6 @@ const ENDING_THRESHOLDS = {
   balancedKnowledge: 14500,
   middleScience: 12500,
   lowKnowledge: 7000,
-  bronzeScience: 1800,
-  faithfulCollapse: 12000,
   exodusPopulation: 10000,
   exodusEconomy: 95000,
   authoritarianPopulation: 10000,
@@ -337,7 +334,6 @@ function createNewState(seedValue = Date.now()) {
     awaitingCivilizationRestart: false,
     pendingRestart: null,
     endingCandidate: null,
-    cEndingStreak: 0,
     cStagnantCivilizationStreak: 0,
     finished: false,
     finalEnding: null,
@@ -2539,15 +2535,6 @@ function settlementStatusText() {
 
 function maybeFinishGame(context = {}) {
   const current = context.snapshot || snapshot();
-  if (updateHiddenCEndingStreak(context, current)) {
-    finishGame("C", {
-      ...context,
-      trigger: `信仰断代文明连续 ${C_AUTO_STREAK} 次毁灭`,
-      snapshot: current
-    });
-    return true;
-  }
-
   if (!canHoldEndingCandidate(context)) {
     state.endingCandidate = null;
     return false;
@@ -2621,11 +2608,6 @@ function resolveEnding(context = {}, current = snapshot()) {
   return null;
 }
 
-function isCEndingState(current) {
-  return current.be >= ENDING_THRESHOLDS.faithfulCollapse &&
-    current.sc <= ENDING_THRESHOLDS.bronzeScience;
-}
-
 function updateEndingCandidate(endingId, context = {}, current = snapshot()) {
   if (!endingId) {
     state.endingCandidate = null;
@@ -2643,25 +2625,12 @@ function updateEndingCandidate(endingId, context = {}, current = snapshot()) {
   };
 }
 
-function updateHiddenCEndingStreak(context = {}, current = snapshot()) {
-  if (context.kind !== "collapse") return false;
-
-  if (isCEndingState(current)) {
-    state.cEndingStreak = Math.min(C_AUTO_STREAK, Math.max(0, Math.round(state.cEndingStreak || 0)) + 1);
-    return state.cEndingStreak >= C_AUTO_STREAK;
-  } else {
-    state.cEndingStreak = 0;
-  }
-
-  return false;
-}
-
 function maybeFinishStagnantCivilizationCEnding(archived, current = snapshot(), rand = state.lastRand) {
   if (!updateStagnantCivilizationCEndingStreak(archived)) return false;
 
   finishGame("C", {
     kind: "stagnant-civilizations",
-    trigger: `连续 ${C_STAGNANT_CIVILIZATION_STREAK} 代文明毁灭时科学与神学均未突破 ${formatNumber(C_EARLY_ERA_BREAKTHROUGH)}`,
+    trigger: `连续 ${C_STAGNANT_CIVILIZATION_STREAK} 代文明毁灭时科学与神学峰值均未突破 ${formatNumber(C_EARLY_ERA_BREAKTHROUGH)}`,
     rand,
     snapshot: current
   });
@@ -4106,7 +4075,6 @@ function loadState() {
     if (migrated.awaitingCivilizationRestart) {
       migrated.endingCandidate = null;
     }
-    migrated.cEndingStreak = clamp(Math.round(finiteOr(migrated.cEndingStreak, 0)), 0, C_AUTO_STREAK);
     migrated.cStagnantCivilizationStreak = clamp(
       Math.round(finiteOr(migrated.cStagnantCivilizationStreak ?? migrated.cStagnationStreak, 0)),
       0,
