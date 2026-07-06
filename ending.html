@@ -72,6 +72,7 @@
       const storedEnding = readStoredEnding();
       const queryEnding = new URLSearchParams(window.location.search).get("ending");
       const endingId = queryEnding || storedEnding?.id || "A";
+      document.body.dataset.ending = endingId;
       const ending = window.THREE_SUN_ENDINGS?.[endingId] || {
         name: `${endingId}结局`,
         paragraphs: ["终局资料缺失。"],
