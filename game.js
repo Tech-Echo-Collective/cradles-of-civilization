@@ -826,14 +826,17 @@ function advanceRound(actionId) {
   const event = eventFor(rand, before);
 
   if (event.destroy) {
-    const collapseSnapshot = completeEerfActionBeforeDisaster(action, crisisAtRoundStart) || before;
-    const disasterEvent = collapseSnapshot === before
+    const completedEerf = completeEerfActionBeforeDisaster(action, crisisAtRoundStart);
+    const collapseSnapshot = completedEerf?.snapshot || before;
+    const disasterEvent = !completedEerf
       ? event
       : {
           ...event,
           text: `EERF 工程赶在灾变抵达前完成最后一次封门。${event.text}`
         };
-    if (!collapseCivilization(disasterEvent, collapseSnapshot, rand)) {
+    if (!collapseCivilization(disasterEvent, collapseSnapshot, rand, {
+      minimumRestartEerfLevel: completedEerf?.minimumRestartEerfLevel || 0
+    })) {
       state.rngState = rng.state;
       saveState();
       render();
@@ -2209,6 +2212,7 @@ function prepareActionDelta(action, rawDelta, crisisAtRoundStart = false) {
 function completeEerfActionBeforeDisaster(action, crisisAtRoundStart = false) {
   if (!isEerfConstructionAction(action)) return null;
 
+  const previousLevel = state.eerfLevel || 0;
   const rawDelta = typeof action.delta === "function" ? action.delta(state) : action.delta;
   const actionResult = prepareActionDelta(action, rawDelta, crisisAtRoundStart);
   if (actionResult.locked) return null;
@@ -2217,7 +2221,13 @@ function completeEerfActionBeforeDisaster(action, crisisAtRoundStart = false) {
   if (typeof action.effect === "function") {
     action.effect();
   }
-  return snapshot();
+  const completedLevel = state.eerfLevel || 0;
+  return {
+    snapshot: snapshot(),
+    minimumRestartEerfLevel: completedLevel > previousLevel
+      ? Math.max(1, completedLevel - 1)
+      : 0
+  };
 }
 
 function isEerfConstructionAction(action) {
@@ -2283,7 +2293,7 @@ function resetCivilizationModifiers() {
   cancelAutoRun();
 }
 
-function collapseCivilization(event, before, rand) {
+function collapseCivilization(event, before, rand, options = {}) {
   state.autoRunUntilCollapse = false;
   cancelAutoRun();
 
@@ -2311,6 +2321,11 @@ function collapseCivilization(event, before, rand) {
     return true;
   }
 
+  const restartEerfLevel = Math.max(
+    Math.max(0, oldEerfLevel - 1),
+    clamp(Math.round(finiteOr(options.minimumRestartEerfLevel, 0)), 0, EERF_MAX_LEVEL)
+  );
+
   state.pendingRestart = {
     oldCount,
     nextCount: oldCount + 1,
@@ -2321,7 +2336,7 @@ function collapseCivilization(event, before, rand) {
     pop: restartPopulation,
     eco: restartPopulation > BASE_RESTART_POP ? Math.round(restartPopulation * 2.2) : 0,
     stability: Math.max(18, Math.floor(before.stability * 0.42)),
-    eerfLevel: Math.max(0, oldEerfLevel - 1),
+    eerfLevel: restartEerfLevel,
     collapseCause: event.title
   };
   state.awaitingCivilizationRestart = true;

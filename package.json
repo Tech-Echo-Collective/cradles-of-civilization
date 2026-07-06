@@ -1,0 +1,8 @@
+{
+  "name": "cradles-of-civilization",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "package": "node scripts/package-game.mjs"
+  }
+}

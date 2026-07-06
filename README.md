@@ -6,6 +6,10 @@
 
 直接用浏览器打开 `index.html`。
 
+## 打包分享
+
+运行 `npm run package` 会生成 `dist/cradles-of-civilization/` 和 `dist/cradles-of-civilization.zip`。把 zip 发给朋友即可；对方解压后双击 `index.html` 就能玩。存档保存在各自浏览器本机，不会跟着 zip 传播。
+
 ## 基础规则
 
 - `SC` 是科学，`BE` 是神学，二者上限都是 `20000`。
