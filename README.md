@@ -12,6 +12,16 @@
 
 运行 `npm run package` 会生成 `dist/cradles-of-civilization/` 和 `dist/cradles-of-civilization.zip`。把 zip 发给朋友即可；对方解压后双击 `index.html` 就能玩。存档保存在各自浏览器本机，不会跟着 zip 传播。
 
+## Windows 桌面版
+
+商业发布路线使用 Tauri。当前工程已经有 Windows 壳、安装包配置、Rust 后端入口和 GitHub Actions 构建流程。
+
+- 本地生成桌面前端资源：`npm run desktop:build-ui`
+- 本机有完整 Tauri/Rust 环境时构建：`npm run desktop:windows`
+- 在 GitHub 上构建 Windows 安装包：进入 Actions，手动运行 `Build Windows Desktop`，完成后下载 `cradles-of-civilization-windows` artifact。
+
+注意：当前版本先完成桌面封装和后端入口，游戏规则主体仍在前端。收费发布前应继续把核心结算、事件和平衡数值迁入 `src-tauri/src/engine.rs`，并做版权引用审计。
+
 ## 基础规则
 
 - `SC` 是科学，`BE` 是神学，二者上限都是 `20000`。

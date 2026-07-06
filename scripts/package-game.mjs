@@ -13,6 +13,7 @@ const files = [
   "ending.html",
   "endings.js",
   "game.js",
+  "desktop.js",
   "styles.css",
   "README.md"
 ];

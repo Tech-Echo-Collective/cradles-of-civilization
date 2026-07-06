@@ -1,0 +1,26 @@
+[package]
+name = "cradles_of_civilization_desktop"
+version = "0.1.0"
+description = "Cradles Of Civilization desktop shell"
+authors = ["Noah Walker"]
+license = "All rights reserved"
+repository = "https://github.com/noahwalkerror-hash/cradles-of-civilization"
+default-run = "cradles-of-civilization"
+edition = "2021"
+rust-version = "1.77.2"
+
+[[bin]]
+name = "cradles-of-civilization"
+path = "src/main.rs"
+
+[lib]
+name = "cradles_of_civilization_desktop"
+path = "src/lib.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.0.0", features = [] }
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tauri = { version = "2.0.0", features = [] }

@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "package": "node scripts/package-game.mjs"
+    "package": "node scripts/package-game.mjs",
+    "desktop:build-ui": "node scripts/build-desktop-ui.mjs",
+    "desktop:serve": "python3 -m http.server 1420",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "tauri build",
+    "desktop:windows": "tauri build --bundles nsis,msi"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
   }
 }
