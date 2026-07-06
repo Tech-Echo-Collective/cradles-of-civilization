@@ -33,11 +33,28 @@
           </div>
         </header>
 
-        <section class="sky-block">
-          <canvas id="skyCanvas" width="960" height="420" aria-label="文明摇篮的三颗恒星与城市景观"></canvas>
-          <div class="sky-readout">
-            <span id="weatherLabel">等待第一年观测</span>
-            <strong id="endingLabel">文明尚未抵达终局</strong>
+        <section class="command-deck" aria-label="执政终端">
+          <div class="command-grid">
+            <article class="terminal-readout primary-readout">
+              <div class="terminal-head">
+                <span>GOVERNANCE FEED</span>
+                <strong>三恒星危机管制台</strong>
+              </div>
+              <p id="weatherLabel">等待第一年观测</p>
+            </article>
+            <article class="terminal-readout ending-readout">
+              <div class="terminal-head">
+                <span>ENDING VECTOR</span>
+                <strong>终局判定</strong>
+              </div>
+              <p id="endingLabel">文明尚未抵达终局</p>
+            </article>
+          </div>
+          <div class="system-lines" aria-hidden="true">
+            <span>STAR PRESSURE</span>
+            <span>CIVIL ORDER</span>
+            <span>EERF SEEDBANK</span>
+            <span>RAND STREAM</span>
           </div>
         </section>
 

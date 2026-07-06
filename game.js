@@ -432,7 +432,7 @@ function init() {
   if (maybeFinishGame({ kind: "load", trigger: "载入存档" })) return;
   updateEnding();
   render();
-  drawSky();
+  if (dom.skyCanvas) drawSky();
   scheduleAutoRunIfNeeded();
 }
 
@@ -572,13 +572,16 @@ function bindEvents() {
     button.addEventListener("click", () => setLogFilter(button.dataset.logFilter || "all"));
   });
 
-  window.addEventListener("resize", scheduleSkyResize);
-  window.addEventListener("orientationchange", scheduleSkyResize);
+  if (dom.skyCanvas) {
+    window.addEventListener("resize", scheduleSkyResize);
+    window.addEventListener("orientationchange", scheduleSkyResize);
+  }
 
   window.addEventListener("keydown", handleShortcut);
 }
 
 function scheduleSkyResize() {
+  if (!dom.skyCanvas) return;
   if (skyResizeHandle) cancelAnimationFrame(skyResizeHandle);
   skyResizeHandle = requestAnimationFrame(() => {
     skyResizeHandle = 0;
@@ -2882,7 +2885,7 @@ function render() {
   renderLog();
   renderArchive();
   renderSpecialNotice();
-  renderSkyFrame(performance.now());
+  if (dom.skyCanvas) renderSkyFrame(performance.now());
 }
 
 function renderActionButtons() {
