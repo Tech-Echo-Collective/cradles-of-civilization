@@ -52,8 +52,6 @@ const SKY_SAFARI_MAX_POP_LIGHTS = 52;
 const DIVIDE_AUTO_ACTION = "balance";
 const DIVIDE_AUTO_DELAY_MS = 180;
 const ENDING_THRESHOLDS = {
-  dominanceRatio: 1.28,
-  reformHigh: 18500,
   companionKnowledge: 9000,
   exodusKnowledge: 17000,
   balancedKnowledge: 14500,
@@ -63,8 +61,6 @@ const ENDING_THRESHOLDS = {
   faithfulCollapse: 12000,
   exodusPopulation: 10000,
   exodusEconomy: 95000,
-  promisedEconomy: 125000,
-  promisedPopulation: 30000,
   authoritarianPopulation: 10000,
   orderHigh: 82,
   collapseCycle: 7
@@ -969,7 +965,7 @@ function advanceRound(actionId) {
       .join(" "),
     delta: totalDelta
   });
-  trendEvents.forEach(addLog);
+  broadcastTrendEvents(trendEvents);
 
   saveState();
   render();
@@ -1128,6 +1124,32 @@ function knowledgeTrendChangeEvent(key, beforeTrend, nextTrend) {
     title: `第 ${state.turn} 年｜${label}趋势${direction === "upgrade" ? "升级" : "降级"}｜${nextStage.label}`,
     text: knowledgeTrendEventText(key, direction, nextStage),
     delta: {}
+  };
+}
+
+function broadcastTrendEvents(trendEvents) {
+  if (!Array.isArray(trendEvents) || !trendEvents.length) return;
+
+  const title = trendEvents
+    .map((event) => event.title.replace(/^第 \d+ 年｜/, ""))
+    .join("；");
+  const text = trendEvents
+    .map((event) => `${event.title.replace(/^第 \d+ 年｜/, "")}：${event.text}`)
+    .join(" ");
+
+  if (!state.specialNotice) {
+    state.specialNotice = {
+      title: `第 ${state.turn} 年｜趋势播报｜${title}`,
+      text,
+      delta: {}
+    };
+    return;
+  }
+
+  state.specialNotice = {
+    ...state.specialNotice,
+    text: [state.specialNotice.text, `趋势播报：${text}`].filter(Boolean).join(" "),
+    delta: state.specialNotice.delta || {}
   };
 }
 
@@ -2492,10 +2514,14 @@ function updateEnding() {
     state.ending = `终极答案倒计时：还剩 ${state.doomCountdown} 次行动`;
   } else if (isEconomicCrisis()) {
     state.ending = "经济危机：科学与神学的正向发展冻结";
+  } else if (state.sc >= CAP && state.be < CAP) {
+    state.ending = "科学封顶：A结局即将自动结算";
+  } else if (state.be >= CAP && state.sc < CAP) {
+    state.ending = "神学封顶：B结局即将自动结算";
   } else if (state.sc >= ENDING_THRESHOLDS.exodusKnowledge && state.be < ENDING_THRESHOLDS.companionKnowledge) {
-    state.ending = "科学终局临界：离星舰只差最后的秩序与经济";
+    state.ending = "科学撤离临界：离星舰只差最后的秩序与经济";
   } else if (state.be >= ENDING_THRESHOLDS.exodusKnowledge && state.sc < ENDING_THRESHOLDS.companionKnowledge) {
-    state.ending = "神学终局临界：正道正在吞没旧世界";
+    state.ending = "神学撤离临界：正道正在吞没旧世界";
   } else if (state.sc >= ENDING_THRESHOLDS.balancedKnowledge && state.be >= ENDING_THRESHOLDS.balancedKnowledge) {
     state.ending = "双相终局临界：学院与神殿正在同一座塔中合流";
   } else if (state.sc >= ENDING_THRESHOLDS.middleScience && state.be <= ENDING_THRESHOLDS.lowKnowledge) {
@@ -2530,7 +2556,7 @@ function maybeFinishGame(context = {}) {
   const endingId = resolveEnding(context, current);
   updateEndingCandidate(endingId, context, current);
 
-  const automaticEndingId = resolveAutomaticEnding(context, current, endingId);
+  const automaticEndingId = resolveAutomaticEnding(context, current);
   if (!automaticEndingId) return false;
   finishGame(automaticEndingId, {
     ...context,
@@ -2547,10 +2573,6 @@ function canHoldEndingCandidate(context = {}) {
 function resolveEnding(context = {}, current = snapshot()) {
   const harmony = knowledgeHarmony(current.sc, current.be);
   const thresholds = ENDING_THRESHOLDS;
-  const scDominance = current.sc >= current.be * thresholds.dominanceRatio;
-  const beDominance = current.be >= current.sc * thresholds.dominanceRatio;
-  const scienceOnlyTrack = current.be < thresholds.balancedKnowledge;
-  const beliefOnlyTrack = current.sc < thresholds.balancedKnowledge;
 
   if (
     current.sc >= thresholds.exodusKnowledge &&
@@ -2568,28 +2590,6 @@ function resolveEnding(context = {}, current = snapshot()) {
     current.stability >= 66
   ) {
     return "E";
-  }
-
-  if (
-    current.sc >= thresholds.reformHigh &&
-    current.be >= thresholds.companionKnowledge &&
-    scienceOnlyTrack &&
-    scDominance &&
-    current.pop >= thresholds.promisedPopulation &&
-    current.eco >= thresholds.promisedEconomy &&
-    current.stability >= 55
-  ) {
-    return "A";
-  }
-
-  if (
-    current.be >= thresholds.reformHigh &&
-    current.sc >= thresholds.companionKnowledge &&
-    beliefOnlyTrack &&
-    beDominance &&
-    current.stability >= 62
-  ) {
-    return "B";
   }
 
   if (
@@ -2694,14 +2694,11 @@ function isStagnantCivilization(archived) {
   return peakSc < C_EARLY_ERA_BREAKTHROUGH && peakBe < C_EARLY_ERA_BREAKTHROUGH;
 }
 
-function resolveAutomaticEnding(context = {}, current = snapshot(), endingId = null) {
-  const thresholds = ENDING_THRESHOLDS;
-  if (current.sc >= CAP && current.be >= CAP) {
-    return null;
-  }
-
-  if (current.sc >= CAP && current.be < thresholds.balancedKnowledge) return "A";
-  if (current.be >= CAP && current.sc < thresholds.balancedKnowledge) return "B";
+function resolveAutomaticEnding(context = {}, current = snapshot()) {
+  const scienceAtCap = current.sc >= CAP;
+  const beliefAtCap = current.be >= CAP;
+  if (scienceAtCap && !beliefAtCap) return "A";
+  if (beliefAtCap && !scienceAtCap) return "B";
 
   return null;
 }
@@ -2979,23 +2976,13 @@ function endingWatchItems() {
     {
       id: "A",
       reqs: [
-        minimumRequirement("SC", current.sc, thresholds.reformHigh),
-        minimumRequirement("BE", current.be, thresholds.companionKnowledge),
-        maximumRequirement("BE 双高上限", current.be, thresholds.balancedKnowledge - 1),
-        minimumRequirement("POP", current.pop, thresholds.promisedPopulation),
-        minimumRequirement("ECO", current.eco, thresholds.promisedEconomy),
-        minimumRequirement("秩序", current.stability, 55),
-        ratioRequirement("科学主导", current.sc, current.be * thresholds.dominanceRatio)
+        singleLineCapRequirement("SC", current.sc, "BE", current.be)
       ]
     },
     {
       id: "B",
       reqs: [
-        minimumRequirement("BE", current.be, thresholds.reformHigh),
-        minimumRequirement("SC", current.sc, thresholds.companionKnowledge),
-        maximumRequirement("SC 双高上限", current.sc, thresholds.balancedKnowledge - 1),
-        minimumRequirement("秩序", current.stability, 62),
-        ratioRequirement("神学主导", current.be, current.sc * thresholds.dominanceRatio)
+        singleLineCapRequirement("BE", current.be, "SC", current.sc)
       ]
     },
     {
@@ -3067,6 +3054,20 @@ function minimumRequirement(label, value, target, formatter = formatNumber) {
   };
 }
 
+function singleLineCapRequirement(primaryLabel, primaryValue, companionLabel, companionValue) {
+  const primary = finiteOr(primaryValue, 0);
+  const companion = finiteOr(companionValue, 0);
+  const primaryAtCap = primary >= CAP;
+  const companionAtCap = companion >= CAP;
+  return {
+    met: primaryAtCap && !companionAtCap,
+    progress: companionAtCap ? 0.96 : clamp(primary / CAP, 0, 1),
+    missing: companionAtCap
+      ? `${companionLabel} 已同步封顶，转入双相判断`
+      : `${primaryLabel} ${formatNumber(Math.max(0, CAP - primary))}`
+  };
+}
+
 function maximumRequirement(label, value, maximum, formatter = formatNumber) {
   const current = finiteOr(value, 0);
   const cap = finiteOr(maximum, 0);
@@ -3074,16 +3075,6 @@ function maximumRequirement(label, value, maximum, formatter = formatNumber) {
     met: current <= cap,
     progress: current <= cap ? 1 : clamp(cap / Math.max(current, 1), 0, 1),
     missing: `${label} 需降至 ${formatter(cap)} 以下`
-  };
-}
-
-function ratioRequirement(label, value, target) {
-  const current = finiteOr(value, 0);
-  const goal = Math.max(1, finiteOr(target, 0));
-  return {
-    met: current >= goal,
-    progress: clamp(current / goal, 0, 1),
-    missing: `${label} 需 ${formatNumber(goal)}`
   };
 }
 
