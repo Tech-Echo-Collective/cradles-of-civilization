@@ -1,6 +1,7 @@
 "use strict";
 
 const CAP = 20000;
+const LA_CAP = CAP;
 const SPECIAL_KNOWLEDGE_SCALE = CAP / 1000;
 const SPECIAL_MATH_SCIENCE_SCALE = 100;
 const SPEC_MAX = 5000;
@@ -34,8 +35,13 @@ const SCIENCE_RESTART_RATES = [0, 0.03, 0.06, 0.09, 0.125, 0.165];
 const SCIENCE_RESTART_CAPS = [0, 750, 1450, 2200, 3000, 3800];
 const BELIEF_RESTART_RATE_MULTIPLIER = 1.08;
 const BELIEF_RESTART_CAPS = [0, 820, 1600, 2450, 3350, 4200];
-const C_STAGNANT_CIVILIZATION_STREAK = 5;
-const C_EARLY_ERA_BREAKTHROUGH = 1100;
+const LA_EERF_MAX_KNOWLEDGE_RATE = 0.5;
+const LA_EERF_MAX_TREND_RATE = 0.8;
+const C_STAGNANT_CIVILIZATION_STREAK = 25;
+const C_BRONZE_ERA_SCIENCE_CAP = 1600;
+const I_LOW_ORDER_STREAK = 11;
+const I_LOW_ORDER_THRESHOLD = 4;
+const J_LA_FULL_STREAK = 4;
 const SKY_FRAME_INTERVAL_MS = 96;
 const SKY_SAFARI_FRAME_INTERVAL_MS = 160;
 const SKY_MAX_DEVICE_PIXEL_RATIO = 1.25;
@@ -52,7 +58,7 @@ const DIVIDE_AUTO_ACTION = "balance";
 const DIVIDE_AUTO_DELAY_MS = 180;
 const ENDING_THRESHOLDS = {
   companionKnowledge: 9000,
-  exodusKnowledge: 17000,
+  exodusKnowledge: 16000,
   balancedKnowledge: 14500,
   middleScience: 12500,
   lowKnowledge: 7000,
@@ -115,7 +121,7 @@ const ACTIONS = {
     type: "progress",
     delta: { sc: -18, be: 24, pop: 2600, eco: -9500, stability: -5 },
     text: "居者有其屋，耕者有其田。\n安得广厦千万间，大庇天下寒士俱欢颜？",
-    chronicleText: "新的洞穴、温室与地下街区被打开，人口膨胀也带来拥挤。"
+    chronicleText: "新的洞穴、温室与地下街区被打开，人口膨胀带来繁荣，也带来拥挤。"
   },
   balance: {
     label: "均衡治理",
@@ -136,17 +142,17 @@ const ACTIONS = {
     type: "special",
     delta: { sc: 125, be: -125, pop: -420, eco: -8800, stability: -8 },
     text: "陛下，我不需要上帝这个假设。\n——皮埃尔·西蒙·拉普拉斯，1802年",
-    chronicleText: "学院夺回祭坛、税粮与钟楼，神学退却，科学获得一段残酷的清场。"
+    chronicleText: "学院夺回祭坛、税粮与钟楼，教化蒙昧。神学退却，科学获得一段残酷的清场。"
   },
   suppressScience: {
     label: "打压科学",
     type: "special",
     delta: { sc: -125, be: 125, pop: 120, eco: -6200, stability: 3 },
     text: "不管怎么说，它依然在转动！\n——伽利略·伽利莱，1632年",
-    chronicleText: "祭司接管测量器与工坊账簿，科学退却，神学获得一段安静的扩张。"
+    chronicleText: "祭司接管学院、工坊与账簿，清算异端。科学退却，神学获得一段安静的扩张。"
   },
   hibernate: {
-    label: "冬眠：增援未来",
+    label: "脱水",
     type: "special",
     delta(state) {
       return {
@@ -157,8 +163,15 @@ const ACTIONS = {
         stability: 14
       };
     },
-    text: "国度从你而立，君王由你而出。",
-    chronicleText: "一批人进入冬眠库，文明用当下的热闹换取下一次醒来的秩序。"
+    text: "脱水！脱水！！！",
+    chronicleText: "一批人进入脱水状态，文明用当下的热闹换取下一次醒来的秩序。"
+  },
+  arts: {
+    label: "扶持文艺",
+    type: "progress",
+    delta: { sc: 18, be: 22, la: 720, pop: 260, eco: -9200, stability: 3 },
+    text: "把字刻在石头上。\n——《死神永生》，罗辑，掩体纪元67年",
+    chronicleText: "诗歌、壁画、档案馆和剧场从预算缝隙里生长出来，文明开始记住自己。"
   },
   economy: {
     label: "刺激经济",
@@ -172,8 +185,8 @@ const ACTIONS = {
         stability: -1
       };
     },
-    text: "牛奶会有的，面包也会有的。一切都会有的！\n ——列宁，1917年",
-    chronicleText: "粮仓、工坊和税制被重新接上线，文明把理想暂时换成了现金流。"
+    text: "牛奶会有的，面包也会有的。一切都会有的！\n ——弗拉基米尔·伊里奇·列宁，1917年",
+    chronicleText: "粮仓、工坊和税制重新开始工作，文明卖出了理想，得到了现金。"
   },
   buildEerf: {
     label: "建造 EERF",
@@ -253,6 +266,7 @@ const ACTION_SHORTCUTS = [
   { key: "1", actionId: "suppressBelief", label: "1" },
   { key: "2", actionId: "suppressScience", label: "2" },
   { key: "h", actionId: "hibernate", label: "H" },
+  { key: "l", actionId: "arts", label: "L" },
   { key: "e", actionId: "economy", label: "E" },
   { key: "f", actionId: "buildEerf", label: "F" },
   { key: "u", actionId: "upgradeEerf", label: "U" },
@@ -306,6 +320,7 @@ function createNewState(seedValue = Date.now()) {
   const initialSnapshot = {
     sc: 240,
     be: 360,
+    la: 0,
     pop: 7600,
     eco: DEFAULT_ECO,
     stability: 52
@@ -335,21 +350,24 @@ function createNewState(seedValue = Date.now()) {
     pendingRestart: null,
     endingCandidate: null,
     cStagnantCivilizationStreak: 0,
+    lowOrderStreak: 0,
+    laFullStreak: 0,
     finished: false,
     finalEnding: null,
     endingStats,
     lastRand: null,
+    lastSpec: null,
     lastTone: "quiet",
     specialNotice: null,
     history: [],
     currentCivilization: createCivilizationStats(1, 0, initialSnapshot),
-    weather: "等待第一年观测",
+    weather: "等待观测",
     ending: "我们依旧存在。",
     log: [
       {
         type: "progress",
         title: "第 1 号文明苏醒",
-        text: "三颗恒星在天幕上留下互相矛盾的轨迹。科学、神学、人口与经济都脆弱不堪，这是一个文明的新生。",
+        text: "三颗恒星在天幕上留下互相矛盾的轨迹。执政官看着围在篝火旁的各人，那时科学、神学、人口与经济都脆弱不堪：这是一个文明的新生。",
         delta: { sc: 240, be: 360, pop: 7600, eco: DEFAULT_ECO, stability: 52 }
       }
     ]
@@ -360,6 +378,7 @@ function createCivilizationStats(civilization, startTurn, initialSnapshot = {}) 
   const snap = {
     sc: finiteOr(initialSnapshot.sc, 0),
     be: finiteOr(initialSnapshot.be, 0),
+    la: finiteOr(initialSnapshot.la, 0),
     pop: finiteOr(initialSnapshot.pop, 0),
     eco: finiteOr(initialSnapshot.eco, 0),
     stability: finiteOr(initialSnapshot.stability, 0)
@@ -371,11 +390,13 @@ function createCivilizationStats(civilization, startTurn, initialSnapshot = {}) 
     turns: 0,
     initialSc: snap.sc,
     initialBe: snap.be,
+    initialLa: snap.la,
     initialPop: snap.pop,
     initialEco: snap.eco,
     initialStability: snap.stability,
     peakSc: snap.sc,
     peakBe: snap.be,
+    peakLa: snap.la,
     peakPop: snap.pop,
     peakEco: snap.eco,
     peakEerf: finiteOr(initialSnapshot.eerfLevel ?? initialSnapshot.eerf, 0),
@@ -396,6 +417,7 @@ function updateCivilizationStats(snapshotValue = snapshot(), specialEventTitle =
   stats.turns = Math.max(0, state.turn - stats.startTurn);
   stats.peakSc = Math.max(stats.peakSc, snapshotValue.sc);
   stats.peakBe = Math.max(stats.peakBe, snapshotValue.be);
+  stats.peakLa = Math.max(stats.peakLa || 0, snapshotValue.la || 0);
   stats.peakPop = Math.max(stats.peakPop, snapshotValue.pop);
   stats.peakEco = Math.max(stats.peakEco, snapshotValue.eco);
   stats.peakEerf = Math.max(stats.peakEerf || 0, snapshotValue.eerf || state.eerfLevel || 0);
@@ -463,11 +485,13 @@ function cacheDom() {
   dom.randValue = document.querySelector("#randValue");
   dom.scValue = document.querySelector("#scValue");
   dom.beValue = document.querySelector("#beValue");
+  dom.laValue = document.querySelector("#laValue");
   dom.popValue = document.querySelector("#popValue");
   dom.ecoValue = document.querySelector("#ecoValue");
   dom.eerfValue = document.querySelector("#eerfValue");
   dom.scMeter = document.querySelector("#scMeter");
   dom.beMeter = document.querySelector("#beMeter");
+  dom.laMeter = document.querySelector("#laMeter");
   dom.popMeter = document.querySelector("#popMeter");
   dom.ecoMeter = document.querySelector("#ecoMeter");
   dom.eerfMeter = document.querySelector("#eerfMeter");
@@ -480,6 +504,7 @@ function cacheDom() {
   dom.stabilityValue = document.querySelector("#stabilityValue");
   dom.ecoStatus = document.querySelector("#ecoStatus");
   dom.eerfStatus = document.querySelector("#eerfStatus");
+  dom.laStatus = document.querySelector("#laStatus");
   dom.weatherLabel = document.querySelector("#weatherLabel");
   dom.endingLabel = document.querySelector("#endingLabel");
   dom.specialBanner = document.querySelector("#specialBanner");
@@ -814,6 +839,7 @@ function advanceRound(actionId) {
   state.rngState = rng.state;
   state.turn += 1;
   state.lastRand = rand;
+  state.lastSpec = spec;
   state.specialNotice = null;
 
   const before = snapshot();
@@ -827,7 +853,7 @@ function advanceRound(actionId) {
       ? event
       : {
           ...event,
-          text: `EERF 工程赶在灾变抵达前完成最后一次封门。${event.text}`
+          text: `极端环境抵抗设施赶在灾变抵达前完成最后一次封门。${event.text}`
         };
     if (!collapseCivilization(disasterEvent, collapseSnapshot, rand, {
       minimumRestartEerfLevel: completedEerf?.minimumRestartEerfLevel || 0
@@ -906,6 +932,7 @@ function advanceRound(actionId) {
   if (maybeFinishGame({ kind: "action", trigger: action.label, rand })) return;
   const pressureDelta = applyDelta(computeSystemPressure(snapshot()), { freezeKnowledge: crisisAtRoundStart });
   const populationWasLocked = enforcePopulationLock() || populationLockedBeforeAction;
+  updateAnnualAutomaticEndingStreaks(snapshot());
   if (maybeFinishGame({ kind: "pressure", trigger: "系统压力", rand })) return;
   if (state.pop <= 0) {
     if (!collapseCivilization(
@@ -984,6 +1011,12 @@ function computeDrift(rand, current) {
   return {
     sc: knowledgeTrend.sc,
     be: knowledgeTrend.be,
+    la: Math.round(
+      (current.pop > 12000 ? Math.sqrt(current.pop - 12000) * 0.09 : 0) +
+        knowledgeHarmony(current.sc, current.be) * 5 +
+        (current.stability >= 58 ? 3 : 0) -
+        (current.eco <= 0 ? 18 : 0)
+    ),
     pop: Math.round(current.pop * (0.004 + current.stability / 18000) + popNoise * 70 - lowOrderPenalty + highOrderBonus),
     eco: Math.round(Math.sqrt(Math.max(0, current.eco)) * 7 + current.stability * 8 - current.pop * 0.003 - (state.eerfLevel || 0) * 620 + lowEconomyBuffer),
     stability: orderNoise
@@ -1091,6 +1124,7 @@ function actionTrendShift(action, key) {
   if (action === ACTIONS.suppressBelief) return key === "sc" ? 22 : -30;
   if (action === ACTIONS.suppressScience) return key === "be" ? 24 : -32;
   if (action === ACTIONS.hibernate) return 10;
+  if (action === ACTIONS.arts) return key === "sc" ? 4 : 6;
   if (action === ACTIONS.economy) return key === "sc" ? 7 : 4;
   if (action === ACTIONS.population) return key === "sc" ? 3 : 6;
   if (action === ACTIONS.buildEerf) return key === "sc" ? -12 : -10;
@@ -1117,10 +1151,11 @@ function knowledgeTrendChangeEvent(key, beforeTrend, nextTrend) {
   if (beforeStage.id === nextStage.id) return null;
 
   const direction = nextStage.index > beforeStage.index ? "upgrade" : "downgrade";
+  const directionLabel = direction === "upgrade" ? "升级至" : "降级至";
   const label = key === "sc" ? "科学" : "神学";
   return {
     type: "special",
-    title: `第 ${state.turn} 年｜${label}趋势${direction === "upgrade" ? "升级" : "降级"}｜${nextStage.label}`,
+    title: `${label}${directionLabel}${nextStage.label}`,
     text: knowledgeTrendEventText(key, direction, nextStage),
     delta: {}
   };
@@ -1165,34 +1200,34 @@ function knowledgeTrendEventText(key, direction, stage) {
   const copy = {
     sc: {
       upgrade: {
-        budding: "物理学的大厦已经基本落成，只剩下两朵乌云遮蔽着。\n——开尔文勋爵，1899年",
-        formed: "万物皆数。\n——毕达哥拉斯，公元前530年",
-        expanding: "我发现了！\n——阿基米德，公元前212年",
-        surging: "现在，我将演示世界运行的规律。\n——牛顿，1687年"
+        budding: "\n物理学的大厦已经基本落成，只剩下两朵乌云遮蔽着。——开尔文勋爵，1899年\n",
+        formed: "\n万物皆数。——毕达哥拉斯，公元前530年\n",
+        expanding: "\n我发现了！——阿基米德，公元前212年\n",
+        surging: "\n现在，我将演示世界运行的规律。——艾萨克·牛顿，1687年\n"
       },
       downgrade: {
-        expanding: "前沿项目被迫收缩，学院把一部分预算还给粮仓和城墙。",
-        formed: "导师散入行政与军队，科学仍在运转，但制度锋芒开始变钝。",
-        budding: "研究传统退回少数书房，工坊继续生产，却不再提出太多问题。",
-        stalled: "你们可以一眨眼就把他的头砍下来，但那样的头脑一百年再也长不出一个来了！\n——拉格朗日，1794年",
-        decline: "不要弄坏我的圆！\n——阿基米德，公元前212年",
-        collapse: "盛宴已毕。\n——杨振宁，1980年"
+        expanding: "\n因为我是个白痴。——罗伯特·奥本海默，1954年\n",
+        formed: "\n我没有时间了。——埃瓦里斯特·伽罗瓦，1832年\n",
+        budding: "\n或许，你们比我更加恐惧！——焦尔达诺·布鲁诺，1600年\n",
+        stalled: "\n你们可以一眨眼就把他的头砍下来，但那样的头脑一百年再也长不出一个来了！——约瑟夫-路易·拉格朗日，1794年\n",
+        decline: "\n不要弄坏我的圆！——阿基米德，公元前212年\n",
+        collapse: "盛宴已毕。——杨振宁，1980年\n"
       }
     },
     be: {
       upgrade: {
-        budding: "起初，神创造天地。\n——《创世记》1:1",
-        formed: "凡事都要规规矩矩地按着次序行。\n——《哥林多前书》14:40",
-        expanding: "这福音要传遍天下。\n——《马太福音》24:14",
-        surging: "万膝必向我跪拜，万口必向我承认。\n——《罗马书》14:11"
+        budding: "\n起初，神创造天地。——《创世记》1:1",
+        formed: "\n凡事都要规规矩矩地按着次序行。——《哥林多前书》14:40",
+        expanding: "\n这福音要传遍天下。——《马太福音》24:14",
+        surging: "\n万膝必向我跪拜，万口必向我承认。——《罗马书》14:11"
       },
       downgrade: {
-        expanding: "日光之下，并无新事。\n——《传道书》1:9",
-        formed: "没有异象，民就放肆。\n——《箴言》29:18",
-        budding: "他们的心远离我。\n——《以赛亚书》29:13",
-        stalled: "你们心持两意要到几时呢？\n——《列王纪上》18:21",
-        decline: "我的神，我的神！为什么离弃我？\n——《马太福音》27:46",
-        collapse: "虚空的虚空，凡事都是虚空。\n——《传道书》1:2"
+        expanding: "日光之下，并无新事。——《传道书》1:9",
+        formed: "\n没有异象，民就放肆。——《箴言》29:18",
+        budding: "\n他们的心远离我。——《以赛亚书》29:13",
+        stalled: "\n你们心持两意要到几时呢？——《列王纪上》18:21",
+        decline: "\n我的神，我的神！为什么离弃我？——《马太福音》27:46",
+        collapse: "\n虚空的虚空，凡事都是虚空。——《传道书》1:2"
       }
     }
   };
@@ -1258,15 +1293,17 @@ function computeSystemPressure(current) {
 function computeOrderPressure(current, carryingCapacity, harmony, rivalry) {
   const scRatio = current.sc / CAP;
   const beRatio = current.be / CAP;
+  const laRatio = finiteOr(current.la, 0) / LA_CAP;
   const overloadPenalty = Math.max(0, current.pop - carryingCapacity) / 42000;
   const povertyPenalty = current.eco < current.pop * 0.22 ? 5 : 0;
-  const doctrineOrderTarget = 42 + beRatio * 58 + harmony * 12 - scRatio * 14 - rivalry * 6 - overloadPenalty - povertyPenalty;
+  const doctrineOrderTarget = 42 + beRatio * 58 + harmony * 12 + laRatio * 7 - scRatio * 14 - rivalry * 6 - overloadPenalty - povertyPenalty;
   return clamp(Math.round((doctrineOrderTarget - current.stability) / 10), -8, 9);
 }
 
 function computeSolowEconomyPressure(current, carryingCapacity, harmony, rivalry) {
   const scRatio = current.sc / CAP;
   const beRatio = current.be / CAP;
+  const laRatio = finiteOr(current.la, 0) / LA_CAP;
   const labor = Math.max(1, current.pop);
   const capital = Math.max(1, current.eco) + 24000;
   const laborIndex = labor / 7600;
@@ -1279,7 +1316,8 @@ function computeSolowEconomyPressure(current, carryingCapacity, harmony, rivalry
     1.04
   );
   // Game-tuned Solow-Cobb-Douglas: ECO is capital, POP is labor, SC is productivity, BE is doctrine drag.
-  const totalFactorProductivity = scienceTfp * orderTfp * doctrineFriction;
+  const culturalCoordination = 1 + laRatio * 0.04;
+  const totalFactorProductivity = scienceTfp * orderTfp * doctrineFriction * culturalCoordination;
   const grossOutput = 15500 *
     totalFactorProductivity *
     Math.pow(capitalIndex, 0.34) *
@@ -1631,7 +1669,7 @@ function doomEvent(rand, current) {
     return {
       destroy: true,
       type: "disaster",
-      title: "潮汐裂谷",
+      title: "三日连珠",
       text: "大地被三颗太阳的潮汐力撕开，地下河与城市一起坠入裂谷。"
     };
   }
@@ -1649,7 +1687,7 @@ function doomEvent(rand, current) {
     return {
       destroy: true,
       type: "disaster",
-      title: "地壳回潮",
+      title: "板块运动",
       text: "远古海床重新隆起，城市像沉船一样被埋进盐壳和石灰岩。"
     };
   }
@@ -1667,7 +1705,7 @@ function doomEvent(rand, current) {
     return {
       destroy: true,
       type: "disaster",
-      title: "寒潮纪元",
+      title: "三颗飞星",
       text: "长夜提前降临，冰层越过赤道，火种和粮仓在同一周内熄灭。"
     };
   }
@@ -1676,7 +1714,7 @@ function doomEvent(rand, current) {
     return {
       destroy: true,
       type: "disaster",
-      title: "飞星雨",
+      title: "碎片雨",
       text: "来自旧轨道的碎片贯穿大气层，城市和神殿一起消失在白光里。"
     };
   }
@@ -1726,7 +1764,7 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "Civil War - 三体内战",
-      text: `内战撕裂城邦，人口被除以 ${divisor}，经济损失 100,000。`,
+      text: `消灭三体暴政，世界属于人类。\n人口被除以 ${divisor}，经济损失 100,000。`,
       delta: {
         pop: Math.round(current.pop / divisor) - current.pop,
         eco: -100000
@@ -1762,7 +1800,7 @@ function specialEventFor(spec, rng) {
       title: "Gender Equality - 两性平等",
       text: slowsGrowth
         ? "女孩们只想玩乐。\n——辛迪·劳帕，1983年。\n人口增长策略转向审慎，本代文明内人口增速变为原来的 2/3。"
-        : "新的家庭制度释放劳动与生育潜能，本代文明内人口增速变为原来的 5/4。",
+        : "妇女能顶半边天。新的家庭制度释放劳动与生育潜能，本代文明内人口增速变为原来的 5/4。",
       delta: {},
       effect() {
         state.populationGrowthMultiplier = roundStat(state.populationGrowthMultiplier * factor);
@@ -1786,7 +1824,7 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "Divide and Fall - 分崩离析",
-      text: "共同体碎裂。本代文明内，玩家行动无法再控制 SC、BE、人口或经济的发展。文明将自行推进，直到本轮毁灭。",
+      text: "共同体碎裂。本代文明内，玩家行动无法再控制任何发展。文明将自行推进，直到本轮毁灭，或自动结算。",
       delta: {},
       effect() {
         state.controlLocked = true;
@@ -1799,7 +1837,7 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "Remember the Pain - 勿忘国耻",
-      text: "神州陆沉。\n人口损失 300,000。",
+      text: "铸兹宝鼎，祀我国殇。\n人口损失 300,000，且EERF保护作用无效。",
       delta: { pop: -300000 },
       piercesPopulationProtection: true
     };
@@ -1858,7 +1896,7 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "Anarchy - 时代终结",
-      text: "难道就没有一个基督徒来砍下我的头吗？！\n——君士坦丁十一世，1453年5月29日。\n经济被压到五分之一，人口流失一成。",
+      text: "难道就没有一个基督徒来砍下我的头吗？！\n——君士坦丁十一世，1453年5月29日。\n经济衰退至原有的五分之一，人口流失一成。",
       delta: {
         eco: Math.round(current.eco / 5) - current.eco,
         pop: Math.round(current.pop * 0.9) - current.pop
@@ -1888,7 +1926,7 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "Nature Goddess - 自然对数",
-      text: "自然对数被奉为女神，增长曲线突然变得优雅。",
+      text: "自然对数被奉为女神，人们在她的祭坛上计算——嗯，几乎是一切。",
       delta: { sc: 27.1828 * SPECIAL_MATH_SCIENCE_SCALE, eco: 27000 }
     };
   }
@@ -2309,6 +2347,8 @@ function resetCivilizationModifiers() {
   state.populationLockTurns = 0;
   state.doomCountdown = 0;
   state.lockedPopulation = null;
+  state.lowOrderStreak = 0;
+  state.laFullStreak = 0;
   cancelAutoRun();
 }
 
@@ -2324,7 +2364,7 @@ function collapseCivilization(event, before, rand, options = {}) {
   const restartPopulation = computeRestartPopulation(before);
   const restartKnowledge = computeRestartKnowledge(before);
   const oldEerfLevel = state.eerfLevel || 0;
-  const restartTrends = computeRestartKnowledgeTrends(oldEerfLevel);
+  const restartTrends = computeRestartKnowledgeTrends(oldEerfLevel, before);
   updateCivilizationStats(before);
   const archived = {
     ...state.currentCivilization,
@@ -2350,6 +2390,7 @@ function collapseCivilization(event, before, rand, options = {}) {
     nextCount: oldCount + 1,
     sc: restartKnowledge.sc,
     be: restartKnowledge.be,
+    la: 0,
     scTrend: restartTrends.scTrend,
     beTrend: restartTrends.beTrend,
     pop: restartPopulation,
@@ -2361,11 +2402,14 @@ function collapseCivilization(event, before, rand, options = {}) {
   state.awaitingCivilizationRestart = true;
   state.sc = 0;
   state.be = 0;
+  state.la = 0;
   state.scTrend = 0;
   state.beTrend = 0;
   state.pop = 0;
   state.eco = 0;
   state.stability = Math.max(0, Math.floor(before.stability * 0.2));
+  state.lowOrderStreak = 0;
+  state.laFullStreak = 0;
   state.weather = event.title;
   state.ending = `第 ${oldCount} 号文明毁灭，等待重启文明`;
   state.lastTone = "disaster";
@@ -2379,7 +2423,7 @@ function collapseCivilization(event, before, rand, options = {}) {
   addLog({
     type: "disaster",
     title: `第 ${state.turn} 年｜Rand ${formatRand(rand)}｜${event.title}`,
-    text: `${event.text} 第 ${oldCount} 号文明在${event.title}中毁灭了，该文明进化至${scienceEra(before.sc)}。文明的种子仍在，等待重启文明。EERF 保存人口 ${formatNumber(restartPopulation)}、少量知识与少量趋势。`,
+    text: `${event.text} 第 ${oldCount} 号文明在${event.title}中毁灭了，该文明进化至${scienceEra(before.sc)}。文明的种子仍在，它将重新启动，再次开启在三体世界中命运莫测的进化。`,
     delta: diff(before, snapshot())
   });
 
@@ -2393,6 +2437,7 @@ function restartCivilizationFromPending() {
   const restart = state.pendingRestart;
   state.sc = restart.sc;
   state.be = restart.be;
+  state.la = finiteOr(restart.la, 0);
   state.scTrend = finiteOr(restart.scTrend, 0);
   state.beTrend = finiteOr(restart.beTrend, 0);
   state.pop = restart.pop;
@@ -2439,25 +2484,35 @@ function computeRestartKnowledge(snapshotValue) {
   const level = state.eerfLevel || 0;
   if (level <= 0) return { sc: 0, be: 0 };
 
-  const scienceRate = SCIENCE_RESTART_RATES[level] || 0;
+  const laRatio = eerfCultureRatio(snapshotValue);
+  const scienceRate = interpolate(SCIENCE_RESTART_RATES[level] || 0, LA_EERF_MAX_KNOWLEDGE_RATE, laRatio);
   const beliefRate = scienceRate * BELIEF_RESTART_RATE_MULTIPLIER;
-  const scienceCap = SCIENCE_RESTART_CAPS[level] || 0;
-  const beliefCap = BELIEF_RESTART_CAPS[level] || 0;
+  const scienceCap = Math.floor(interpolate(SCIENCE_RESTART_CAPS[level] || 0, CAP * LA_EERF_MAX_KNOWLEDGE_RATE, laRatio));
+  const beliefCap = Math.floor(interpolate(BELIEF_RESTART_CAPS[level] || 0, CAP * LA_EERF_MAX_KNOWLEDGE_RATE * BELIEF_RESTART_RATE_MULTIPLIER, laRatio));
   return {
-    sc: clamp(Math.round(level * 35 + snapshotValue.sc * scienceRate), 0, scienceCap),
-    be: clamp(Math.round(level * 35 + snapshotValue.be * beliefRate), 0, beliefCap)
+    sc: clamp(Math.floor(level * 35 + snapshotValue.sc * scienceRate), 0, scienceCap),
+    be: clamp(Math.floor(level * 35 + snapshotValue.be * beliefRate), 0, beliefCap)
   };
 }
 
-function computeRestartKnowledgeTrends(level = state.eerfLevel || 0) {
+function computeRestartKnowledgeTrends(level = state.eerfLevel || 0, snapshotValue = snapshot()) {
   if (level <= 0) return { scTrend: 0, beTrend: 0 };
 
-  const rate = KNOWLEDGE_TREND_RESTART_RATES[level] || 0;
-  const cap = KNOWLEDGE_TREND_RESTART_CAPS[level] || 0;
+  const laRatio = eerfCultureRatio(snapshotValue);
+  const rate = interpolate(KNOWLEDGE_TREND_RESTART_RATES[level] || 0, LA_EERF_MAX_TREND_RATE, laRatio);
+  const cap = Math.floor(interpolate(KNOWLEDGE_TREND_RESTART_CAPS[level] || 0, KNOWLEDGE_TREND_MAX * LA_EERF_MAX_TREND_RATE, laRatio));
   return {
-    scTrend: clamp(Math.round(level * 2 + Math.max(0, finiteOr(state.scTrend, 0)) * rate), 0, cap),
-    beTrend: clamp(Math.round(level * 2 + Math.max(0, finiteOr(state.beTrend, 0)) * rate), 0, cap)
+    scTrend: clamp(Math.floor(level * 2 + Math.max(0, finiteOr(state.scTrend, 0)) * rate), 0, cap),
+    beTrend: clamp(Math.floor(level * 2 + Math.max(0, finiteOr(state.beTrend, 0)) * rate), 0, cap)
   };
+}
+
+function eerfCultureRatio(snapshotValue = snapshot()) {
+  return clamp(finiteOr(snapshotValue.la, state.la || 0) / LA_CAP, 0, 1);
+}
+
+function interpolate(from, to, ratio) {
+  return from + (to - from) * clamp(ratio, 0, 1);
 }
 
 function eerfScienceRequirementForLevel(level) {
@@ -2472,6 +2527,7 @@ function applyDelta(delta, options = {}) {
   }
   state.sc = clamp(roundStat(state.sc + Number(effectiveDelta.sc || 0)), 0, CAP);
   state.be = clamp(roundStat(state.be + Number(effectiveDelta.be || 0)), 0, CAP);
+  state.la = clamp(Math.floor(finiteOr(state.la, 0) + Number(effectiveDelta.la || 0)), 0, LA_CAP);
   state.pop = Math.max(0, Math.round(state.pop + (effectiveDelta.pop || 0)));
   state.eco = Math.max(0, Math.round(state.eco + (effectiveDelta.eco || 0)));
   state.stability = clamp(state.stability + Math.round(effectiveDelta.stability || 0), 0, 100);
@@ -2511,29 +2567,33 @@ function updateEnding() {
     state.ending = settlementStatusText();
   } else if (state.doomCountdown > 0) {
     state.ending = `终极答案倒计时：还剩 ${state.doomCountdown} 次行动`;
+  } else if ((state.laFullStreak || 0) > 0) {
+    state.ending = `永志不忘观测：LA 满值连续 ${state.laFullStreak}/${J_LA_FULL_STREAK} 年`;
+  } else if ((state.lowOrderStreak || 0) > 0) {
+    state.ending = `罗马再临观测：低秩序连续 ${state.lowOrderStreak}/${I_LOW_ORDER_STREAK} 年`;
   } else if (isEconomicCrisis()) {
     state.ending = "经济危机：科学与神学的正向发展冻结";
   } else if (state.sc >= CAP && state.be < CAP) {
-    state.ending = "科学封顶：A结局即将自动结算";
+    state.ending = "我们即将建成地上天国。";
   } else if (state.be >= CAP && state.sc < CAP) {
-    state.ending = "神学封顶：B结局即将自动结算";
+    state.ending = "我们即将皈依上上善道。";
   } else if (state.sc >= ENDING_THRESHOLDS.exodusKnowledge && state.be < ENDING_THRESHOLDS.companionKnowledge) {
-    state.ending = "科学撤离临界：离星舰只差最后的秩序与经济";
+    state.ending = "我们即将拥有整片星空。";
   } else if (state.be >= ENDING_THRESHOLDS.exodusKnowledge && state.sc < ENDING_THRESHOLDS.companionKnowledge) {
-    state.ending = "神学撤离临界：正道正在吞没旧世界";
+    state.ending = "我们即将拥有完美信仰。";
   } else if (state.sc >= ENDING_THRESHOLDS.balancedKnowledge && state.be >= ENDING_THRESHOLDS.balancedKnowledge) {
-    state.ending = "双相终局临界：学院与神殿正在同一座塔中合流";
+    state.ending = "我们即将建成通天高塔。";
   } else if (state.sc >= ENDING_THRESHOLDS.middleScience && state.be <= ENDING_THRESHOLDS.lowKnowledge) {
-    state.ending = "技术统治临界：天空仍远，王座已近";
+    state.ending = "我们即将奴役有灵众生。";
   } else {
-    state.ending = "文明尚未抵达终局";
+    state.ending = "文明的旅程尚未停息。";
   }
 }
 
 function settlementStatusText() {
   if (!state.endingCandidate?.id) return "";
 
-  return `${state.endingCandidate.id}结局可结算：可继续发展或点击结算终局`;
+  return `${state.endingCandidate.id}结局可结算。可继续发展，或点击脱离苦海`;
 }
 
 function maybeFinishGame(context = {}) {
@@ -2577,7 +2637,7 @@ function resolveEnding(context = {}, current = snapshot()) {
     current.be >= thresholds.exodusKnowledge &&
     current.sc < thresholds.companionKnowledge &&
     current.pop >= thresholds.exodusPopulation &&
-    current.stability >= 66
+    current.stability >= 58
   ) {
     return "E";
   }
@@ -2600,6 +2660,10 @@ function resolveEnding(context = {}, current = snapshot()) {
     return "H";
   }
 
+  if (isApproachingHiddenCEnding()) {
+    return null;
+  }
+
   if (context.kind === "collapse" && (state.count >= thresholds.collapseCycle || state.history.length >= thresholds.collapseCycle - 1)) {
     return "G";
   }
@@ -2609,6 +2673,11 @@ function resolveEnding(context = {}, current = snapshot()) {
   }
 
   return null;
+}
+
+function isApproachingHiddenCEnding() {
+  const guard = Math.min(C_STAGNANT_CIVILIZATION_STREAK - 1, ENDING_THRESHOLDS.collapseCycle - 1);
+  return (state.cStagnantCivilizationStreak || 0) >= guard;
 }
 
 function updateEndingCandidate(endingId, context = {}, current = snapshot()) {
@@ -2628,12 +2697,21 @@ function updateEndingCandidate(endingId, context = {}, current = snapshot()) {
   };
 }
 
+function updateAnnualAutomaticEndingStreaks(current = snapshot()) {
+  state.lowOrderStreak = current.stability <= I_LOW_ORDER_THRESHOLD
+    ? Math.min(I_LOW_ORDER_STREAK, Math.max(0, Math.round(state.lowOrderStreak || 0)) + 1)
+    : 0;
+  state.laFullStreak = current.la >= LA_CAP
+    ? Math.min(J_LA_FULL_STREAK, Math.max(0, Math.round(state.laFullStreak || 0)) + 1)
+    : 0;
+}
+
 function maybeFinishStagnantCivilizationCEnding(archived, current = snapshot(), rand = state.lastRand) {
   if (!updateStagnantCivilizationCEndingStreak(archived)) return false;
 
   finishGame("C", {
     kind: "stagnant-civilizations",
-    trigger: `连续 ${C_STAGNANT_CIVILIZATION_STREAK} 代文明毁灭时科学与神学峰值均未突破 ${formatNumber(C_EARLY_ERA_BREAKTHROUGH)}`,
+    trigger: `连续 ${C_STAGNANT_CIVILIZATION_STREAK} 代文明毁灭时科学峰值未突破青铜停滞阈值 ${formatNumber(C_BRONZE_ERA_SCIENCE_CAP)}`,
     rand,
     snapshot: current
   });
@@ -2662,11 +2740,12 @@ function isStagnantCivilization(archived) {
   if (!archived || archived.turns < 1) return false;
 
   const peakSc = finiteOr(archived.peakSc, 0);
-  const peakBe = finiteOr(archived.peakBe, 0);
-  return peakSc < C_EARLY_ERA_BREAKTHROUGH && peakBe < C_EARLY_ERA_BREAKTHROUGH;
+  return peakSc < C_BRONZE_ERA_SCIENCE_CAP;
 }
 
 function resolveAutomaticEnding(context = {}, current = snapshot()) {
+  if ((state.laFullStreak || 0) >= J_LA_FULL_STREAK) return "J";
+  if ((state.lowOrderStreak || 0) >= I_LOW_ORDER_STREAK) return "I";
   const scienceAtCap = current.sc >= CAP;
   const beliefAtCap = current.be >= CAP;
   if (scienceAtCap && !beliefAtCap) return "A";
@@ -2678,6 +2757,8 @@ function resolveAutomaticEnding(context = {}, current = snapshot()) {
 function automaticEndingTrigger(endingId, context = {}) {
   if (endingId === "A") return "科学抵达上限";
   if (endingId === "B") return "神学抵达上限";
+  if (endingId === "I") return `连续 ${I_LOW_ORDER_STREAK} 年秩序不高于 ${I_LOW_ORDER_THRESHOLD}`;
+  if (endingId === "J") return `LA 连续 ${J_LA_FULL_STREAK} 年抵达上限`;
   return context.trigger || state.weather;
 }
 
@@ -2733,6 +2814,7 @@ function runPeakSnapshot(finalSnapshot = snapshot()) {
   const peak = {
     sc: finiteOr(finalSnapshot.sc, 0),
     be: finiteOr(finalSnapshot.be, 0),
+    la: finiteOr(finalSnapshot.la, 0),
     pop: finiteOr(finalSnapshot.pop, 0),
     eco: finiteOr(finalSnapshot.eco, 0),
     eerf: finiteOr(finalSnapshot.eerf, state.eerfLevel || 0),
@@ -2747,6 +2829,7 @@ function runPeakSnapshot(finalSnapshot = snapshot()) {
   records.forEach((entry) => {
     peak.sc = Math.max(peak.sc, finiteOr(entry.peakSc, peak.sc));
     peak.be = Math.max(peak.be, finiteOr(entry.peakBe, peak.be));
+    peak.la = Math.max(peak.la, finiteOr(entry.peakLa, peak.la));
     peak.pop = Math.max(peak.pop, finiteOr(entry.peakPop, peak.pop));
     peak.eco = Math.max(peak.eco, finiteOr(entry.peakEco, peak.eco));
     peak.eerf = Math.max(peak.eerf, finiteOr(entry.peakEerf, peak.eerf));
@@ -2803,6 +2886,7 @@ function snapshot() {
   return {
     sc: state.sc,
     be: state.be,
+    la: state.la || 0,
     pop: state.pop,
     eco: state.eco,
     eerf: state.eerfLevel || 0,
@@ -2814,6 +2898,7 @@ function snapshotForObject(source) {
   return {
     sc: finiteOr(source.sc, 0),
     be: finiteOr(source.be, 0),
+    la: finiteOr(source.la, 0),
     pop: finiteOr(source.pop, 0),
     eco: finiteOr(source.eco, 0),
     eerf: finiteOr(source.eerf ?? source.eerfLevel, 0),
@@ -2825,6 +2910,7 @@ function diff(before, after) {
   return {
     sc: after.sc - before.sc,
     be: after.be - before.be,
+    la: after.la - before.la,
     pop: after.pop - before.pop,
     eco: after.eco - before.eco,
     eerf: after.eerf - before.eerf,
@@ -2860,11 +2946,13 @@ function render() {
   dom.randValue.textContent = state.lastRand === null ? "----" : formatRand(state.lastRand);
   dom.scValue.textContent = formatNumber(state.sc);
   dom.beValue.textContent = formatNumber(state.be);
+  if (dom.laValue) dom.laValue.textContent = formatNumber(state.la || 0);
   dom.popValue.textContent = formatNumber(state.pop);
   dom.ecoValue.textContent = formatNumber(state.eco);
   dom.eerfValue.textContent = `${state.eerfLevel || 0}/${EERF_MAX_LEVEL}`;
   dom.scMeter.style.width = `${(state.sc / CAP) * 100}%`;
   dom.beMeter.style.width = `${(state.be / CAP) * 100}%`;
+  if (dom.laMeter) dom.laMeter.style.width = `${((state.la || 0) / LA_CAP) * 100}%`;
   dom.popMeter.style.width = `${Math.min(100, Math.sqrt(state.pop / 180000) * 100)}%`;
   dom.ecoMeter.style.width = `${Math.min(100, Math.sqrt(state.eco / ECO_METER_CAP) * 100)}%`;
   dom.eerfMeter.style.width = `${((state.eerfLevel || 0) / EERF_MAX_LEVEL) * 100}%`;
@@ -2874,6 +2962,7 @@ function render() {
   dom.stabilityValue.textContent = `秩序 ${state.stability}`;
   dom.ecoStatus.textContent = isEconomicCrisis() ? "经济危机：发展冻结" : "预算、产业与粮仓";
   dom.eerfStatus.textContent = eerfStatusText();
+  if (dom.laStatus) dom.laStatus.textContent = laStatusText();
   dom.weatherLabel.textContent = state.weather;
   dom.endingLabel.textContent = state.ending;
   dom.seedValue.textContent = state.seed;
@@ -2972,7 +3061,7 @@ function endingWatchItems() {
         minimumRequirement("BE", current.be, thresholds.exodusKnowledge),
         maximumRequirement("SC", current.sc, thresholds.companionKnowledge - 1),
         minimumRequirement("POP", current.pop, thresholds.exodusPopulation),
-        minimumRequirement("秩序", current.stability, 66)
+        minimumRequirement("秩序", current.stability, 58)
       ]
     },
     {
@@ -2997,6 +3086,20 @@ function endingWatchItems() {
         maximumRequirement("BE", current.be, thresholds.lowKnowledge),
         minimumRequirement("秩序", current.stability, thresholds.orderHigh),
         minimumRequirement("POP", current.pop, thresholds.authoritarianPopulation)
+      ]
+    },
+    {
+      id: "I",
+      reqs: [
+        maximumRequirement("秩序", current.stability, I_LOW_ORDER_THRESHOLD),
+        minimumRequirement("低秩序连续年数", state.lowOrderStreak || 0, I_LOW_ORDER_STREAK)
+      ]
+    },
+    {
+      id: "J",
+      reqs: [
+        minimumRequirement("LA", current.la, LA_CAP),
+        minimumRequirement("满值连续年数", state.laFullStreak || 0, J_LA_FULL_STREAK)
       ]
     }
   ];
@@ -3067,10 +3170,13 @@ function renderEerfDetails() {
     rows.push(["火种趋势", `SC ${formatSignedNumber(state.pendingRestart.scTrend || 0)}/年 / BE ${formatSignedNumber(state.pendingRestart.beTrend || 0)}/年`]);
     rows.push(["下一代 EERF", `${formatNumber(state.pendingRestart.eerfLevel)}/${EERF_MAX_LEVEL}`]);
   } else {
-    const estimate = computeRestartPopulation(snapshot());
-    const knowledge = computeRestartKnowledge(snapshot());
-    const trends = computeRestartKnowledgeTrends(level);
+    const current = snapshot();
+    const estimate = computeRestartPopulation(current);
+    const knowledge = computeRestartKnowledge(current);
+    const trends = computeRestartKnowledgeTrends(level, current);
+    const cultureRatio = eerfCultureRatio(current);
     rows.push(["当前等级", `${formatNumber(level)}/${EERF_MAX_LEVEL}`]);
+    rows.push(["LA 保存增幅", formatPercent(cultureRatio)]);
     rows.push(["毁灭后人口", formatNumber(estimate)]);
     rows.push(["毁灭后知识", `SC ${formatNumber(knowledge.sc)} / BE ${formatNumber(knowledge.be)}`]);
     rows.push(["毁灭后趋势", `SC ${formatSignedNumber(trends.scTrend)}/年 / BE ${formatSignedNumber(trends.beTrend)}/年`]);
@@ -3168,7 +3274,9 @@ function renderEndingStats() {
     const item = document.createElement("li");
     const count = summary.endings[endingId] || 0;
     item.className = count > 0 ? "achieved" : "";
-    item.textContent = `${endingId} ${shortEndingName(endingId)} ×${formatNumber(count)}`;
+    item.textContent = count > 0
+      ? `${endingId} ${shortEndingName(endingId)} ×${formatNumber(count)}`
+      : `${endingId}-???`;
     fragment.append(item);
   });
   dom.endingStatsList.append(fragment);
@@ -3176,9 +3284,10 @@ function renderEndingStats() {
 
 function renderSpecialNotice() {
   if (!state.specialNotice) {
-    dom.specialBanner.hidden = true;
-    dom.specialTitle.textContent = "----";
-    dom.specialText.textContent = "";
+    dom.specialBanner.hidden = false;
+    const specLabel = state.lastSpec === null ? "SPEC ----" : `SPEC ${formatSpec(state.lastSpec)}`;
+    dom.specialTitle.textContent = `${specLabel}｜无特殊事件`;
+    dom.specialText.textContent = "日光之下，并无新事。";
     dom.specialDelta.innerHTML = "";
     return;
   }
@@ -3241,7 +3350,7 @@ function renderArchive() {
   const fragment = document.createDocumentFragment();
   state.history.forEach((entry) => {
     const item = document.createElement("li");
-    const peak = `SC ${formatNumber(entry.peakSc)} / BE ${formatNumber(entry.peakBe)} / POP ${formatNumber(entry.peakPop)} / ECO ${formatNumber(entry.peakEco)} / EERF ${formatNumber(entry.peakEerf || 0)}`;
+    const peak = `SC ${formatNumber(entry.peakSc)} / BE ${formatNumber(entry.peakBe)} / LA ${formatNumber(entry.peakLa || 0)} / POP ${formatNumber(entry.peakPop)} / ECO ${formatNumber(entry.peakEco)} / EERF ${formatNumber(entry.peakEerf || 0)}`;
     const specials = entry.specialEvents?.length
       ? `特殊：${entry.specialEvents.slice(0, 2).join("、")}`
       : "特殊：无";
@@ -3274,7 +3383,7 @@ function archiveSummary(entry) {
 }
 
 function deltaHtml(delta = {}) {
-  return ["sc", "be", "pop", "eco", "eerf", "stability"].map((key) => {
+  return ["sc", "be", "la", "pop", "eco", "eerf", "stability"].map((key) => {
     const label = key === "stability" ? "秩序" : key.toUpperCase();
     const value = Number(delta[key] || 0);
     const sign = value > 0 ? "+" : "";
@@ -3289,13 +3398,22 @@ function eerfStatusText() {
 
   const level = state.eerfLevel || 0;
   if (level <= 0) return `尚未修建EERF；下一代初始人口 ${formatNumber(BASE_RESTART_POP)}`;
-  const estimate = computeRestartPopulation(snapshot());
-  const knowledge = computeRestartKnowledge(snapshot());
+  const current = snapshot();
+  const estimate = computeRestartPopulation(current);
+  const knowledge = computeRestartKnowledge(current);
   const nextLevel = Math.min(EERF_MAX_LEVEL, level + 1);
   const nextRequirement = level < EERF_MAX_LEVEL
     ? `；下一级需 SC ${formatNumber(eerfScienceRequirementForLevel(nextLevel))}`
     : "；已达满级";
-  return `灾后火种等级 ${level}；下一代初始人口约 ${formatNumber(estimate)}；SC/BE 约 ${formatNumber(knowledge.sc)}/${formatNumber(knowledge.be)}${nextRequirement}`;
+  return `灾后火种等级 ${level}；下一代初始人口约 ${formatNumber(estimate)}；SC/BE 约 ${formatNumber(knowledge.sc)}/${formatNumber(knowledge.be)}；LA 保存增幅 ${formatPercent(eerfCultureRatio(current))}${nextRequirement}`;
+}
+
+function laStatusText() {
+  const ratio = clamp((state.la || 0) / LA_CAP, 0, 1);
+  if (state.la >= LA_CAP) {
+    return `记忆工程满值；连续 ${formatNumber(state.laFullStreak || 0)}/${formatNumber(J_LA_FULL_STREAK)} 年`;
+  }
+  return `EERF 线性保存增幅 ${formatPercent(ratio)}`;
 }
 
 function isSafariBrowser() {
@@ -3989,6 +4107,9 @@ function loadState() {
     migrated.lastRand = Number.isFinite(Number(migrated.lastRand))
       ? clamp(Math.round(Number(migrated.lastRand)), 0, 9999)
       : null;
+    migrated.lastSpec = Number.isFinite(Number(migrated.lastSpec))
+      ? Math.max(1, Math.round(Number(migrated.lastSpec)))
+      : null;
     migrated.weather = String(migrated.weather || "等待第一年观测");
     migrated.ending = String(migrated.ending || "文明尚未抵达终局");
     migrated.lastTone = String(migrated.lastTone || "quiet");
@@ -4006,6 +4127,7 @@ function loadState() {
       : null;
     migrated.sc = clamp(roundStat(finiteOr(migrated.sc, 240)), 0, CAP);
     migrated.be = clamp(roundStat(finiteOr(migrated.be, 360)), 0, CAP);
+    migrated.la = clamp(Math.floor(finiteOr(migrated.la, 0)), 0, LA_CAP);
     migrated.pop = Math.max(0, Math.round(finiteOr(migrated.pop, 7600)));
     migrated.eco = Math.max(0, Math.round(finiteOr(migrated.eco, DEFAULT_ECO)));
     migrated.stability = clamp(Math.round(finiteOr(migrated.stability, 52)), 0, 100);
@@ -4038,6 +4160,7 @@ function loadState() {
           nextCount: Math.max(1, Math.round(finiteOr(migrated.pendingRestart.nextCount, migrated.count + 1))),
           sc: clamp(roundStat(finiteOr(migrated.pendingRestart.sc, 0)), 0, CAP),
           be: clamp(roundStat(finiteOr(migrated.pendingRestart.be, 0)), 0, CAP),
+          la: clamp(Math.floor(finiteOr(migrated.pendingRestart.la, 0)), 0, LA_CAP),
           scTrend: clamp(Math.round(finiteOr(migrated.pendingRestart.scTrend, 0)), 0, KNOWLEDGE_TREND_MAX),
           beTrend: clamp(Math.round(finiteOr(migrated.pendingRestart.beTrend, 0)), 0, KNOWLEDGE_TREND_MAX),
           pop: Math.max(0, Math.round(finiteOr(migrated.pendingRestart.pop, BASE_RESTART_POP))),
@@ -4064,6 +4187,7 @@ function loadState() {
             ? {
                 sc: clamp(roundStat(finiteOr(migrated.endingCandidate.snapshot.sc, migrated.sc)), 0, CAP),
                 be: clamp(roundStat(finiteOr(migrated.endingCandidate.snapshot.be, migrated.be)), 0, CAP),
+                la: clamp(Math.floor(finiteOr(migrated.endingCandidate.snapshot.la, migrated.la)), 0, LA_CAP),
                 pop: Math.max(0, Math.round(finiteOr(migrated.endingCandidate.snapshot.pop, migrated.pop))),
                 eco: Math.max(0, Math.round(finiteOr(migrated.endingCandidate.snapshot.eco, migrated.eco))),
                 eerf: clamp(Math.round(finiteOr(migrated.endingCandidate.snapshot.eerf, migrated.eerfLevel)), 0, EERF_MAX_LEVEL),
@@ -4083,6 +4207,8 @@ function loadState() {
       0,
       C_STAGNANT_CIVILIZATION_STREAK
     );
+    migrated.lowOrderStreak = clamp(Math.round(finiteOr(migrated.lowOrderStreak, 0)), 0, I_LOW_ORDER_STREAK);
+    migrated.laFullStreak = clamp(Math.round(finiteOr(migrated.laFullStreak, 0)), 0, J_LA_FULL_STREAK);
     migrated.finished = Boolean(migrated.finished);
     migrated.finalEnding = migrated.finalEnding && typeof migrated.finalEnding === "object"
       ? migrated.finalEnding
@@ -4099,11 +4225,13 @@ function loadState() {
       : fallbackCivilization;
     migrated.currentCivilization.initialSc = finiteOr(migrated.currentCivilization.initialSc, fallbackCivilization.initialSc);
     migrated.currentCivilization.initialBe = finiteOr(migrated.currentCivilization.initialBe, fallbackCivilization.initialBe);
+    migrated.currentCivilization.initialLa = finiteOr(migrated.currentCivilization.initialLa, fallbackCivilization.initialLa);
     migrated.currentCivilization.initialPop = finiteOr(migrated.currentCivilization.initialPop, fallbackCivilization.initialPop);
     migrated.currentCivilization.initialEco = finiteOr(migrated.currentCivilization.initialEco, fallbackCivilization.initialEco);
     migrated.currentCivilization.initialStability = finiteOr(migrated.currentCivilization.initialStability, fallbackCivilization.initialStability);
     migrated.currentCivilization.peakSc = Math.max(finiteOr(migrated.currentCivilization.peakSc, 0), migrated.sc);
     migrated.currentCivilization.peakBe = Math.max(finiteOr(migrated.currentCivilization.peakBe, 0), migrated.be);
+    migrated.currentCivilization.peakLa = Math.max(finiteOr(migrated.currentCivilization.peakLa, 0), migrated.la);
     migrated.currentCivilization.peakPop = Math.max(finiteOr(migrated.currentCivilization.peakPop, 0), migrated.pop);
     migrated.currentCivilization.peakEco = Math.max(finiteOr(migrated.currentCivilization.peakEco, 0), migrated.eco);
     migrated.currentCivilization.peakEerf = Math.max(finiteOr(migrated.currentCivilization.peakEerf, 0), migrated.eerfLevel);

@@ -6,7 +6,7 @@
     <meta name="author" content="Noah Walker">
     <meta name="copyright" content="Original concept by Noah Walker">
     <title>文明摇篮：终局</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=20260707">
   </head>
   <body class="ending-body">
     <main class="ending-shell" aria-label="文明摇篮终局">
@@ -131,8 +131,8 @@
           ["年份", storedEnding?.turn ? `${formatNumber(storedEnding.turn)} 年` : "未知"],
           ["触发", storedEnding?.trigger || ending.name],
           ["终局统计", endingStats.total ? `已达成 ${formatNumber(unique)} 种 / 总计 ${formatNumber(endingStats.total)} 次` : "尚未记录"],
-          ["终值", `SC ${formatNumber(snapshot.sc)} / BE ${formatNumber(snapshot.be)} / POP ${formatNumber(snapshot.pop)} / ECO ${formatNumber(snapshot.eco)} / 秩序 ${formatNumber(snapshot.stability)}`],
-          ["峰值", `SC ${formatNumber(peak.sc)} / BE ${formatNumber(peak.be)} / POP ${formatNumber(peak.pop)} / ECO ${formatNumber(peak.eco)} / EERF ${formatNumber(peak.eerf)}`]
+          ["终值", `SC ${formatNumber(snapshot.sc)} / BE ${formatNumber(snapshot.be)} / LA ${formatNumber(snapshot.la)} / POP ${formatNumber(snapshot.pop)} / ECO ${formatNumber(snapshot.eco)} / 秩序 ${formatNumber(snapshot.stability)}`],
+          ["峰值", `SC ${formatNumber(peak.sc)} / BE ${formatNumber(peak.be)} / LA ${formatNumber(peak.la)} / POP ${formatNumber(peak.pop)} / ECO ${formatNumber(peak.eco)} / EERF ${formatNumber(peak.eerf)}`]
         ];
         endingRecapList.innerHTML = rows.map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`).join("");
         copyChallengeButton.disabled = !storedEnding?.seed;
