@@ -89,18 +89,18 @@ body.ending-body[data-ending="C"] {
 
 body.ending-body[data-ending="D"] {
   --ending-accent: #7dd3fc;
-  --ending-secondary: #c7d2fe;
+  --ending-secondary: #f6d365;
   --ending-haze: rgba(125, 211, 252, 0.15);
   --ending-line: rgba(125, 211, 252, 0.18);
-  --ending-secondary-line: rgba(199, 210, 254, 0.12);
+  --ending-secondary-line: rgba(246, 211, 101, 0.12);
 }
 
 body.ending-body[data-ending="E"] {
   --ending-accent: #ffd166;
-  --ending-secondary: #f0f7ff;
+  --ending-secondary: #f6d365;
   --ending-haze: rgba(255, 209, 102, 0.13);
   --ending-line: rgba(255, 209, 102, 0.17);
-  --ending-secondary-line: rgba(240, 247, 255, 0.11);
+  --ending-secondary-line: rgba(246, 211, 101, 0.12);
 }
 
 body.ending-body[data-ending="F"] {
@@ -120,27 +120,27 @@ body.ending-body[data-ending="G"] {
 }
 
 body.ending-body[data-ending="H"] {
-  --ending-accent: #f87171;
-  --ending-secondary: #94a3b8;
-  --ending-haze: rgba(248, 113, 113, 0.12);
-  --ending-line: rgba(248, 113, 113, 0.16);
-  --ending-secondary-line: rgba(148, 163, 184, 0.1);
+  --ending-accent: #94a3b8;
+  --ending-secondary: #38bdf8;
+  --ending-haze: rgba(56, 189, 248, 0.11);
+  --ending-line: rgba(148, 163, 184, 0.16);
+  --ending-secondary-line: rgba(56, 189, 248, 0.1);
 }
 
 body.ending-body[data-ending="I"] {
-  --ending-accent: #f97316;
-  --ending-secondary: #f8fafc;
-  --ending-haze: rgba(249, 115, 22, 0.13);
-  --ending-line: rgba(249, 115, 22, 0.17);
-  --ending-secondary-line: rgba(248, 250, 252, 0.1);
+  --ending-accent: #f6d365;
+  --ending-secondary: #b91c1c;
+  --ending-haze: rgba(185, 28, 28, 0.14);
+  --ending-line: rgba(185, 28, 28, 0.18);
+  --ending-secondary-line: rgba(185, 28, 28, 0.11);
 }
 
 body.ending-body[data-ending="J"] {
-  --ending-accent: #f4a7d8;
-  --ending-secondary: #c7d2fe;
-  --ending-haze: rgba(244, 167, 216, 0.13);
-  --ending-line: rgba(244, 167, 216, 0.17);
-  --ending-secondary-line: rgba(199, 210, 254, 0.11);
+  --ending-accent: #a7f3d0;
+  --ending-secondary: #b6f0ff;
+  --ending-haze: rgba(167, 243, 208, 0.12);
+  --ending-line: rgba(167, 243, 208, 0.16);
+  --ending-secondary-line: rgba(182, 240, 255, 0.1);
 }
 
 body.ending-body::before,
@@ -190,6 +190,7 @@ input {
 
 .topbar,
 .command-deck,
+.dashboard-panel,
 .stat-card,
 .log-panel,
 .rules-panel {
@@ -238,11 +239,6 @@ input {
   color: #93a4b8;
   font-size: 0.72rem;
   line-height: 1.35;
-}
-
-.ending-origin {
-  margin-top: -14px;
-  color: #b7c3d2;
 }
 
 h1,
@@ -443,6 +439,136 @@ h2 {
   gap: 14px;
 }
 
+.dashboard-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 8px;
+}
+
+.dashboard-head,
+.chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dashboard-head h2 {
+  color: #d9f7ff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dashboard-head button {
+  min-height: 30px;
+  padding: 0 10px;
+  color: #e7f5ff;
+  background: #101823;
+  border: 1px solid rgba(84, 216, 255, 0.22);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.dashboard-head button:hover,
+.dashboard-head button:focus-visible {
+  background: #172334;
+  border-color: rgba(84, 216, 255, 0.52);
+  outline: none;
+}
+
+.dashboard-view[hidden] {
+  display: none;
+}
+
+.chart-view {
+  display: grid;
+  gap: 10px;
+  min-height: 342px;
+  padding: 12px;
+  background:
+    linear-gradient(180deg, rgba(8, 14, 22, 0.96), rgba(5, 9, 14, 0.96)),
+    repeating-linear-gradient(90deg, rgba(84, 216, 255, 0.04) 0 1px, transparent 1px 22px);
+  border: 1px solid rgba(84, 216, 255, 0.14);
+  border-radius: 6px;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.chart-legend span,
+.eerf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 9px;
+  color: #dce9f6;
+  background: rgba(5, 10, 16, 0.74);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.chart-legend span::before {
+  content: "";
+  width: 18px;
+  height: 3px;
+  border-radius: 99px;
+  background: currentColor;
+}
+
+.legend-sc {
+  color: var(--science);
+}
+
+.legend-be {
+  color: var(--belief);
+}
+
+.legend-pop {
+  color: var(--people);
+}
+
+.legend-eco {
+  color: var(--economy);
+}
+
+.legend-la {
+  color: var(--arts);
+}
+
+.legend-order {
+  color: #e2e8f0;
+}
+
+.eerf-chip {
+  color: var(--eerf);
+  white-space: nowrap;
+}
+
+.eerf-chip span {
+  color: #aebbd0;
+}
+
+.metrics-chart {
+  display: block;
+  width: 100%;
+  height: 292px;
+  background:
+    linear-gradient(180deg, rgba(6, 12, 19, 0.9), rgba(3, 7, 12, 0.96));
+  border: 1px solid rgba(84, 216, 255, 0.1);
+  border-radius: 4px;
+}
+
 .special-banner {
   display: grid;
   grid-template-columns: minmax(180px, 0.34fr) minmax(260px, 1fr) auto;
@@ -608,9 +734,8 @@ h2 {
 
 .trend-strip {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
-  margin-top: -6px;
 }
 
 .trend-pill {
@@ -653,6 +778,22 @@ h2 {
 
 .belief-trend {
   border-left: 4px solid var(--belief);
+}
+
+.population-trend {
+  border-left: 4px solid var(--people);
+}
+
+.economy-trend {
+  border-left: 4px solid var(--economy);
+}
+
+.arts-trend {
+  border-left: 4px solid var(--arts);
+}
+
+.order-trend {
+  border-left: 4px solid #e2e8f0;
 }
 
 .control-groups {
@@ -1430,6 +1571,10 @@ h2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .trend-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .controls {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1451,6 +1596,11 @@ h2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .chart-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .controls {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1468,6 +1618,10 @@ h2 {
   .trend-strip,
   .stats-grid {
     grid-template-columns: 1fr;
+  }
+
+  .metrics-chart {
+    height: 240px;
   }
 
   .turn-board {

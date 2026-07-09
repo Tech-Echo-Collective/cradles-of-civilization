@@ -15,10 +15,13 @@ const STORE_KEY = "three-sun-chronicle:v1";
 const ENDING_STORE_KEY = "three-sun-chronicle:ending:v1";
 const ENDING_STATS_STORE_KEY = "three-sun-chronicle:ending-stats:v1";
 const ENDING_PAGE = "ending.html";
+const ORIGINAL_CONCEPT_SIGNATURE = "Cradles Of Civilization original concept: Noah Walker / Tech Echo Collective";
 const RNG_MOD = 2147483647;
 const RNG_MUL = 48271;
 const KNOWLEDGE_TREND_MIN = -180;
 const KNOWLEDGE_TREND_MAX = 240;
+const METRIC_SAMPLE_LIMIT = 80;
+const METRIC_CHART_WINDOW = 15;
 const KNOWLEDGE_TREND_RESTART_RATES = [0, 0.08, 0.12, 0.16, 0.2, 0.25];
 const KNOWLEDGE_TREND_RESTART_CAPS = [0, 8, 14, 20, 28, 36];
 const KNOWLEDGE_TREND_STAGES = [
@@ -37,11 +40,11 @@ const BELIEF_RESTART_RATE_MULTIPLIER = 1.08;
 const BELIEF_RESTART_CAPS = [0, 820, 1600, 2450, 3350, 4200];
 const LA_EERF_MAX_KNOWLEDGE_RATE = 0.5;
 const LA_EERF_MAX_TREND_RATE = 0.8;
-const C_STAGNANT_CIVILIZATION_STREAK = 25;
+const C_STAGNANT_CIVILIZATION_STREAK = 18;
 const C_BRONZE_ERA_SCIENCE_CAP = 1600;
-const I_LOW_ORDER_STREAK = 11;
-const I_LOW_ORDER_THRESHOLD = 4;
-const J_LA_FULL_STREAK = 4;
+const I_LOW_ORDER_CIVILIZATION_STREAK = 7;
+const I_LOW_ORDER_THRESHOLD = 20;
+const J_MEMORY_CIVILIZATION_STREAK = 4;
 const SKY_FRAME_INTERVAL_MS = 96;
 const SKY_SAFARI_FRAME_INTERVAL_MS = 160;
 const SKY_MAX_DEVICE_PIXEL_RATIO = 1.25;
@@ -65,7 +68,7 @@ const ENDING_THRESHOLDS = {
   exodusPopulation: 10000,
   exodusEconomy: 95000,
   authoritarianPopulation: 10000,
-  orderHigh: 82,
+  orderHigh: 80,
   collapseCycle: 7
 };
 
@@ -167,11 +170,11 @@ const ACTIONS = {
     chronicleText: "一批人进入脱水状态，文明用当下的热闹换取下一次醒来的秩序。"
   },
   arts: {
-    label: "扶持文艺",
+    label: "文艺复兴",
     type: "progress",
-    delta: { sc: 18, be: 22, la: 720, pop: 260, eco: -9200, stability: 3 },
-    text: "把字刻在石头上。\n——《死神永生》，罗辑，掩体纪元67年",
-    chronicleText: "诗歌、壁画、档案馆和剧场从预算缝隙里生长出来，文明开始记住自己。"
+    delta: { sc: 0, be: 0, la: 750, pop: 260, eco: -9200, stability: 3 },
+    text: "真正的艺术，是不显得像艺术。\n——巴尔达萨雷·卡斯蒂廖内，1528年",
+    chronicleText: "佛罗伦萨的晨钟敲碎中世纪的蒙昧,人文主义的曙光正为每块大理石注入体温."
   },
   economy: {
     label: "刺激经济",
@@ -346,12 +349,15 @@ function createNewState(seedValue = Date.now()) {
     lockedPopulation: null,
     eerfLevel: 0,
     restartPopulationSeed: BASE_RESTART_POP,
+    dashboardMode: "cards",
+    metricTrends: { sc: 0, be: 0, la: 0, pop: 0, eco: 0, stability: 0 },
+    metricSamples: [createMetricSample(0, 1, initialSnapshot, { label: "文明苏醒" })],
     awaitingCivilizationRestart: false,
     pendingRestart: null,
     endingCandidate: null,
     cStagnantCivilizationStreak: 0,
-    lowOrderStreak: 0,
-    laFullStreak: 0,
+    lowOrderCivilizationStreak: 0,
+    laMemoryCivilizationStreak: 0,
     finished: false,
     finalEnding: null,
     endingStats,
@@ -401,6 +407,9 @@ function createCivilizationStats(civilization, startTurn, initialSnapshot = {}) 
     peakEco: snap.eco,
     peakEerf: finiteOr(initialSnapshot.eerfLevel ?? initialSnapshot.eerf, 0),
     peakStability: snap.stability,
+    minStability: snap.stability,
+    hadLowOrder: snap.stability < I_LOW_ORDER_THRESHOLD,
+    hadLaCap: snap.la >= LA_CAP,
     specialEvents: [],
     collapseCause: null,
     finalSnapshot: null,
@@ -422,6 +431,9 @@ function updateCivilizationStats(snapshotValue = snapshot(), specialEventTitle =
   stats.peakEco = Math.max(stats.peakEco, snapshotValue.eco);
   stats.peakEerf = Math.max(stats.peakEerf || 0, snapshotValue.eerf || state.eerfLevel || 0);
   stats.peakStability = Math.max(stats.peakStability, snapshotValue.stability);
+  stats.minStability = Math.min(finiteOr(stats.minStability, snapshotValue.stability), snapshotValue.stability);
+  stats.hadLowOrder = Boolean(stats.hadLowOrder || snapshotValue.stability < I_LOW_ORDER_THRESHOLD);
+  stats.hadLaCap = Boolean(stats.hadLaCap || snapshotValue.la >= LA_CAP);
 
   if (specialEventTitle && !stats.specialEvents.includes(specialEventTitle)) {
     stats.specialEvents.unshift(specialEventTitle);
@@ -499,8 +511,16 @@ function cacheDom() {
   dom.beEra = document.querySelector("#beEra");
   dom.scTrendValue = document.querySelector("#scTrendValue");
   dom.beTrendValue = document.querySelector("#beTrendValue");
+  dom.popTrendValue = document.querySelector("#popTrendValue");
+  dom.ecoTrendValue = document.querySelector("#ecoTrendValue");
+  dom.laTrendValue = document.querySelector("#laTrendValue");
+  dom.orderTrendValue = document.querySelector("#orderTrendValue");
   dom.scTrendStage = document.querySelector("#scTrendStage");
   dom.beTrendStage = document.querySelector("#beTrendStage");
+  dom.popTrendStage = document.querySelector("#popTrendStage");
+  dom.ecoTrendStage = document.querySelector("#ecoTrendStage");
+  dom.laTrendStage = document.querySelector("#laTrendStage");
+  dom.orderTrendStage = document.querySelector("#orderTrendStage");
   dom.stabilityValue = document.querySelector("#stabilityValue");
   dom.ecoStatus = document.querySelector("#ecoStatus");
   dom.eerfStatus = document.querySelector("#eerfStatus");
@@ -516,6 +536,10 @@ function cacheDom() {
   dom.seedInput = document.querySelector("#seedInput");
   dom.seedStartButton = document.querySelector("#seedStartButton");
   dom.saveStatus = document.querySelector("#saveStatus");
+  dom.dashboardToggleButton = document.querySelector("#dashboardToggleButton");
+  dom.dashboardViews = Array.from(document.querySelectorAll("[data-dashboard-view]"));
+  dom.metricsChart = document.querySelector("#metricsChart");
+  dom.chartEerfValue = document.querySelector("#chartEerfValue");
   dom.endingWatchList = document.querySelector("#endingWatchList");
   dom.eerfDetailList = document.querySelector("#eerfDetailList");
   dom.endingStatsStatus = document.querySelector("#endingStatsStatus");
@@ -591,6 +615,7 @@ function bindEvents() {
 
   dom.newGameButton.addEventListener("click", startNewGame);
   dom.seedForm?.addEventListener("submit", startNewGameFromSeed);
+  dom.dashboardToggleButton?.addEventListener("click", toggleDashboardMode);
 
   dom.clearLogButton.addEventListener("click", clearChronicle);
   dom.logFilterButtons.forEach((button) => {
@@ -600,6 +625,10 @@ function bindEvents() {
   if (dom.skyCanvas) {
     window.addEventListener("resize", scheduleSkyResize);
     window.addEventListener("orientationchange", scheduleSkyResize);
+  }
+  if (dom.metricsChart) {
+    window.addEventListener("resize", renderMetricsChart);
+    window.addEventListener("orientationchange", renderMetricsChart);
   }
 
   window.addEventListener("keydown", handleShortcut);
@@ -701,6 +730,13 @@ function confirmNewWorld() {
 
 function hasActiveRun() {
   return Boolean(state && !state.finished && (state.turn > 0 || state.history.length || state.awaitingCivilizationRestart || state.endingCandidate?.id));
+}
+
+function toggleDashboardMode() {
+  state.dashboardMode = state.dashboardMode === "chart" ? "cards" : "chart";
+  saveState();
+  renderDashboardMode();
+  renderMetricsChart();
 }
 
 function clearChronicle() {
@@ -932,7 +968,6 @@ function advanceRound(actionId) {
   if (maybeFinishGame({ kind: "action", trigger: action.label, rand })) return;
   const pressureDelta = applyDelta(computeSystemPressure(snapshot()), { freezeKnowledge: crisisAtRoundStart });
   const populationWasLocked = enforcePopulationLock() || populationLockedBeforeAction;
-  updateAnnualAutomaticEndingStreaks(snapshot());
   if (maybeFinishGame({ kind: "pressure", trigger: "系统压力", rand })) return;
   if (state.pop <= 0) {
     if (!collapseCivilization(
@@ -972,6 +1007,8 @@ function advanceRound(actionId) {
     rand
   });
   const totalDelta = diff(before, after);
+  updateMetricTrends(totalDelta);
+  recordMetricSample();
   state.weather = [event.title, action.label].filter(Boolean).join("；");
   const type = event.type === "special" || action.type === "special" || actionResult.locked
     ? "special"
@@ -1748,7 +1785,7 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "Answers to All - 终极答案",
-      text: "我们不禁驻足思考。生命、宇宙和万物的终极答案，究竟是什么？\nSC 暴涨，旧神学体系崩塌，EERF 被一次性推至满级。人口被锁定 5 次行动。",
+      text: "我们不禁驻足思考。生命、宇宙和万物的终极答案，究竟是什么？\nSC 暴涨，旧神学体系崩塌，EERF 被一次性推至满级。人口被锁定 5 次行动。\n",
       delta: { sc: 2000, be: -4000 },
       effect() {
         state.populationLockTurns = 5;
@@ -1764,7 +1801,7 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "Civil War - 三体内战",
-      text: `消灭三体暴政，世界属于人类。\n人口被除以 ${divisor}，经济损失 100,000。`,
+      text: `消灭三体暴政，世界属于人类。\n人口被除以 ${divisor}，经济损失 100,000。\n`,
       delta: {
         pop: Math.round(current.pop / divisor) - current.pop,
         eco: -100000
@@ -1778,7 +1815,7 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "Plague Inc. - 瘟疫公司",
-      text: "灰烬，灰烬，我们都将倒下。\n——中世纪英国民谣。\n先按 4/5 人口减半、1/5 人口保留得到幸存基数。",
+      text: "灰烬，灰烬，我们都将倒下。\n——中世纪英国民谣。\n先按 4/5 人口减半、1/5 人口保留得到幸存基数。\n",
       delta: { pop: newPopulation - current.pop }
     };
   }
@@ -1787,7 +1824,7 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "Genesis Birth - 创世出生",
-      text: "冬至过了那整三天，耶稣降生在驻马店。",
+      text: "冬至过了那整三天，耶稣降生在驻马店。\n",
       delta: { sc: 10 * SPECIAL_KNOWLEDGE_SCALE, be: 5 * SPECIAL_KNOWLEDGE_SCALE, pop: 20000, eco: 5000 }
     };
   }
@@ -1799,8 +1836,8 @@ function specialEventFor(spec, rng) {
       type: "special",
       title: "Gender Equality - 两性平等",
       text: slowsGrowth
-        ? "女孩们只想玩乐。\n——辛迪·劳帕，1983年。\n人口增长策略转向审慎，本代文明内人口增速变为原来的 2/3。"
-        : "妇女能顶半边天。新的家庭制度释放劳动与生育潜能，本代文明内人口增速变为原来的 5/4。",
+        ? "女孩们只想玩乐。\n——辛迪·劳帕，1983年。\n人口增长策略转向审慎，本代文明内人口增速变为原来的 2/3。\n"
+        : "妇女能顶半边天。新的家庭制度释放劳动与生育潜能，本代文明内人口增速变为原来的 5/4。\n",
       delta: {},
       effect() {
         state.populationGrowthMultiplier = roundStat(state.populationGrowthMultiplier * factor);
@@ -1812,7 +1849,7 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "Union We Stand - 团结永存",
-      text: "所有派系暂时站在同一条防线上，本代文明内发展与打压效率 ×2。",
+      text: "所有派系暂时站在同一条防线上，本代文明内发展与打压效率 ×2。\n",
       delta: {},
       effect() {
         state.controlEfficiencyMultiplier = roundStat(state.controlEfficiencyMultiplier * 2);
@@ -1824,7 +1861,7 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "Divide and Fall - 分崩离析",
-      text: "共同体碎裂。本代文明内，玩家行动无法再控制任何发展。文明将自行推进，直到本轮毁灭，或自动结算。",
+      text: "共同体碎裂。本代文明内，玩家行动无法再控制任何发展。文明将自行推进，直到本轮毁灭，或自动结算。\n",
       delta: {},
       effect() {
         state.controlLocked = true;
@@ -1837,7 +1874,7 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "Remember the Pain - 勿忘国耻",
-      text: "铸兹宝鼎，祀我国殇。\n人口损失 300,000，且EERF保护作用无效。",
+      text: "铸兹宝鼎，祀我国殇。\n人口损失 300,000，且EERF保护作用无效。\n",
       delta: { pop: -300000 },
       piercesPopulationProtection: true
     };
@@ -1847,7 +1884,7 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "Revenge Our Loss - 招核男儿",
-      text: "亲王亲王御马前，何物随风斩娇颜？",
+      text: "亲王亲王御马前，何物随风斩娇颜？\n",
       delta: { sc: 20 * SPECIAL_KNOWLEDGE_SCALE, pop: -800000 }
     };
   }
@@ -1860,8 +1897,8 @@ function specialEventFor(spec, rng) {
       type: "special",
       title: "Industrial Revolution - 工业革命",
       text: current.sc <= threshold
-        ? `工厂、滚轮和蒸汽噪声同时启动，科学被推至 ${formatNumber(goal)}。`
-        : "工业革命擦过地平线，但当前科学基础已不需要这次补课。",
+        ? `工厂、滚轮和蒸汽噪声同时启动，科学被推至 ${formatNumber(goal)}。\n`
+        : "工业革命擦过地平线，但当前科学基础已不需要这次补课。\n",
       delta: { sc: target - current.sc }
     };
   }
@@ -1874,8 +1911,8 @@ function specialEventFor(spec, rng) {
       type: "special",
       title: "Middle Aged Times - 中古世纪",
       text: current.be <= threshold
-        ? `旧秩序用城墙、钟声和滚轮重组信仰，BE 被推至 ${formatNumber(goal)}。`
-        : "中古世纪的影子出现了，但神学基础已经更高。",
+        ? `旧秩序用城墙、钟声和滚轮重组信仰，BE 被推至 ${formatNumber(goal)}。\n`
+        : "中古世纪的影子出现了，但神学基础已经更高。\n",
       delta: { be: target - current.be }
     };
   }
@@ -1884,7 +1921,7 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "Independence and Freedom - 独立自由",
-      text: "独立宣言扩散进学院和神殿，本代文明内 SC/BE 正向增速 ×1.15。",
+      text: "独立宣言扩散进学院和神殿，本代文明内 SC/BE 正向增速 ×1.15。\n",
       delta: {},
       effect() {
         state.knowledgeGrowthMultiplier = roundStat(state.knowledgeGrowthMultiplier * 1.15);
@@ -1896,7 +1933,7 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "Anarchy - 时代终结",
-      text: "难道就没有一个基督徒来砍下我的头吗？！\n——君士坦丁十一世，1453年5月29日。\n经济衰退至原有的五分之一，人口流失一成。",
+      text: "难道就没有一个基督徒来砍下我的头吗？！\n——君士坦丁十一世，1453年5月29日。\n经济衰退至原有的五分之一，人口流失一成。\n",
       delta: {
         eco: Math.round(current.eco / 5) - current.eco,
         pop: Math.round(current.pop * 0.9) - current.pop
@@ -1908,7 +1945,7 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "No Meaning - 虚无主义",
-      text: "跳舞吧，狂欢吧。一切都没有意义。\n经济损失 30,000，神学增长 600。",
+      text: "跳舞吧，狂欢吧。一切都没有意义。\n经济损失 30,000，神学增长 600。\n",
       delta: { be: 30 * SPECIAL_KNOWLEDGE_SCALE, eco: -30000 }
     };
   }
@@ -1917,7 +1954,7 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "Great Ratio - π",
-      text: "山巅一寺一壶酒。",
+      text: "山巅一寺一壶酒。\n",
       delta: { sc: 31.4159 * SPECIAL_MATH_SCIENCE_SCALE, eco: 31000 }
     };
   }
@@ -1926,7 +1963,7 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "Nature Goddess - 自然对数",
-      text: "自然对数被奉为女神，人们在她的祭坛上计算——嗯，几乎是一切。",
+      text: "自然对数被奉为女神，人们在她的祭坛上计算——嗯，几乎是一切。\n",
       delta: { sc: 27.1828 * SPECIAL_MATH_SCIENCE_SCALE, eco: 27000 }
     };
   }
@@ -1935,7 +1972,7 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "No Refund - 概不退款",
-      text: "朋友，随我来，加入这场伟大的合唱。",
+      text: "朋友，随我来，加入这场伟大的合唱。\n",
       delta: { eco: -30000 }
     };
   }
@@ -1944,8 +1981,26 @@ function specialEventFor(spec, rng) {
     return {
       type: "special",
       title: "God Not Found - 查无此神",
-      text: "我们把天空翻了个遍，没有发现上帝和天使。\n——尤里·加加林，1961年。",
+      text: "我们把天空翻了个遍，没有发现上帝和天使。\n——尤里·加加林，1961年。\n",
       delta: { be: -50 * SPECIAL_KNOWLEDGE_SCALE }
+    };
+  }
+
+  if (spec === 1611) {
+    return {
+      type: "special",
+      title: "The Tempest - 暴风雨",
+      text: "啊，这美丽的新世界，竟有这样的人。\n——《暴风雨》，莎士比亚，1611年。\n",
+      delta: { la: 2200, sc: 10 * SPECIAL_KNOWLEDGE_SCALE, be: 6 * SPECIAL_KNOWLEDGE_SCALE, eco: -12000 }
+    };
+  }
+
+  if (spec === 213) {
+    return {
+      type: "special",
+      title: "Ashes of Alexandria - 亚历山大灰烬",
+      text: "图书馆的火光照亮海港，也照亮空白的目录。LA 大幅下降。\n",
+      delta: { la: -2600, sc: -18 * SPECIAL_KNOWLEDGE_SCALE, be: 8 * SPECIAL_KNOWLEDGE_SCALE, eco: -18000, stability: -5 }
     };
   }
 
@@ -2039,7 +2094,7 @@ function baseEvent(rand) {
     {
       title: "抄写院失火",
       text: "一场小火烧掉了半座抄写院，幸存的书页反而被抄得更快。",
-      delta: { sc: -18, be: 50, pop: -300, eco: -7000, stability: -2 }
+      delta: { sc: -18, be: 50, la: -520, pop: -300, eco: -7000, stability: -2 }
     },
     {
       title: "青铜钟裂",
@@ -2109,7 +2164,7 @@ function baseEvent(rand) {
     {
       title: "夜校开课",
       text: "白天种地的人夜里学习几何，白天祷告的人夜里学习账簿。",
-      delta: { sc: 50, be: 22, pop: 900, eco: -4000, stability: 2 }
+      delta: { sc: 50, be: 22, la: 340, pop: 900, eco: -4000, stability: 2 }
     },
     {
       title: "赦免令",
@@ -2135,6 +2190,26 @@ function baseEvent(rand) {
       title: "城墙加高",
       text: "城墙又高了一层，外面的人看不见粮仓，里面的人看不见地平线。",
       delta: { sc: 10, be: 26, pop: 600, eco: -12000, stability: 9 }
+    },
+    {
+      title: "诗歌竞赛",
+      text: "市民把灾年、粮价和三颗太阳写进韵脚，广场第一次因为记忆而拥挤。",
+      delta: { sc: 8, be: 18, la: 760, pop: 500, eco: -6500, stability: 3 }
+    },
+    {
+      title: "壁画出土",
+      text: "旧文明的壁画从盐壳下露出，孩子们照着那些线条重新想象祖先。",
+      delta: { sc: 28, be: 22, la: 920, pop: 300, eco: -9000, stability: 2 }
+    },
+    {
+      title: "剧场禁令",
+      text: "城邦禁止剧场上演灾变寓言，演员散入酒馆，把沉默变成更锋利的故事。",
+      delta: { sc: -6, be: 20, la: -850, pop: -200, eco: -4500, stability: 6 }
+    },
+    {
+      title: "档案霉变",
+      text: "潮气钻进地下档案室，一整架族谱在早晨变成无法展开的灰。",
+      delta: { sc: -14, be: 8, la: -980, pop: -120, eco: -7200, stability: -2 }
     }
   ];
 
@@ -2347,8 +2422,6 @@ function resetCivilizationModifiers() {
   state.populationLockTurns = 0;
   state.doomCountdown = 0;
   state.lockedPopulation = null;
-  state.lowOrderStreak = 0;
-  state.laFullStreak = 0;
   cancelAutoRun();
 }
 
@@ -2377,6 +2450,9 @@ function collapseCivilization(event, before, rand, options = {}) {
   state.history = state.history.slice(0, 12);
 
   if (maybeFinishStagnantCivilizationCEnding(archived, before, rand)) {
+    return true;
+  }
+  if (maybeFinishCivilizationStreakEnding(archived, before, rand)) {
     return true;
   }
 
@@ -2408,8 +2484,8 @@ function collapseCivilization(event, before, rand, options = {}) {
   state.pop = 0;
   state.eco = 0;
   state.stability = Math.max(0, Math.floor(before.stability * 0.2));
-  state.lowOrderStreak = 0;
-  state.laFullStreak = 0;
+  updateMetricTrends(diff(before, snapshot()));
+  recordMetricSample({ collapse: event.title });
   state.weather = event.title;
   state.ending = `第 ${oldCount} 号文明毁灭，等待重启文明`;
   state.lastTone = "disaster";
@@ -2454,6 +2530,8 @@ function restartCivilizationFromPending() {
   state.weather = `第 ${state.count} 号文明苏醒`;
   state.ending = "我们依然存在。";
   state.lastTone = "special";
+  updateMetricTrends(diff(before, snapshot()));
+  recordMetricSample({ label: `第 ${state.count} 号文明苏醒` });
   state.specialNotice = {
     title: "重启文明",
     text: `第 ${state.count} 号文明从 EERF 火种中启动。`,
@@ -2531,7 +2609,22 @@ function applyDelta(delta, options = {}) {
   state.pop = Math.max(0, Math.round(state.pop + (effectiveDelta.pop || 0)));
   state.eco = Math.max(0, Math.round(state.eco + (effectiveDelta.eco || 0)));
   state.stability = clamp(state.stability + Math.round(effectiveDelta.stability || 0), 0, 100);
+  markCivilizationMilestones(snapshot());
   return effectiveDelta;
+}
+
+function markCivilizationMilestones(snapshotValue = snapshot()) {
+  if (!state.currentCivilization) return;
+  state.currentCivilization.minStability = Math.min(
+    finiteOr(state.currentCivilization.minStability, snapshotValue.stability),
+    snapshotValue.stability
+  );
+  if (snapshotValue.stability < I_LOW_ORDER_THRESHOLD) {
+    state.currentCivilization.hadLowOrder = true;
+  }
+  if (snapshotValue.la >= LA_CAP) {
+    state.currentCivilization.hadLaCap = true;
+  }
 }
 
 function protectedPopulationDelta(popDelta) {
@@ -2567,10 +2660,10 @@ function updateEnding() {
     state.ending = settlementStatusText();
   } else if (state.doomCountdown > 0) {
     state.ending = `终极答案倒计时：还剩 ${state.doomCountdown} 次行动`;
-  } else if ((state.laFullStreak || 0) > 0) {
-    state.ending = `永志不忘观测：LA 满值连续 ${state.laFullStreak}/${J_LA_FULL_STREAK} 年`;
-  } else if ((state.lowOrderStreak || 0) > 0) {
-    state.ending = `罗马再临观测：低秩序连续 ${state.lowOrderStreak}/${I_LOW_ORDER_STREAK} 年`;
+  } else if (currentInclusiveLaMemoryStreak() > 0) {
+    state.ending = `永志不忘观测：连续 ${currentInclusiveLaMemoryStreak()}/${J_MEMORY_CIVILIZATION_STREAK} 代文明曾使 LA 满值`;
+  } else if (currentInclusiveLowOrderStreak() > 0) {
+    state.ending = `罗马再临观测：连续 ${currentInclusiveLowOrderStreak()}/${I_LOW_ORDER_CIVILIZATION_STREAK} 代文明以无政府收束`;
   } else if (isEconomicCrisis()) {
     state.ending = "经济危机：科学与神学的正向发展冻结";
   } else if (state.sc >= CAP && state.be < CAP) {
@@ -2697,15 +2790,6 @@ function updateEndingCandidate(endingId, context = {}, current = snapshot()) {
   };
 }
 
-function updateAnnualAutomaticEndingStreaks(current = snapshot()) {
-  state.lowOrderStreak = current.stability <= I_LOW_ORDER_THRESHOLD
-    ? Math.min(I_LOW_ORDER_STREAK, Math.max(0, Math.round(state.lowOrderStreak || 0)) + 1)
-    : 0;
-  state.laFullStreak = current.la >= LA_CAP
-    ? Math.min(J_LA_FULL_STREAK, Math.max(0, Math.round(state.laFullStreak || 0)) + 1)
-    : 0;
-}
-
 function maybeFinishStagnantCivilizationCEnding(archived, current = snapshot(), rand = state.lastRand) {
   if (!updateStagnantCivilizationCEndingStreak(archived)) return false;
 
@@ -2743,9 +2827,75 @@ function isStagnantCivilization(archived) {
   return peakSc < C_BRONZE_ERA_SCIENCE_CAP;
 }
 
+function currentCivilizationReachedLaCap() {
+  return Boolean(state.currentCivilization?.hadLaCap || state.la >= LA_CAP);
+}
+
+function currentCivilizationEnteredAnarchy() {
+  return state.stability < I_LOW_ORDER_THRESHOLD;
+}
+
+function currentInclusiveLaMemoryStreak() {
+  const completed = Math.max(0, Math.round(finiteOr(state.laMemoryCivilizationStreak, 0)));
+  return clamp(completed + (currentCivilizationReachedLaCap() ? 1 : 0), 0, J_MEMORY_CIVILIZATION_STREAK);
+}
+
+function currentInclusiveLowOrderStreak() {
+  const completed = Math.max(0, Math.round(finiteOr(state.lowOrderCivilizationStreak, 0)));
+  return clamp(completed + (currentCivilizationEnteredAnarchy() ? 1 : 0), 0, I_LOW_ORDER_CIVILIZATION_STREAK);
+}
+
+function maybeFinishCivilizationStreakEnding(archived, current = snapshot(), rand = state.lastRand) {
+  const endingId = updateCivilizationStreakEndings(archived);
+  if (!endingId) return false;
+
+  finishGame(endingId, {
+    kind: "civilization-streak",
+    trigger: civilizationStreakEndingTrigger(endingId),
+    rand,
+    snapshot: current
+  });
+  return true;
+}
+
+function updateCivilizationStreakEndings(archived) {
+  const reachedMemoryCap = didCivilizationReachLaCap(archived);
+  const enteredAnarchy = didCivilizationEnterAnarchy(archived);
+
+  state.laMemoryCivilizationStreak = reachedMemoryCap
+    ? Math.min(J_MEMORY_CIVILIZATION_STREAK, Math.max(0, Math.round(state.laMemoryCivilizationStreak || 0)) + 1)
+    : 0;
+  state.lowOrderCivilizationStreak = enteredAnarchy
+    ? Math.min(I_LOW_ORDER_CIVILIZATION_STREAK, Math.max(0, Math.round(state.lowOrderCivilizationStreak || 0)) + 1)
+    : 0;
+
+  if (state.laMemoryCivilizationStreak >= J_MEMORY_CIVILIZATION_STREAK) return "J";
+  if (state.lowOrderCivilizationStreak >= I_LOW_ORDER_CIVILIZATION_STREAK) return "I";
+  return null;
+}
+
+function didCivilizationReachLaCap(archived) {
+  return Boolean(archived?.hadLaCap || finiteOr(archived?.peakLa, 0) >= LA_CAP);
+}
+
+function didCivilizationEnterAnarchy(archived) {
+  const finalOrder = finiteOr(archived?.finalSnapshot?.stability, finiteOr(archived?.peakStability, 100));
+  return finalOrder < I_LOW_ORDER_THRESHOLD;
+}
+
+function civilizationStreakEndingTrigger(endingId) {
+  if (endingId === "I") {
+    return `连续 ${I_LOW_ORDER_CIVILIZATION_STREAK} 代文明以无政府秩序收束（低于 ${I_LOW_ORDER_THRESHOLD}）`;
+  }
+  if (endingId === "J") {
+    return `连续 ${J_MEMORY_CIVILIZATION_STREAK} 代文明曾将 LA 推至满值`;
+  }
+  return state.weather;
+}
+
 function resolveAutomaticEnding(context = {}, current = snapshot()) {
-  if ((state.laFullStreak || 0) >= J_LA_FULL_STREAK) return "J";
-  if ((state.lowOrderStreak || 0) >= I_LOW_ORDER_STREAK) return "I";
+  if (currentInclusiveLaMemoryStreak() >= J_MEMORY_CIVILIZATION_STREAK) return "J";
+  if (currentInclusiveLowOrderStreak() >= I_LOW_ORDER_CIVILIZATION_STREAK) return "I";
   const scienceAtCap = current.sc >= CAP;
   const beliefAtCap = current.be >= CAP;
   if (scienceAtCap && !beliefAtCap) return "A";
@@ -2757,8 +2907,6 @@ function resolveAutomaticEnding(context = {}, current = snapshot()) {
 function automaticEndingTrigger(endingId, context = {}) {
   if (endingId === "A") return "科学抵达上限";
   if (endingId === "B") return "神学抵达上限";
-  if (endingId === "I") return `连续 ${I_LOW_ORDER_STREAK} 年秩序不高于 ${I_LOW_ORDER_THRESHOLD}`;
-  if (endingId === "J") return `LA 连续 ${J_LA_FULL_STREAK} 年抵达上限`;
   return context.trigger || state.weather;
 }
 
@@ -2918,12 +3066,67 @@ function diff(before, after) {
   };
 }
 
+function createMetricSample(turn, civilization, snapshotValue, options = {}) {
+  return {
+    turn: Math.max(0, Math.round(finiteOr(turn, 0))),
+    civilization: Math.max(1, Math.round(finiteOr(civilization, 1))),
+    sc: clamp(roundStat(finiteOr(snapshotValue.sc, 0)), 0, CAP),
+    be: clamp(roundStat(finiteOr(snapshotValue.be, 0)), 0, CAP),
+    la: clamp(Math.floor(finiteOr(snapshotValue.la, 0)), 0, LA_CAP),
+    pop: Math.max(0, Math.round(finiteOr(snapshotValue.pop, 0))),
+    eco: Math.max(0, Math.round(finiteOr(snapshotValue.eco, 0))),
+    stability: clamp(Math.round(finiteOr(snapshotValue.stability, 0)), 0, 100),
+    eerf: clamp(Math.round(finiteOr(snapshotValue.eerf ?? snapshotValue.eerfLevel, 0)), 0, EERF_MAX_LEVEL),
+    collapse: options.collapse ? String(options.collapse) : "",
+    label: options.label ? String(options.label) : ""
+  };
+}
+
+function recordMetricSample(options = {}) {
+  if (!state) return;
+  if (!Array.isArray(state.metricSamples)) state.metricSamples = [];
+
+  const sample = createMetricSample(state.turn, state.count, snapshot(), options);
+  const last = state.metricSamples[state.metricSamples.length - 1];
+  if (
+    last &&
+    last.turn === sample.turn &&
+    last.civilization === sample.civilization &&
+    Boolean(last.collapse) === Boolean(sample.collapse)
+  ) {
+    state.metricSamples[state.metricSamples.length - 1] = sample;
+  } else {
+    state.metricSamples.push(sample);
+  }
+  state.metricSamples = state.metricSamples.slice(-METRIC_SAMPLE_LIMIT);
+}
+
+function updateMetricTrends(delta = {}) {
+  state.metricTrends = {
+    sc: Math.round(finiteOr(delta.sc, 0)),
+    be: Math.round(finiteOr(delta.be, 0)),
+    la: Math.round(finiteOr(delta.la, 0)),
+    pop: Math.round(finiteOr(delta.pop, 0)),
+    eco: Math.round(finiteOr(delta.eco, 0)),
+    stability: Math.round(finiteOr(delta.stability, 0))
+  };
+}
+
 function scienceEra(value) {
   return eraNameFor(value, SCIENCE_ERAS);
 }
 
 function beliefEra(value) {
   return eraNameFor(value, BELIEF_ERAS);
+}
+
+function orderRegime(value) {
+  const order = clamp(Math.round(finiteOr(value, 0)), 0, 100);
+  if (order < 20) return "无政府";
+  if (order < 40) return "封建";
+  if (order < 60) return "君主立宪";
+  if (order < 80) return "资本主义";
+  return "极权国家";
 }
 
 function eraNameFor(value, eras) {
@@ -2958,8 +3161,9 @@ function render() {
   dom.eerfMeter.style.width = `${((state.eerfLevel || 0) / EERF_MAX_LEVEL) * 100}%`;
   dom.scEra.textContent = scienceEra(state.sc);
   dom.beEra.textContent = beliefEra(state.be);
-  renderKnowledgeTrendStatus();
-  dom.stabilityValue.textContent = `秩序 ${state.stability}`;
+  renderTrendStatus();
+  renderDashboardMode();
+  dom.stabilityValue.textContent = `秩序 ${state.stability}｜${orderRegime(state.stability)}`;
   dom.ecoStatus.textContent = isEconomicCrisis() ? "经济危机：发展冻结" : "预算、产业与粮仓";
   dom.eerfStatus.textContent = eerfStatusText();
   if (dom.laStatus) dom.laStatus.textContent = laStatusText();
@@ -2974,6 +3178,7 @@ function render() {
   renderLog();
   renderArchive();
   renderSpecialNotice();
+  renderMetricsChart();
   if (dom.skyCanvas) renderSkyFrame(performance.now());
 }
 
@@ -2991,16 +3196,249 @@ function renderActionButtons() {
   });
 }
 
-function renderKnowledgeTrendStatus() {
+function renderTrendStatus() {
   const scTrend = Math.round(finiteOr(state.scTrend, 0));
   const beTrend = Math.round(finiteOr(state.beTrend, 0));
   const scStage = knowledgeTrendStageFor(scTrend);
   const beStage = knowledgeTrendStageFor(beTrend);
+  const trends = state.metricTrends || {};
 
   if (dom.scTrendValue) dom.scTrendValue.textContent = `${formatSignedNumber(scTrend)}/年`;
   if (dom.beTrendValue) dom.beTrendValue.textContent = `${formatSignedNumber(beTrend)}/年`;
   if (dom.scTrendStage) dom.scTrendStage.textContent = scStage.label;
   if (dom.beTrendStage) dom.beTrendStage.textContent = beStage.label;
+  renderMetricTrend("pop", trends.pop, dom.popTrendValue, dom.popTrendStage);
+  renderMetricTrend("eco", trends.eco, dom.ecoTrendValue, dom.ecoTrendStage);
+  renderMetricTrend("la", trends.la, dom.laTrendValue, dom.laTrendStage);
+  renderMetricTrend("stability", trends.stability, dom.orderTrendValue, dom.orderTrendStage);
+}
+
+function renderMetricTrend(key, value, valueNode, stageNode) {
+  const trend = Math.round(finiteOr(value, 0));
+  if (valueNode) valueNode.textContent = `${formatSignedNumber(trend)}/年`;
+  if (stageNode) stageNode.textContent = metricTrendStageFor(key, trend);
+}
+
+function metricTrendStageFor(key, value) {
+  const abs = Math.abs(finiteOr(value, 0));
+  const sign = value > 0 ? 1 : value < 0 ? -1 : 0;
+  const limits = {
+    pop: [900, 2600, 7000],
+    eco: [6000, 18000, 52000],
+    la: [260, 760, 1800],
+    stability: [2, 7, 14]
+  }[key] || [1, 3, 8];
+
+  if (sign === 0 || abs < limits[0]) return "平稳";
+  const labels = sign > 0
+    ? ["上扬", "扩张", "激增"]
+    : ["下滑", "收缩", "崩落"];
+  if (abs >= limits[2]) return labels[2];
+  if (abs >= limits[1]) return labels[1];
+  return labels[0];
+}
+
+function renderDashboardMode() {
+  if (!dom.dashboardViews?.length) return;
+
+  const mode = state.dashboardMode === "chart" ? "chart" : "cards";
+  dom.dashboardViews.forEach((view) => {
+    view.hidden = view.dataset.dashboardView !== mode;
+  });
+  if (dom.dashboardToggleButton) {
+    const nextLabel = mode === "chart" ? "数值卡" : "折线图";
+    dom.dashboardToggleButton.textContent = nextLabel;
+    dom.dashboardToggleButton.setAttribute("aria-pressed", mode === "chart" ? "true" : "false");
+    dom.dashboardToggleButton.title = `切换到${nextLabel}`;
+  }
+  if (dom.chartEerfValue) dom.chartEerfValue.textContent = `${state.eerfLevel || 0}/${EERF_MAX_LEVEL}`;
+}
+
+function renderMetricsChart() {
+  const canvas = dom.metricsChart;
+  if (!canvas || !state || state.dashboardMode !== "chart") return;
+
+  const context = canvas.getContext("2d");
+  if (!context) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const cssWidth = Math.max(320, Math.round(rect.width || canvas.clientWidth || 720));
+  const cssHeight = Math.max(220, Math.round(rect.height || 292));
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
+  const width = Math.round(cssWidth * pixelRatio);
+  const height = Math.round(cssHeight * pixelRatio);
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+  context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+  context.clearRect(0, 0, cssWidth, cssHeight);
+
+  const samples = normalizedMetricSamples();
+  drawChartBackground(context, cssWidth, cssHeight);
+  if (samples.length < 2) {
+    drawChartEmptyState(context, cssWidth, cssHeight);
+    return;
+  }
+
+  const plot = {
+    left: 42,
+    right: cssWidth - 16,
+    top: 20,
+    bottom: cssHeight - 34
+  };
+  drawChartGrid(context, plot);
+  drawCollapseMarkers(context, samples, plot);
+
+  chartSeries().forEach((series) => {
+    drawMetricSeries(context, samples, plot, series);
+  });
+  drawChartAxisLabels(context, samples, plot);
+}
+
+function normalizedMetricSamples() {
+  const samples = Array.isArray(state.metricSamples) ? state.metricSamples : [];
+  if (!samples.length) {
+    return [createMetricSample(state.turn, state.count, snapshot())];
+  }
+  return samples.slice(-METRIC_CHART_WINDOW).map((sample) => normalizeMetricSample(sample));
+}
+
+function normalizeMetricSample(sample = {}) {
+  return {
+    ...createMetricSample(sample.turn, sample.civilization, sample, sample),
+    collapse: sample.collapse ? String(sample.collapse) : "",
+    label: sample.label ? String(sample.label) : ""
+  };
+}
+
+function chartSeries() {
+  const styles = getComputedStyle(document.documentElement);
+  return [
+    { key: "sc", label: "SC", color: styles.getPropertyValue("--science").trim() || "#54d8ff" },
+    { key: "be", label: "BE", color: styles.getPropertyValue("--belief").trim() || "#ffd166" },
+    { key: "pop", label: "POP", color: styles.getPropertyValue("--people").trim() || "#74e0a8" },
+    { key: "eco", label: "ECO", color: styles.getPropertyValue("--economy").trim() || "#c5ef7f" },
+    { key: "la", label: "LA", color: styles.getPropertyValue("--arts").trim() || "#f4a7d8" },
+    { key: "stability", label: "ORDER", color: "#e2e8f0" }
+  ];
+}
+
+function normalizeMetricValue(key, value) {
+  const caps = {
+    sc: CAP,
+    be: CAP,
+    la: LA_CAP,
+    pop: 180000,
+    eco: ECO_METER_CAP,
+    stability: 100
+  };
+  return clamp(finiteOr(value, 0) / (caps[key] || 1), 0, 1);
+}
+
+function drawChartBackground(context, width, height) {
+  const gradient = context.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, "#08111c");
+  gradient.addColorStop(1, "#03070c");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, width, height);
+}
+
+function drawChartEmptyState(context, width, height) {
+  context.fillStyle = "#8ea2b8";
+  context.font = "700 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+  context.textAlign = "center";
+  context.fillText("等待趋势样本", width / 2, height / 2);
+}
+
+function drawChartGrid(context, plot) {
+  context.save();
+  context.strokeStyle = "rgba(84, 216, 255, 0.13)";
+  context.lineWidth = 1;
+  for (let index = 0; index <= 4; index += 1) {
+    const y = plot.top + (plot.bottom - plot.top) * (index / 4);
+    context.beginPath();
+    context.moveTo(plot.left, y);
+    context.lineTo(plot.right, y);
+    context.stroke();
+  }
+  context.strokeStyle = "rgba(255, 255, 255, 0.12)";
+  context.strokeRect(plot.left, plot.top, plot.right - plot.left, plot.bottom - plot.top);
+  context.restore();
+}
+
+function drawCollapseMarkers(context, samples, plot) {
+  context.save();
+  context.strokeStyle = "rgba(255, 107, 107, 0.64)";
+  context.fillStyle = "rgba(255, 107, 107, 0.82)";
+  context.font = "800 10px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+  samples.forEach((sample, index) => {
+    if (!sample.collapse) return;
+    const x = chartX(index, samples.length, plot);
+    context.beginPath();
+    context.moveTo(x, plot.top);
+    context.lineTo(x, plot.bottom);
+    context.stroke();
+    context.save();
+    context.translate(x + 4, plot.top + 8);
+    context.rotate(-Math.PI / 2);
+    context.fillText("COLLAPSE", 0, 0);
+    context.restore();
+  });
+  context.restore();
+}
+
+function drawMetricSeries(context, samples, plot, series) {
+  context.save();
+  context.strokeStyle = series.color;
+  context.lineWidth = 2;
+  context.shadowColor = series.color;
+  context.shadowBlur = 8;
+  context.beginPath();
+  samples.forEach((sample, index) => {
+    const x = chartX(index, samples.length, plot);
+    const y = chartY(normalizeMetricValue(series.key, sample[series.key]), plot);
+    if (index === 0) {
+      context.moveTo(x, y);
+    } else {
+      context.lineTo(x, y);
+    }
+  });
+  context.stroke();
+  context.shadowBlur = 0;
+  context.fillStyle = series.color;
+  samples.forEach((sample, index) => {
+    const x = chartX(index, samples.length, plot);
+    const y = chartY(normalizeMetricValue(series.key, sample[series.key]), plot);
+    context.beginPath();
+    context.arc(x, y, 2.6, 0, Math.PI * 2);
+    context.fill();
+  });
+  context.restore();
+}
+
+function drawChartAxisLabels(context, samples, plot) {
+  context.save();
+  context.fillStyle = "#8ea2b8";
+  context.font = "700 10px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+  context.textAlign = "left";
+  context.fillText("100%", 6, plot.top + 4);
+  context.fillText("0", 20, plot.bottom + 3);
+  context.textAlign = "center";
+  const first = samples[0];
+  const last = samples[samples.length - 1];
+  context.fillText(`Y${formatNumber(first.turn)}`, plot.left, plot.bottom + 22);
+  context.fillText(`Y${formatNumber(last.turn)}`, plot.right, plot.bottom + 22);
+  context.restore();
+}
+
+function chartX(index, length, plot) {
+  if (length <= 1) return plot.left;
+  return plot.left + (plot.right - plot.left) * (index / (length - 1));
+}
+
+function chartY(value, plot) {
+  return plot.bottom - (plot.bottom - plot.top) * clamp(value, 0, 1);
 }
 
 function renderEndingWatch() {
@@ -3091,15 +3529,15 @@ function endingWatchItems() {
     {
       id: "I",
       reqs: [
-        maximumRequirement("秩序", current.stability, I_LOW_ORDER_THRESHOLD),
-        minimumRequirement("低秩序连续年数", state.lowOrderStreak || 0, I_LOW_ORDER_STREAK)
+        maximumRequirement("当前秩序", current.stability, I_LOW_ORDER_THRESHOLD - 1),
+        minimumRequirement("低秩序文明连败", currentInclusiveLowOrderStreak(), I_LOW_ORDER_CIVILIZATION_STREAK)
       ]
     },
     {
       id: "J",
       reqs: [
-        minimumRequirement("LA", current.la, LA_CAP),
-        minimumRequirement("满值连续年数", state.laFullStreak || 0, J_LA_FULL_STREAK)
+        minimumRequirement("本代 LA", current.la, LA_CAP),
+        minimumRequirement("记忆文明连胜", currentInclusiveLaMemoryStreak(), J_MEMORY_CIVILIZATION_STREAK)
       ]
     }
   ];
@@ -3151,6 +3589,13 @@ function maximumRequirement(label, value, maximum, formatter = formatNumber) {
     progress: current <= cap ? 1 : clamp(cap / Math.max(current, 1), 0, 1),
     missing: `${label} 需降至 ${formatter(cap)} 以下`
   };
+}
+
+function currentCivilizationMinOrder() {
+  return Math.min(
+    finiteOr(state.currentCivilization?.minStability, state.stability),
+    finiteOr(state.stability, 0)
+  );
 }
 
 function shortEndingName(endingId) {
@@ -3410,8 +3855,8 @@ function eerfStatusText() {
 
 function laStatusText() {
   const ratio = clamp((state.la || 0) / LA_CAP, 0, 1);
-  if (state.la >= LA_CAP) {
-    return `记忆工程满值；连续 ${formatNumber(state.laFullStreak || 0)}/${formatNumber(J_LA_FULL_STREAK)} 年`;
+  if (state.currentCivilization?.hadLaCap || state.la >= LA_CAP) {
+    return `本代已记录满值；连续文明 ${formatNumber(currentInclusiveLaMemoryStreak())}/${formatNumber(J_MEMORY_CIVILIZATION_STREAK)}`;
   }
   return `EERF 线性保存增幅 ${formatPercent(ratio)}`;
 }
@@ -4141,6 +4586,20 @@ function loadState() {
       KNOWLEDGE_TREND_MIN,
       KNOWLEDGE_TREND_MAX
     );
+    migrated.dashboardMode = migrated.dashboardMode === "chart" ? "chart" : "cards";
+    migrated.metricTrends = migrated.metricTrends && typeof migrated.metricTrends === "object"
+      ? {
+          sc: Math.round(finiteOr(migrated.metricTrends.sc, 0)),
+          be: Math.round(finiteOr(migrated.metricTrends.be, 0)),
+          la: Math.round(finiteOr(migrated.metricTrends.la, 0)),
+          pop: Math.round(finiteOr(migrated.metricTrends.pop, 0)),
+          eco: Math.round(finiteOr(migrated.metricTrends.eco, 0)),
+          stability: Math.round(finiteOr(migrated.metricTrends.stability, 0))
+        }
+      : { sc: 0, be: 0, la: 0, pop: 0, eco: 0, stability: 0 };
+    migrated.metricSamples = Array.isArray(migrated.metricSamples) && migrated.metricSamples.length
+      ? migrated.metricSamples.slice(-METRIC_SAMPLE_LIMIT).map((sample) => normalizeMetricSample(sample))
+      : [createMetricSample(migrated.turn, migrated.count, migrated)];
     migrated.populationGrowthMultiplier = finiteOr(migrated.populationGrowthMultiplier, 1);
     migrated.knowledgeGrowthMultiplier = finiteOr(migrated.knowledgeGrowthMultiplier, 1);
     migrated.controlEfficiencyMultiplier = finiteOr(migrated.controlEfficiencyMultiplier, 1);
@@ -4207,8 +4666,16 @@ function loadState() {
       0,
       C_STAGNANT_CIVILIZATION_STREAK
     );
-    migrated.lowOrderStreak = clamp(Math.round(finiteOr(migrated.lowOrderStreak, 0)), 0, I_LOW_ORDER_STREAK);
-    migrated.laFullStreak = clamp(Math.round(finiteOr(migrated.laFullStreak, 0)), 0, J_LA_FULL_STREAK);
+    migrated.lowOrderCivilizationStreak = clamp(
+      Math.round(finiteOr(migrated.lowOrderCivilizationStreak ?? migrated.lowOrderStreak, 0)),
+      0,
+      I_LOW_ORDER_CIVILIZATION_STREAK
+    );
+    migrated.laMemoryCivilizationStreak = clamp(
+      Math.round(finiteOr(migrated.laMemoryCivilizationStreak ?? migrated.laFullStreak, 0)),
+      0,
+      J_MEMORY_CIVILIZATION_STREAK
+    );
     migrated.finished = Boolean(migrated.finished);
     migrated.finalEnding = migrated.finalEnding && typeof migrated.finalEnding === "object"
       ? migrated.finalEnding
@@ -4235,6 +4702,17 @@ function loadState() {
     migrated.currentCivilization.peakPop = Math.max(finiteOr(migrated.currentCivilization.peakPop, 0), migrated.pop);
     migrated.currentCivilization.peakEco = Math.max(finiteOr(migrated.currentCivilization.peakEco, 0), migrated.eco);
     migrated.currentCivilization.peakEerf = Math.max(finiteOr(migrated.currentCivilization.peakEerf, 0), migrated.eerfLevel);
+    migrated.currentCivilization.peakStability = Math.max(finiteOr(migrated.currentCivilization.peakStability, 0), migrated.stability);
+    migrated.currentCivilization.minStability = Math.min(
+      finiteOr(migrated.currentCivilization.minStability, migrated.stability),
+      migrated.stability
+    );
+    migrated.currentCivilization.hadLowOrder = Boolean(
+      migrated.currentCivilization.hadLowOrder || migrated.currentCivilization.minStability < I_LOW_ORDER_THRESHOLD
+    );
+    migrated.currentCivilization.hadLaCap = Boolean(
+      migrated.currentCivilization.hadLaCap || migrated.currentCivilization.peakLa >= LA_CAP || migrated.la >= LA_CAP
+    );
     migrated.currentCivilization.specialEvents = Array.isArray(migrated.currentCivilization.specialEvents)
       ? migrated.currentCivilization.specialEvents.slice(0, 6)
       : [];

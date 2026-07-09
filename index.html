@@ -6,7 +6,7 @@
     <meta name="author" content="Noah Walker">
     <meta name="copyright" content="Original concept by Noah Walker">
     <title>文明摇篮：文明文字模拟</title>
-    <link rel="stylesheet" href="styles.css?v=20260707">
+    <link rel="stylesheet" href="styles.css?v=20260709">
   </head>
   <body>
     <main class="shell">
@@ -69,68 +69,112 @@
           <div class="delta-row" id="specialDelta"></div>
         </section>
 
-        <section class="stats-grid" aria-label="核心变量">
-          <article class="stat-card sc-card">
-            <div class="stat-head">
-              <span>SC 科学</span>
-              <strong id="scValue">0</strong>
-            </div>
-            <div class="meter" aria-hidden="true"><span id="scMeter"></span></div>
-            <p id="scEra">石器时代</p>
-          </article>
-          <article class="stat-card be-card">
-            <div class="stat-head">
-              <span>BE 神学</span>
-              <strong id="beValue">0</strong>
-            </div>
-            <div class="meter" aria-hidden="true"><span id="beMeter"></span></div>
-            <p id="beEra">巫祝萌芽</p>
-          </article>
-          <article class="stat-card pop-card">
-            <div class="stat-head">
-              <span>POP 人口</span>
-              <strong id="popValue">0</strong>
-            </div>
-            <div class="meter" aria-hidden="true"><span id="popMeter"></span></div>
-            <p id="stabilityValue">秩序 50</p>
-          </article>
-          <article class="stat-card eco-card">
-            <div class="stat-head">
-              <span>ECO 经济</span>
-              <strong id="ecoValue">0</strong>
-            </div>
-            <div class="meter" aria-hidden="true"><span id="ecoMeter"></span></div>
-            <p id="ecoStatus">预算、产业与粮仓</p>
-          </article>
-          <article class="stat-card eerf-card">
-            <div class="stat-head">
-              <span>EERF 极端环境抵抗设施</span>
-              <strong id="eerfValue">0</strong>
-            </div>
-            <div class="meter" aria-hidden="true"><span id="eerfMeter"></span></div>
-            <p id="eerfStatus">无地下种子库</p>
-          </article>
-          <article class="stat-card la-card">
-            <div class="stat-head">
-              <span>LA 文学艺术</span>
-              <strong id="laValue">0</strong>
-            </div>
-            <div class="meter" aria-hidden="true"><span id="laMeter"></span></div>
-            <p id="laStatus">记忆、艺术与档案</p>
-          </article>
-        </section>
-
-        <section class="trend-strip" aria-label="知识趋势">
-          <div class="trend-pill science-trend">
-            <span>科学趋势</span>
-            <strong id="scTrendValue">+0/年</strong>
-            <small id="scTrendStage">停滞</small>
+        <section class="dashboard-panel" aria-label="文明状态仪表">
+          <div class="dashboard-head">
+            <h2>状态仪表</h2>
+            <button id="dashboardToggleButton" type="button" aria-pressed="false">折线图</button>
           </div>
-          <div class="trend-pill belief-trend">
-            <span>神学趋势</span>
-            <strong id="beTrendValue">+0/年</strong>
-            <small id="beTrendStage">停滞</small>
+          <div class="dashboard-view" data-dashboard-view="cards">
+            <section class="stats-grid" aria-label="核心变量">
+              <article class="stat-card sc-card">
+                <div class="stat-head">
+                  <span>SC 科学</span>
+                  <strong id="scValue">0</strong>
+                </div>
+                <div class="meter" aria-hidden="true"><span id="scMeter"></span></div>
+                <p id="scEra">石器时代</p>
+              </article>
+              <article class="stat-card be-card">
+                <div class="stat-head">
+                  <span>BE 神学</span>
+                  <strong id="beValue">0</strong>
+                </div>
+                <div class="meter" aria-hidden="true"><span id="beMeter"></span></div>
+                <p id="beEra">巫祝萌芽</p>
+              </article>
+              <article class="stat-card pop-card">
+                <div class="stat-head">
+                  <span>POP 人口</span>
+                  <strong id="popValue">0</strong>
+                </div>
+                <div class="meter" aria-hidden="true"><span id="popMeter"></span></div>
+                <p id="stabilityValue">秩序 50</p>
+              </article>
+              <article class="stat-card eco-card">
+                <div class="stat-head">
+                  <span>ECO 经济</span>
+                  <strong id="ecoValue">0</strong>
+                </div>
+                <div class="meter" aria-hidden="true"><span id="ecoMeter"></span></div>
+                <p id="ecoStatus">预算、产业与粮仓</p>
+              </article>
+              <article class="stat-card eerf-card">
+                <div class="stat-head">
+                  <span>EERF 极端环境抵抗设施</span>
+                  <strong id="eerfValue">0</strong>
+                </div>
+                <div class="meter" aria-hidden="true"><span id="eerfMeter"></span></div>
+                <p id="eerfStatus">无地下种子库</p>
+              </article>
+              <article class="stat-card la-card">
+                <div class="stat-head">
+                  <span>LA 文学艺术</span>
+                  <strong id="laValue">0</strong>
+                </div>
+                <div class="meter" aria-hidden="true"><span id="laMeter"></span></div>
+                <p id="laStatus">记忆、艺术与档案</p>
+              </article>
+            </section>
           </div>
+          <div class="dashboard-view chart-view" data-dashboard-view="chart" hidden>
+            <div class="chart-head">
+              <div class="chart-legend" aria-label="折线图图例">
+                <span class="legend-sc">SC</span>
+                <span class="legend-be">BE</span>
+                <span class="legend-pop">POP</span>
+                <span class="legend-eco">ECO</span>
+                <span class="legend-la">LA</span>
+                <span class="legend-order">ORDER</span>
+              </div>
+              <div class="eerf-chip">
+                <span>EERF</span>
+                <strong id="chartEerfValue">0/5</strong>
+              </div>
+            </div>
+            <canvas id="metricsChart" class="metrics-chart" width="960" height="320" aria-label="最近十五年文明指标折线图"></canvas>
+          </div>
+          <section class="trend-strip" aria-label="变量趋势">
+            <div class="trend-pill science-trend">
+              <span>科学趋势</span>
+              <strong id="scTrendValue">+0/年</strong>
+              <small id="scTrendStage">停滞</small>
+            </div>
+            <div class="trend-pill belief-trend">
+              <span>神学趋势</span>
+              <strong id="beTrendValue">+0/年</strong>
+              <small id="beTrendStage">停滞</small>
+            </div>
+            <div class="trend-pill population-trend">
+              <span>人口趋势</span>
+              <strong id="popTrendValue">+0/年</strong>
+              <small id="popTrendStage">平稳</small>
+            </div>
+            <div class="trend-pill economy-trend">
+              <span>经济趋势</span>
+              <strong id="ecoTrendValue">+0/年</strong>
+              <small id="ecoTrendStage">平稳</small>
+            </div>
+            <div class="trend-pill arts-trend">
+              <span>艺术趋势</span>
+              <strong id="laTrendValue">+0/年</strong>
+              <small id="laTrendStage">平稳</small>
+            </div>
+            <div class="trend-pill order-trend">
+              <span>秩序趋势</span>
+              <strong id="orderTrendValue">+0/年</strong>
+              <small id="orderTrendStage">平稳</small>
+            </div>
+          </section>
         </section>
 
         <section class="control-groups" aria-label="玩家行动">
@@ -296,39 +340,23 @@
               </div>
               <div>
                 <dt>终局统计</dt>
-                <dd>游戏不再提供跨局数值增益。每次抵达终局只记录结局种类与达成次数；尚未触发过的结局会在统计中隐藏名称，后续可作为成就系统基础。</dd>
-              </div>
-              <div>
-                <dt>纪年</dt>
-                <dd>玩家每次选择一项行动，文明便推进一年。年份不是倒计时；它记录本代文明在三恒星环境中坚持了多久。</dd>
+                <dd>每次抵达终局只记录结局种类与次数；未触发结局在统计中隐藏名称。</dd>
               </div>
               <div>
                 <dt>变量</dt>
-                <dd>SC 与 BE 分别代表科学和神学，最高为 20000；两者都有趋势值，表示下一年会自然兑现的增产量。LA 是文学艺术，最高为 20000，会线性增强 EERF 对知识与趋势的灾后保存。POP 是人口，按承载力形成 S 型增长；ECO 是经济资本，使用简化 Solow-Cobb-Douglas 模型结算；秩序是组织 Buff：神学增强秩序，秩序增强科学，科学继续压制神学。</dd>
+                <dd>SC、BE、LA 上限均为 20000；POP、ECO 和秩序共同决定文明承压能力。EERF 会在灾后保存人口、知识和趋势，LA 越高保存越多。</dd>
               </div>
               <div>
                 <dt>年流程</dt>
-                <dd>每年先掷出 Rand，并后台掷出隐藏 SPEC。上一年的 SC/BE 趋势先兑现，恒星灾变、状态事件、普通事件与隐藏彩蛋随后结算，再执行玩家行动，最后结算系统压力、低秩序/LA 连续年数，并生成下一年的趋势；普通随机事件不会把人口扣穿最低可持续线。</dd>
-              </div>
-              <div>
-                <dt>治理</dt>
-                <dd>基础行动可推动科学、神学、人口、经济或文学艺术；均衡治理缓和两条知识线的互斥；打压行动会牺牲一方，把发展空间转移给另一方；维持秩序会牺牲经济，防止城邦离心。</dd>
-              </div>
-              <div>
-                <dt>危机</dt>
-                <dd>ECO 归零会触发财政危机，非财政行动锁死，SC/BE 正向发展冻结；此时需要使用“炉边谈话”重启财政。人口与既有资本提高产出，科学提高全要素生产率，神学会形成教义摩擦并压低可投资产出。</dd>
-              </div>
-              <div>
-                <dt>EERF</dt>
-                <dd>EERF 是跨文明火种工程。2/3/4/5 级分别需要 SC 2000/4000/8000/16000；建造和升级不能让地表人口跌破最低可持续线；灾变时会保存人口、少量知识和极少量正向趋势。LA 会线性提高保存率，满值时最高保存毁灭轮 SC/BE 的约一半、正向趋势的八成；若工程年撞上硬灾变，会先完成封门再结算毁灭。</dd>
-              </div>
-              <div>
-                <dt>灾变</dt>
-                <dd>部分 Rand 会触发硬灾变并毁灭当前文明。文明毁灭不是游戏终点；玩家需重启文明，由下一代继续走向终局。</dd>
+                <dd>每次行动推进一年：掷 Rand 与隐藏 SPEC，结算趋势、灾变、事件、行动与系统压力。文明毁灭后需重启文明，游戏终点是抵达结局。</dd>
               </div>
               <div>
                 <dt>结局</dt>
-                <dd>多数终局满足条件后只点亮“脱离苦海”，由玩家决定是否结算；候选终局只属于当前这代文明，本代毁灭后即失效。若多个终局同时满足，按 D/E/F/H/G 的优先级取最先命中的一个；单线 SC 抵达上限且 BE 未同步封顶时会自动结算 A，单线 BE 抵达上限且 SC 未同步封顶时会自动结算 B；双线同时封顶转入双相判断。隐藏 C 只会在连续 25 代文明毁灭且科学峰值始终低于 1600 时自动结算；当低科学连败接近 C 时，普通废墟结局 G 会让位给隐藏判定。I 会在连续 11 年秩序不高于 4 时自动结算；J 会在 LA 满值连续 4 年后自动结算。</dd>
+                <dd>A/B 为单线封顶自动结算；多数结局需点击“脱离苦海”。C/I/J 按连续文明代际隐藏判定：低科学、无政府秩序、文明记忆分别走向不同终局。</dd>
+              </div>
+              <div>
+                <dt>快捷键</dt>
+                <dd>按钮右上角会显示快捷键；种子可手动输入，也可用新世界自动生成。</dd>
               </div>
             </dl>
             <section class="watch-panel" aria-label="终局观测">
