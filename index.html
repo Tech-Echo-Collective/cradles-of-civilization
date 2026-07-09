@@ -6,7 +6,7 @@
     <meta name="author" content="Noah Walker">
     <meta name="copyright" content="Original concept by Noah Walker">
     <title>文明摇篮：文明文字模拟</title>
-    <link rel="stylesheet" href="styles.css?v=20260709">
+    <link rel="stylesheet" href="styles.css?v=20260709-v02">
   </head>
   <body>
     <main class="shell">
@@ -127,21 +127,52 @@
             </section>
           </div>
           <div class="dashboard-view chart-view" data-dashboard-view="chart" hidden>
-            <div class="chart-head">
-              <div class="chart-legend" aria-label="折线图图例">
-                <span class="legend-sc">SC</span>
-                <span class="legend-be">BE</span>
-                <span class="legend-pop">POP</span>
-                <span class="legend-eco">ECO</span>
-                <span class="legend-la">LA</span>
-                <span class="legend-order">ORDER</span>
-              </div>
-              <div class="eerf-chip">
-                <span>EERF</span>
-                <strong id="chartEerfValue">0/5</strong>
-              </div>
+            <div class="chart-grid">
+              <article class="chart-card knowledge-chart-card">
+                <div class="chart-card-head">
+                  <h3>知识与记忆</h3>
+                  <div class="chart-legend" aria-label="知识与记忆图例">
+                    <button type="button" data-metric-focus="sc" class="legend-sc">SC</button>
+                    <button type="button" data-metric-focus="be" class="legend-be">BE</button>
+                    <button type="button" data-metric-focus="la" class="legend-la">LA</button>
+                  </div>
+                </div>
+                <canvas id="knowledgeChart" class="metrics-chart" width="420" height="260" aria-label="科学、神学与文学艺术折线图"></canvas>
+              </article>
+              <article class="chart-card economy-chart-card">
+                <div class="chart-card-head">
+                  <h3>经济</h3>
+                  <div class="chart-legend" aria-label="经济图例">
+                    <button type="button" data-metric-focus="eco" class="legend-eco">ECO</button>
+                  </div>
+                </div>
+                <canvas id="economyChart" class="metrics-chart" width="360" height="260" aria-label="经济折线图"></canvas>
+              </article>
+              <article class="chart-card population-chart-card">
+                <div class="chart-card-head">
+                  <h3>人口</h3>
+                  <div class="chart-legend" aria-label="人口与秩序图例">
+                    <button type="button" data-metric-focus="pop" class="legend-pop">POP</button>
+                    <button type="button" data-metric-focus="stability" class="legend-order">ORDER</button>
+                  </div>
+                </div>
+                <canvas id="populationChart" class="metrics-chart" width="360" height="260" aria-label="人口与秩序折线图"></canvas>
+              </article>
+              <aside class="eerf-chart-panel" aria-label="EERF 状态">
+                <div class="eerf-chip">
+                  <span>EERF</span>
+                  <strong id="chartEerfValue">0/5</strong>
+                </div>
+                <p id="chartEerfText">无地下种子库</p>
+              </aside>
             </div>
-            <canvas id="metricsChart" class="metrics-chart" width="960" height="320" aria-label="最近十五年文明指标折线图"></canvas>
+            <section class="focus-chart-panel" id="focusChartPanel" aria-label="单项指标折线图" hidden>
+              <div class="focus-chart-head">
+                <h3 id="focusChartTitle">SC 单项趋势</h3>
+                <button id="clearFocusMetricButton" type="button">全部趋势</button>
+              </div>
+              <canvas id="focusMetricChart" class="metrics-chart" width="960" height="300" aria-label="单项指标折线图"></canvas>
+            </section>
           </div>
           <section class="trend-strip" aria-label="变量趋势">
             <div class="trend-pill science-trend">
@@ -370,7 +401,7 @@
             <section class="ending-stats-panel" aria-label="终局统计">
               <div>
                 <h2>终局统计</h2>
-                <p id="endingStatsStatus">已达成 0/10 种｜总计 0 次｜最近 尚无</p>
+                <p id="endingStatsStatus">已达成 0/12 种｜总计 0 次｜最近 尚无</p>
               </div>
               <ol id="endingStatsList" class="ending-stats-list"></ol>
             </section>

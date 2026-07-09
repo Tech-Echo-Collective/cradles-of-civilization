@@ -1,10 +1,10 @@
 [package]
 name = "cradles_of_civilization_desktop"
-version = "0.1.0"
+version = "0.2.0"
 description = "Cradles Of Civilization desktop shell"
 authors = ["Noah Walker"]
 license = "All rights reserved"
-repository = "https://github.com/noahwalkerror-hash/cradles-of-civilization"
+repository = "https://github.com/Tech-Echo-Collective/cradles-of-civilization"
 default-run = "cradles-of-civilization"
 edition = "2021"
 rust-version = "1.77.2"

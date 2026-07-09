@@ -143,6 +143,22 @@ body.ending-body[data-ending="J"] {
   --ending-secondary-line: rgba(182, 240, 255, 0.1);
 }
 
+body.ending-body[data-ending="K"] {
+  --ending-accent: #b91c1c;
+  --ending-secondary: #f8c471;
+  --ending-haze: rgba(185, 28, 28, 0.16);
+  --ending-line: rgba(185, 28, 28, 0.22);
+  --ending-secondary-line: rgba(248, 196, 113, 0.12);
+}
+
+body.ending-body[data-ending="L"] {
+  --ending-accent: #94a3b8;
+  --ending-secondary: #c4b5fd;
+  --ending-haze: rgba(148, 163, 184, 0.12);
+  --ending-line: rgba(148, 163, 184, 0.17);
+  --ending-secondary-line: rgba(196, 181, 253, 0.11);
+}
+
 body.ending-body::before,
 body.ending-body::after {
   content: "";
@@ -447,7 +463,8 @@ h2 {
 }
 
 .dashboard-head,
-.chart-head {
+.chart-card-head,
+.focus-chart-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -486,8 +503,7 @@ h2 {
 
 .chart-view {
   display: grid;
-  gap: 10px;
-  min-height: 342px;
+  gap: 12px;
   padding: 12px;
   background:
     linear-gradient(180deg, rgba(8, 14, 22, 0.96), rgba(5, 9, 14, 0.96)),
@@ -496,20 +512,50 @@ h2 {
   border-radius: 6px;
 }
 
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(140px, 0.42fr);
+  gap: 10px;
+}
+
+.chart-card,
+.eerf-chart-panel,
+.focus-chart-panel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  background:
+    linear-gradient(180deg, rgba(9, 15, 23, 0.96), rgba(4, 8, 13, 0.96));
+  border: 1px solid rgba(84, 216, 255, 0.13);
+  border-radius: 6px;
+}
+
+.chart-card h3,
+.focus-chart-panel h3 {
+  margin: 0;
+  color: #d9f7ff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .chart-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
+  justify-content: end;
+  gap: 6px;
 }
 
-.chart-legend span,
+.chart-legend button,
 .eerf-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-height: 28px;
   padding: 0 9px;
-  color: #dce9f6;
   background: rgba(5, 10, 16, 0.74);
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 4px;
@@ -518,7 +564,19 @@ h2 {
   font-weight: 900;
 }
 
-.chart-legend span::before {
+.chart-legend button {
+  cursor: pointer;
+}
+
+.chart-legend button:hover,
+.chart-legend button:focus-visible,
+.chart-legend button[aria-pressed="true"] {
+  background: rgba(16, 30, 43, 0.96);
+  border-color: currentColor;
+  outline: none;
+}
+
+.chart-legend button::before {
   content: "";
   width: 18px;
   height: 3px;
@@ -559,10 +617,41 @@ h2 {
   color: #aebbd0;
 }
 
+.eerf-chart-panel {
+  align-content: start;
+}
+
+.eerf-chart-panel p {
+  color: #cbd5e1;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.focus-chart-panel[hidden] {
+  display: none;
+}
+
+.focus-chart-head button {
+  min-height: 28px;
+  padding: 0 10px;
+  color: #e7f5ff;
+  background: #101823;
+  border: 1px solid rgba(84, 216, 255, 0.2);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.focus-chart-head button:hover,
+.focus-chart-head button:focus-visible {
+  background: #172334;
+  border-color: rgba(84, 216, 255, 0.52);
+  outline: none;
+}
+
 .metrics-chart {
   display: block;
   width: 100%;
-  height: 292px;
+  height: 240px;
   background:
     linear-gradient(180deg, rgba(6, 12, 19, 0.9), rgba(3, 7, 12, 0.96));
   border: 1px solid rgba(84, 216, 255, 0.1);
@@ -1473,6 +1562,7 @@ h2 {
 }
 
 .quote-attribution {
+  justify-self: end;
   width: auto;
   max-width: calc(100% - clamp(28px, 8vw, 96px));
   margin-left: clamp(28px, 8vw, 96px);
@@ -1491,9 +1581,9 @@ h2 {
 @media (min-width: 700px) {
   .quote-attribution {
     width: max-content;
-    max-width: 100%;
-    margin-left: auto;
-    padding-left: clamp(28px, 8vw, 96px);
+    max-width: calc(100% - clamp(28px, 8vw, 96px));
+    margin-left: clamp(28px, 8vw, 96px);
+    padding-left: 0;
   }
 }
 
@@ -1596,9 +1686,12 @@ h2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .chart-head {
-    align-items: stretch;
-    flex-direction: column;
+  .chart-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .eerf-chart-panel {
+    grid-column: 1 / -1;
   }
 
   .controls {
@@ -1616,7 +1709,8 @@ h2 {
   }
 
   .trend-strip,
-  .stats-grid {
+  .stats-grid,
+  .chart-grid {
     grid-template-columns: 1fr;
   }
 

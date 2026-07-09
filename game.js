@@ -10,7 +10,7 @@ const ECO_METER_CAP = 300000;
 const EERF_MAX_LEVEL = 5;
 const BASE_RESTART_POP = 2600;
 const MIN_SUSTAINABLE_POP = 1200;
-const SAVE_VERSION = 3;
+const SAVE_VERSION = 4;
 const STORE_KEY = "three-sun-chronicle:v1";
 const ENDING_STORE_KEY = "three-sun-chronicle:ending:v1";
 const ENDING_STATS_STORE_KEY = "three-sun-chronicle:ending-stats:v1";
@@ -22,6 +22,8 @@ const KNOWLEDGE_TREND_MIN = -180;
 const KNOWLEDGE_TREND_MAX = 240;
 const METRIC_SAMPLE_LIMIT = 80;
 const METRIC_CHART_WINDOW = 15;
+const CIVILIZATION_SAMPLE_LIMIT = 64;
+const FINAL_METRIC_ARCHIVE_LIMIT = 32;
 const KNOWLEDGE_TREND_RESTART_RATES = [0, 0.08, 0.12, 0.16, 0.2, 0.25];
 const KNOWLEDGE_TREND_RESTART_CAPS = [0, 8, 14, 20, 28, 36];
 const KNOWLEDGE_TREND_STAGES = [
@@ -70,6 +72,36 @@ const ENDING_THRESHOLDS = {
   authoritarianPopulation: 10000,
   orderHigh: 80,
   collapseCycle: 7
+};
+
+const SPECIAL_DECISIONS = {
+  levyHost: {
+    label: "征召军役",
+    stage: "war-prelude",
+    visible: false,
+    description: "为地图与战争系统预留的兵役动员决策。",
+    cooldownYears: 6,
+    requirements: { pop: 18000, eco: 70000, stability: 45 },
+    effects: { pop: -1800, eco: -22000, stability: -6 }
+  },
+  secureFrontier: {
+    label: "边疆戒严",
+    stage: "war-prelude",
+    visible: false,
+    description: "为地图系统预留的边疆控制决策。",
+    cooldownYears: 5,
+    requirements: { eco: 52000, stability: 35 },
+    effects: { eco: -18000, stability: 9 }
+  },
+  crownAuthority: {
+    label: "强化王权",
+    stage: "war-prelude",
+    visible: false,
+    description: "为 K/L 结局与战争系统预留的主权决策。",
+    cooldownYears: 8,
+    requirements: { sc: 4000, be: 4000, stability: 55 },
+    effects: { eco: -26000, stability: 12 }
+  }
 };
 
 const SCIENCE_ERAS = [
@@ -350,8 +382,10 @@ function createNewState(seedValue = Date.now()) {
     eerfLevel: 0,
     restartPopulationSeed: BASE_RESTART_POP,
     dashboardMode: "cards",
+    focusMetric: null,
     metricTrends: { sc: 0, be: 0, la: 0, pop: 0, eco: 0, stability: 0 },
     metricSamples: [createMetricSample(0, 1, initialSnapshot, { label: "文明苏醒" })],
+    specialDecisionState: createSpecialDecisionState(),
     awaitingCivilizationRestart: false,
     pendingRestart: null,
     endingCandidate: null,
@@ -410,11 +444,66 @@ function createCivilizationStats(civilization, startTurn, initialSnapshot = {}) 
     minStability: snap.stability,
     hadLowOrder: snap.stability < I_LOW_ORDER_THRESHOLD,
     hadLaCap: snap.la >= LA_CAP,
+    metricSamples: [createMetricSample(startTurn, civilization, snap, { label: `第 ${civilization} 号文明苏醒` })],
     specialEvents: [],
     collapseCause: null,
     finalSnapshot: null,
     ending: "未判定"
   };
+}
+
+function createSpecialDecisionState(source = {}) {
+  const decisions = {};
+  Object.keys(SPECIAL_DECISIONS).forEach((decisionId) => {
+    decisions[decisionId] = {
+      cooldown: Math.max(0, Math.round(finiteOr(source[decisionId]?.cooldown, 0))),
+      used: Math.max(0, Math.round(finiteOr(source[decisionId]?.used, 0)))
+    };
+  });
+  return decisions;
+}
+
+function availableSpecialDecisions(current = snapshot()) {
+  return Object.entries(SPECIAL_DECISIONS)
+    .filter(([decisionId]) => canApplySpecialDecision(decisionId, current))
+    .map(([decisionId, decision]) => ({
+      id: decisionId,
+      label: decision.label,
+      stage: decision.stage,
+      description: decision.description
+    }));
+}
+
+function canApplySpecialDecision(decisionId, current = snapshot()) {
+  const decision = SPECIAL_DECISIONS[decisionId];
+  if (!decision) return false;
+  const record = state.specialDecisionState?.[decisionId] || {};
+  if (finiteOr(record.cooldown, 0) > 0) return false;
+  return Object.entries(decision.requirements || {}).every(([key, value]) => finiteOr(current[key], 0) >= value);
+}
+
+function applySpecialDecision(decisionId) {
+  const decision = SPECIAL_DECISIONS[decisionId];
+  if (!decision || !canApplySpecialDecision(decisionId)) return false;
+
+  const before = snapshot();
+  const delta = applyDelta(decision.effects || {}, { protectPopulationFloor: true });
+  state.specialDecisionState[decisionId] = {
+    cooldown: Math.max(0, Math.round(finiteOr(decision.cooldownYears, 0))),
+    used: Math.max(0, Math.round(finiteOr(state.specialDecisionState?.[decisionId]?.used, 0))) + 1
+  };
+  updateCivilizationStats(snapshot());
+  updateMetricTrends(diff(before, snapshot()));
+  recordMetricSample({ label: decision.label });
+  return { decision, delta };
+}
+
+function tickSpecialDecisionCooldowns() {
+  if (!state?.specialDecisionState) return;
+  Object.keys(state.specialDecisionState).forEach((decisionId) => {
+    const record = state.specialDecisionState[decisionId];
+    record.cooldown = Math.max(0, Math.round(finiteOr(record.cooldown, 0)) - 1);
+  });
 }
 
 function updateCivilizationStats(snapshotValue = snapshot(), specialEventTitle = null) {
@@ -538,8 +627,16 @@ function cacheDom() {
   dom.saveStatus = document.querySelector("#saveStatus");
   dom.dashboardToggleButton = document.querySelector("#dashboardToggleButton");
   dom.dashboardViews = Array.from(document.querySelectorAll("[data-dashboard-view]"));
-  dom.metricsChart = document.querySelector("#metricsChart");
+  dom.metricFocusButtons = Array.from(document.querySelectorAll("[data-metric-focus]"));
+  dom.clearFocusMetricButton = document.querySelector("#clearFocusMetricButton");
+  dom.focusChartPanel = document.querySelector("#focusChartPanel");
+  dom.focusChartTitle = document.querySelector("#focusChartTitle");
+  dom.knowledgeChart = document.querySelector("#knowledgeChart");
+  dom.economyChart = document.querySelector("#economyChart");
+  dom.populationChart = document.querySelector("#populationChart");
+  dom.focusMetricChart = document.querySelector("#focusMetricChart");
   dom.chartEerfValue = document.querySelector("#chartEerfValue");
+  dom.chartEerfText = document.querySelector("#chartEerfText");
   dom.endingWatchList = document.querySelector("#endingWatchList");
   dom.eerfDetailList = document.querySelector("#eerfDetailList");
   dom.endingStatsStatus = document.querySelector("#endingStatsStatus");
@@ -616,6 +713,10 @@ function bindEvents() {
   dom.newGameButton.addEventListener("click", startNewGame);
   dom.seedForm?.addEventListener("submit", startNewGameFromSeed);
   dom.dashboardToggleButton?.addEventListener("click", toggleDashboardMode);
+  dom.metricFocusButtons.forEach((button) => {
+    button.addEventListener("click", () => setFocusMetric(button.dataset.metricFocus));
+  });
+  dom.clearFocusMetricButton?.addEventListener("click", () => setFocusMetric(null));
 
   dom.clearLogButton.addEventListener("click", clearChronicle);
   dom.logFilterButtons.forEach((button) => {
@@ -626,7 +727,7 @@ function bindEvents() {
     window.addEventListener("resize", scheduleSkyResize);
     window.addEventListener("orientationchange", scheduleSkyResize);
   }
-  if (dom.metricsChart) {
+  if (hasMetricCharts()) {
     window.addEventListener("resize", renderMetricsChart);
     window.addEventListener("orientationchange", renderMetricsChart);
   }
@@ -737,6 +838,17 @@ function toggleDashboardMode() {
   saveState();
   renderDashboardMode();
   renderMetricsChart();
+}
+
+function setFocusMetric(metric) {
+  state.focusMetric = metric && metricSeriesByKey(metric) ? metric : null;
+  saveState();
+  renderDashboardMode();
+  renderMetricsChart();
+}
+
+function hasMetricCharts() {
+  return Boolean(dom.knowledgeChart || dom.economyChart || dom.populationChart || dom.focusMetricChart);
 }
 
 function clearChronicle() {
@@ -874,6 +986,7 @@ function advanceRound(actionId) {
   const spec = rng.nextInt(SPEC_MAX) + 1;
   state.rngState = rng.state;
   state.turn += 1;
+  tickSpecialDecisionCooldowns();
   state.lastRand = rand;
   state.lastSpec = spec;
   state.specialNotice = null;
@@ -2446,6 +2559,7 @@ function collapseCivilization(event, before, rand, options = {}) {
     finalSnapshot: { ...before },
     ending: "毁灭后待判定"
   };
+  archived.metricSamples = archivedMetricSamplesWithCollapse(archived, before, event.title, oldEerfLevel);
   state.history.unshift(archived);
   state.history = state.history.slice(0, 12);
 
@@ -2556,6 +2670,24 @@ function computeRestartPopulation(snapshotValue) {
   const base = BASE_RESTART_POP + level * 1450;
   const preserved = Math.round(snapshotValue.pop * preserveRates[level]);
   return clamp(base + preserved, BASE_RESTART_POP, 95000);
+}
+
+function archivedMetricSamplesWithCollapse(archived, before, collapseCause, oldEerfLevel) {
+  const samples = Array.isArray(archived.metricSamples) ? archived.metricSamples.slice(-CIVILIZATION_SAMPLE_LIMIT) : [];
+  const collapseSample = createMetricSample(state.turn, state.count, {
+    sc: 0,
+    be: 0,
+    la: 0,
+    pop: 0,
+    eco: 0,
+    stability: Math.max(0, Math.floor(finiteOr(before.stability, 0) * 0.2)),
+    eerf: oldEerfLevel
+  }, { collapse: collapseCause });
+  const last = samples[samples.length - 1];
+  if (!last || last.turn !== collapseSample.turn || !last.collapse) {
+    samples.push(collapseSample);
+  }
+  return samples.slice(-CIVILIZATION_SAMPLE_LIMIT);
 }
 
 function computeRestartKnowledge(snapshotValue) {
@@ -2942,6 +3074,7 @@ function finishGame(endingId, context = {}) {
     trigger: context.trigger || state.weather,
     snapshot: { ...finalSnapshot },
     peakSnapshot: runPeakSnapshot(finalSnapshot),
+    metricArchive: buildMetricArchive(finalSnapshot),
     endingStats,
     createdAt: new Date().toISOString()
   };
@@ -2985,6 +3118,30 @@ function runPeakSnapshot(finalSnapshot = snapshot()) {
   });
 
   return peak;
+}
+
+function buildMetricArchive(finalSnapshot = snapshot()) {
+  const currentStats = {
+    ...(state.currentCivilization || createCivilizationStats(state.count, state.turn, finalSnapshot)),
+    finalSnapshot: { ...finalSnapshot },
+    metricSamples: Array.isArray(state.currentCivilization?.metricSamples)
+      ? state.currentCivilization.metricSamples.slice(-CIVILIZATION_SAMPLE_LIMIT)
+      : normalizedMetricSamples()
+  };
+  const records = [
+    ...(Array.isArray(state.history) ? state.history : []),
+    currentStats
+  ].filter(Boolean);
+
+  return records.slice(0, FINAL_METRIC_ARCHIVE_LIMIT).map((entry) => ({
+    civilization: Math.max(1, Math.round(finiteOr(entry.civilization, 1))),
+    turns: Math.max(0, Math.round(finiteOr(entry.turns, 0))),
+    collapseCause: String(entry.collapseCause || ""),
+    ending: String(entry.ending || ""),
+    samples: Array.isArray(entry.metricSamples)
+      ? entry.metricSamples.slice(-CIVILIZATION_SAMPLE_LIMIT).map((sample) => normalizeMetricSample(sample))
+      : []
+  }));
 }
 
 function endingCopyFor(endingId) {
@@ -3099,6 +3256,7 @@ function recordMetricSample(options = {}) {
     state.metricSamples.push(sample);
   }
   state.metricSamples = state.metricSamples.slice(-METRIC_SAMPLE_LIMIT);
+  recordCivilizationMetricSample(sample);
 }
 
 function updateMetricTrends(delta = {}) {
@@ -3110,6 +3268,24 @@ function updateMetricTrends(delta = {}) {
     eco: Math.round(finiteOr(delta.eco, 0)),
     stability: Math.round(finiteOr(delta.stability, 0))
   };
+}
+
+function recordCivilizationMetricSample(sample) {
+  if (!state.currentCivilization) return;
+  if (!Array.isArray(state.currentCivilization.metricSamples)) {
+    state.currentCivilization.metricSamples = [];
+  }
+  const last = state.currentCivilization.metricSamples[state.currentCivilization.metricSamples.length - 1];
+  if (
+    last &&
+    last.turn === sample.turn &&
+    Boolean(last.collapse) === Boolean(sample.collapse)
+  ) {
+    state.currentCivilization.metricSamples[state.currentCivilization.metricSamples.length - 1] = sample;
+  } else {
+    state.currentCivilization.metricSamples.push(sample);
+  }
+  state.currentCivilization.metricSamples = state.currentCivilization.metricSamples.slice(-CIVILIZATION_SAMPLE_LIMIT);
 }
 
 function scienceEra(value) {
@@ -3252,18 +3428,37 @@ function renderDashboardMode() {
     dom.dashboardToggleButton.title = `切换到${nextLabel}`;
   }
   if (dom.chartEerfValue) dom.chartEerfValue.textContent = `${state.eerfLevel || 0}/${EERF_MAX_LEVEL}`;
+  if (dom.chartEerfText) dom.chartEerfText.textContent = compactEerfChartText();
+  dom.metricFocusButtons?.forEach((button) => {
+    const active = button.dataset.metricFocus === state.focusMetric;
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+  if (dom.focusChartPanel) dom.focusChartPanel.hidden = !state.focusMetric;
+  if (dom.focusChartTitle) {
+    const series = metricSeriesByKey(state.focusMetric);
+    dom.focusChartTitle.textContent = series ? `${series.label} 单项趋势` : "单项趋势";
+  }
 }
 
 function renderMetricsChart() {
-  const canvas = dom.metricsChart;
-  if (!canvas || !state || state.dashboardMode !== "chart") return;
+  if (!state || state.dashboardMode !== "chart") return;
+  const samples = normalizedMetricSamples();
+  renderChartCanvas(dom.knowledgeChart, samples, ["sc", "be", "la"]);
+  renderChartCanvas(dom.economyChart, samples, ["eco"]);
+  renderChartCanvas(dom.populationChart, samples, ["pop", "stability"]);
+  if (state.focusMetric) {
+    renderChartCanvas(dom.focusMetricChart, samples, [state.focusMetric]);
+  }
+}
 
+function renderChartCanvas(canvas, samples, keys) {
+  if (!canvas || !Array.isArray(keys) || !keys.length) return;
   const context = canvas.getContext("2d");
   if (!context) return;
 
   const rect = canvas.getBoundingClientRect();
-  const cssWidth = Math.max(320, Math.round(rect.width || canvas.clientWidth || 720));
-  const cssHeight = Math.max(220, Math.round(rect.height || 292));
+  const cssWidth = Math.max(240, Math.round(rect.width || canvas.clientWidth || 360));
+  const cssHeight = Math.max(180, Math.round(rect.height || 240));
   const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
   const width = Math.round(cssWidth * pixelRatio);
   const height = Math.round(cssHeight * pixelRatio);
@@ -3274,7 +3469,6 @@ function renderMetricsChart() {
   context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
   context.clearRect(0, 0, cssWidth, cssHeight);
 
-  const samples = normalizedMetricSamples();
   drawChartBackground(context, cssWidth, cssHeight);
   if (samples.length < 2) {
     drawChartEmptyState(context, cssWidth, cssHeight);
@@ -3290,10 +3484,19 @@ function renderMetricsChart() {
   drawChartGrid(context, plot);
   drawCollapseMarkers(context, samples, plot);
 
-  chartSeries().forEach((series) => {
+  chartSeries(keys).forEach((series) => {
     drawMetricSeries(context, samples, plot, series);
   });
   drawChartAxisLabels(context, samples, plot);
+}
+
+function compactEerfChartText() {
+  if (state.awaitingCivilizationRestart && state.pendingRestart) {
+    return `火种人口 ${formatNumber(state.pendingRestart.pop)}；SC/BE ${formatNumber(state.pendingRestart.sc)}/${formatNumber(state.pendingRestart.be)}`;
+  }
+  const current = snapshot();
+  const knowledge = computeRestartKnowledge(current);
+  return `保存增幅 ${formatPercent(eerfCultureRatio(current))}；灾后 SC/BE ${formatNumber(knowledge.sc)}/${formatNumber(knowledge.be)}`;
 }
 
 function normalizedMetricSamples() {
@@ -3312,16 +3515,21 @@ function normalizeMetricSample(sample = {}) {
   };
 }
 
-function chartSeries() {
+function chartSeries(keys = ["sc", "be", "pop", "eco", "la", "stability"]) {
+  return keys.map(metricSeriesByKey).filter(Boolean);
+}
+
+function metricSeriesByKey(key) {
   const styles = getComputedStyle(document.documentElement);
-  return [
-    { key: "sc", label: "SC", color: styles.getPropertyValue("--science").trim() || "#54d8ff" },
-    { key: "be", label: "BE", color: styles.getPropertyValue("--belief").trim() || "#ffd166" },
-    { key: "pop", label: "POP", color: styles.getPropertyValue("--people").trim() || "#74e0a8" },
-    { key: "eco", label: "ECO", color: styles.getPropertyValue("--economy").trim() || "#c5ef7f" },
-    { key: "la", label: "LA", color: styles.getPropertyValue("--arts").trim() || "#f4a7d8" },
-    { key: "stability", label: "ORDER", color: "#e2e8f0" }
-  ];
+  const series = {
+    sc: { key: "sc", label: "SC", color: styles.getPropertyValue("--science").trim() || "#54d8ff" },
+    be: { key: "be", label: "BE", color: styles.getPropertyValue("--belief").trim() || "#ffd166" },
+    pop: { key: "pop", label: "POP", color: styles.getPropertyValue("--people").trim() || "#74e0a8" },
+    eco: { key: "eco", label: "ECO", color: styles.getPropertyValue("--economy").trim() || "#c5ef7f" },
+    la: { key: "la", label: "LA", color: styles.getPropertyValue("--arts").trim() || "#f4a7d8" },
+    stability: { key: "stability", label: "ORDER", color: "#e2e8f0" }
+  };
+  return series[key] || null;
 }
 
 function normalizeMetricValue(key, value) {
@@ -3457,7 +3665,7 @@ function renderEndingWatch() {
   items.forEach((item) => {
     const row = document.createElement("li");
     const title = document.createElement("strong");
-    title.textContent = `${item.id}｜${item.name}｜${formatPercent(item.progress)}`;
+    title.textContent = `${item.id}｜${item.displayName}｜${formatPercent(item.progress)}`;
     const detail = document.createElement("p");
     detail.textContent = item.missing.length ? `还差：${item.missing.join("；")}` : "条件已满足，可结算。";
     row.append(title, detail);
@@ -3547,6 +3755,7 @@ function endingWatchItems() {
     return {
       id: def.id,
       name: shortEndingName(def.id),
+      displayName: endingPreviewName(def.id),
       progress: clamp(progress, 0, 1),
       missing: def.reqs.filter((req) => !req.met).map((req) => req.missing)
     };
@@ -3601,6 +3810,11 @@ function currentCivilizationMinOrder() {
 function shortEndingName(endingId) {
   const name = endingCopyFor(endingId).name || `${endingId}结局`;
   return name.split("/")[0] || name;
+}
+
+function endingPreviewName(endingId) {
+  const summary = endingStatsSummary(state.endingStats);
+  return (summary.endings[endingId] || 0) > 0 ? shortEndingName(endingId) : "???";
 }
 
 function renderEerfDetails() {
@@ -4587,6 +4801,7 @@ function loadState() {
       KNOWLEDGE_TREND_MAX
     );
     migrated.dashboardMode = migrated.dashboardMode === "chart" ? "chart" : "cards";
+    migrated.focusMetric = metricSeriesByKey(migrated.focusMetric) ? String(migrated.focusMetric) : null;
     migrated.metricTrends = migrated.metricTrends && typeof migrated.metricTrends === "object"
       ? {
           sc: Math.round(finiteOr(migrated.metricTrends.sc, 0)),
@@ -4600,6 +4815,7 @@ function loadState() {
     migrated.metricSamples = Array.isArray(migrated.metricSamples) && migrated.metricSamples.length
       ? migrated.metricSamples.slice(-METRIC_SAMPLE_LIMIT).map((sample) => normalizeMetricSample(sample))
       : [createMetricSample(migrated.turn, migrated.count, migrated)];
+    migrated.specialDecisionState = createSpecialDecisionState(migrated.specialDecisionState);
     migrated.populationGrowthMultiplier = finiteOr(migrated.populationGrowthMultiplier, 1);
     migrated.knowledgeGrowthMultiplier = finiteOr(migrated.knowledgeGrowthMultiplier, 1);
     migrated.controlEfficiencyMultiplier = finiteOr(migrated.controlEfficiencyMultiplier, 1);
@@ -4685,7 +4901,9 @@ function loadState() {
       migrated.finished = false;
       migrated.finalEnding = null;
     }
-    migrated.history = Array.isArray(parsed.history) ? parsed.history.slice(0, 12) : [];
+    migrated.history = Array.isArray(parsed.history)
+      ? parsed.history.slice(0, 12).map((entry, index) => normalizeCivilizationArchiveEntry(entry, migrated.count - index - 1))
+      : [];
     const fallbackCivilization = createCivilizationStats(migrated.count, Math.max(0, migrated.turn - 1), migrated);
     migrated.currentCivilization = parsed.currentCivilization && typeof parsed.currentCivilization === "object"
       ? { ...fallbackCivilization, ...parsed.currentCivilization }
@@ -4716,10 +4934,35 @@ function loadState() {
     migrated.currentCivilization.specialEvents = Array.isArray(migrated.currentCivilization.specialEvents)
       ? migrated.currentCivilization.specialEvents.slice(0, 6)
       : [];
+    migrated.currentCivilization.metricSamples = Array.isArray(migrated.currentCivilization.metricSamples) && migrated.currentCivilization.metricSamples.length
+      ? migrated.currentCivilization.metricSamples.slice(-CIVILIZATION_SAMPLE_LIMIT).map((sample) => normalizeMetricSample(sample))
+      : [createMetricSample(migrated.turn, migrated.count, migrated)];
     return migrated;
   } catch {
     return null;
   }
+}
+
+function normalizeCivilizationArchiveEntry(entry, fallbackCivilization = 1) {
+  const safe = entry && typeof entry === "object" ? entry : {};
+  const civilization = Math.max(1, Math.round(finiteOr(safe.civilization, fallbackCivilization)));
+  const finalSnapshot = safe.finalSnapshot && typeof safe.finalSnapshot === "object"
+    ? snapshotForObject(safe.finalSnapshot)
+    : null;
+  const fallbackTurn = Math.max(0, Math.round(finiteOr(safe.startTurn, 0) + finiteOr(safe.turns, 0)));
+  const fallbackSamples = finalSnapshot
+    ? [createMetricSample(fallbackTurn, civilization, finalSnapshot, safe.collapseCause ? { collapse: safe.collapseCause } : {})]
+    : [];
+
+  return {
+    ...safe,
+    civilization,
+    turns: Math.max(0, Math.round(finiteOr(safe.turns, 0))),
+    startTurn: Math.max(0, Math.round(finiteOr(safe.startTurn, 0))),
+    metricSamples: Array.isArray(safe.metricSamples) && safe.metricSamples.length
+      ? safe.metricSamples.slice(-CIVILIZATION_SAMPLE_LIMIT).map((sample) => normalizeMetricSample(sample))
+      : fallbackSamples
+  };
 }
 
 function saveStatusText() {
