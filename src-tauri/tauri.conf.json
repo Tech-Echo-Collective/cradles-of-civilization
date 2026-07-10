@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Cradles Of Civilization",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "identifier": "com.noahwalker.cradlesofcivilization",
   "build": {
     "beforeDevCommand": "npm run desktop:serve",

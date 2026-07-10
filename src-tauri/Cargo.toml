@@ -1,6 +1,6 @@
 [package]
 name = "cradles_of_civilization_desktop"
-version = "0.2.0"
+version = "0.3.0"
 description = "Cradles Of Civilization desktop shell"
 authors = ["Noah Walker"]
 license = "All rights reserved"

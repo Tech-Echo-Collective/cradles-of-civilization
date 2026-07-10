@@ -6,7 +6,7 @@
     <meta name="author" content="Noah Walker">
     <meta name="copyright" content="Original concept by Noah Walker">
     <title>文明摇篮：终局</title>
-    <link rel="stylesheet" href="styles.css?v=20260709-v02">
+    <link rel="stylesheet" href="styles.css?v=20260710-v03">
   </head>
   <body class="ending-body">
     <main class="ending-shell" aria-label="文明摇篮终局">
@@ -17,6 +17,27 @@
           <h2>本局复盘</h2>
           <dl id="endingRecapList"></dl>
           <button id="copyChallengeButton" type="button">复制挑战链接</button>
+          <button id="dataReviewButton" type="button">查看文明数据</button>
+        </section>
+        <section class="ending-data-review" id="endingDataReview" aria-label="文明数据复盘" hidden>
+          <div class="ending-data-head">
+            <h2>文明数据</h2>
+            <select id="civilizationDataSelect" aria-label="选择文明代际"></select>
+          </div>
+          <div class="ending-chart-grid">
+            <article>
+              <h3>知识与记忆</h3>
+              <canvas id="endingKnowledgeChart" class="metrics-chart" width="520" height="260"></canvas>
+            </article>
+            <article>
+              <h3>经济</h3>
+              <canvas id="endingEconomyChart" class="metrics-chart" width="360" height="260"></canvas>
+            </article>
+            <article>
+              <h3>人口与秩序</h3>
+              <canvas id="endingPopulationChart" class="metrics-chart" width="360" height="260"></canvas>
+            </article>
+          </div>
         </section>
         <button id="restartButton" type="button" aria-label="新世界，快捷键 Shift+N" aria-keyshortcuts="Shift+N">
           <span>新世界</span>
@@ -46,6 +67,9 @@
       const endingCopy = document.querySelector("#endingCopy");
       const endingRecapList = document.querySelector("#endingRecapList");
       const copyChallengeButton = document.querySelector("#copyChallengeButton");
+      const dataReviewButton = document.querySelector("#dataReviewButton");
+      const endingDataReview = document.querySelector("#endingDataReview");
+      const civilizationDataSelect = document.querySelector("#civilizationDataSelect");
       const restartButton = document.querySelector("#restartButton");
       const endingSeedForm = document.querySelector("#endingSeedForm");
       const endingSeedInput = document.querySelector("#endingSeedInput");
@@ -131,10 +155,13 @@
           ["触发", storedEnding?.trigger || ending.name],
           ["终局统计", endingStats.total ? `已达成 ${formatNumber(unique)} 种 / 总计 ${formatNumber(endingStats.total)} 次` : "尚未记录"],
           ["终值", `SC ${formatNumber(snapshot.sc)} / BE ${formatNumber(snapshot.be)} / LA ${formatNumber(snapshot.la)} / POP ${formatNumber(snapshot.pop)} / ECO ${formatNumber(snapshot.eco)} / 秩序 ${formatNumber(snapshot.stability)}`],
-          ["峰值", `SC ${formatNumber(peak.sc)} / BE ${formatNumber(peak.be)} / LA ${formatNumber(peak.la)} / POP ${formatNumber(peak.pop)} / ECO ${formatNumber(peak.eco)} / EERF ${formatNumber(peak.eerf)}`]
+          ["峰值", `SC ${formatNumber(peak.sc)} / BE ${formatNumber(peak.be)} / LA ${formatNumber(peak.la)} / POP ${formatNumber(peak.pop)} / ECO ${formatNumber(peak.eco)} / EERF ${formatNumber(peak.eerf)}`],
+          ["地图", storedEnding?.mapArchive ? `${storedEnding.mapArchive.status}｜本国 ${formatNumber(storedEnding.mapArchive.counts?.player)} / 中立 ${formatNumber(storedEnding.mapArchive.counts?.neutral)} / 敌国 ${formatNumber(storedEnding.mapArchive.counts?.rival)}` : "尚无地图数据"],
+          ["军力", storedEnding?.military ? `军力 ${formatNumber(storedEnding.military.force)} / 进攻 ${formatNumber(storedEnding.military.attack)} / 防守 ${formatNumber(storedEnding.military.defense)}` : "尚无军事数据"]
         ];
         endingRecapList.innerHTML = rows.map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`).join("");
         copyChallengeButton.disabled = !storedEnding?.seed;
+        dataReviewButton.disabled = !storedEnding?.metricArchive?.length;
       }
 
       function challengeUrl() {
@@ -159,6 +186,92 @@
       }
 
       renderRecap();
+      initDataReview();
+
+      function initDataReview() {
+        const archive = Array.isArray(storedEnding?.metricArchive) ? storedEnding.metricArchive : [];
+        civilizationDataSelect.innerHTML = "";
+        archive.forEach((entry, index) => {
+          const option = document.createElement("option");
+          option.value = String(index);
+          option.textContent = `第 ${formatNumber(entry.civilization)} 号文明${entry.collapseCause ? `｜${entry.collapseCause}` : ""}`;
+          civilizationDataSelect.append(option);
+        });
+        renderEndingCharts();
+      }
+
+      function toggleDataReview() {
+        endingDataReview.hidden = !endingDataReview.hidden;
+        dataReviewButton.textContent = endingDataReview.hidden ? "查看文明数据" : "收起文明数据";
+        if (!endingDataReview.hidden) renderEndingCharts();
+      }
+
+      function renderEndingCharts() {
+        if (endingDataReview.hidden) return;
+        const archive = Array.isArray(storedEnding?.metricArchive) ? storedEnding.metricArchive : [];
+        const index = Math.max(0, Number(civilizationDataSelect.value) || 0);
+        const samples = Array.isArray(archive[index]?.samples) ? archive[index].samples : [];
+        drawEndingChart(document.querySelector("#endingKnowledgeChart"), samples, ["sc", "be", "la"]);
+        drawEndingChart(document.querySelector("#endingEconomyChart"), samples, ["eco"]);
+        drawEndingChart(document.querySelector("#endingPopulationChart"), samples, ["pop", "stability"]);
+      }
+
+      function drawEndingChart(canvas, samples, keys) {
+        if (!canvas) return;
+        const context = canvas.getContext("2d");
+        const rect = canvas.getBoundingClientRect();
+        const width = Math.max(260, Math.round(rect.width || canvas.width));
+        const height = Math.max(200, Math.round(rect.height || canvas.height));
+        const ratio = Math.min(window.devicePixelRatio || 1, 1.5);
+        canvas.width = Math.round(width * ratio);
+        canvas.height = Math.round(height * ratio);
+        context.setTransform(ratio, 0, 0, ratio, 0, 0);
+        context.clearRect(0, 0, width, height);
+        context.fillStyle = "#050a10";
+        context.fillRect(0, 0, width, height);
+        context.strokeStyle = "rgba(84, 216, 255, 0.14)";
+        for (let line = 0; line <= 4; line += 1) {
+          const y = 18 + (height - 50) * (line / 4);
+          context.beginPath();
+          context.moveTo(36, y);
+          context.lineTo(width - 14, y);
+          context.stroke();
+        }
+        if (samples.length < 2) {
+          context.fillStyle = "#8ea2b8";
+          context.font = "700 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+          context.textAlign = "center";
+          context.fillText("无足够样本", width / 2, height / 2);
+          return;
+        }
+        keys.forEach((key) => drawEndingSeries(context, samples, key, width, height));
+      }
+
+      function drawEndingSeries(context, samples, key, width, height) {
+        const series = {
+          sc: ["SC", "#54d8ff", 20000],
+          be: ["BE", "#ffd166", 20000],
+          la: ["LA", "#f4a7d8", 20000],
+          eco: ["ECO", "#c5ef7f", 300000],
+          pop: ["POP", "#74e0a8", 180000],
+          stability: ["ORDER", "#e2e8f0", 100]
+        }[key];
+        if (!series) return;
+        const [, color, cap] = series;
+        const plot = { left: 36, right: width - 14, top: 18, bottom: height - 32 };
+        context.save();
+        context.strokeStyle = color;
+        context.lineWidth = 2;
+        context.beginPath();
+        samples.forEach((sample, index) => {
+          const x = plot.left + (plot.right - plot.left) * (index / Math.max(1, samples.length - 1));
+          const y = plot.bottom - (plot.bottom - plot.top) * Math.max(0, Math.min(1, (Number(sample[key]) || 0) / cap));
+          if (index === 0) context.moveTo(x, y);
+          else context.lineTo(x, y);
+        });
+        context.stroke();
+        context.restore();
+      }
 
       function restartGame() {
         clearGame();
@@ -196,6 +309,8 @@
 
       restartButton.addEventListener("click", restartGame);
       copyChallengeButton.addEventListener("click", copyChallengeLink);
+      dataReviewButton.addEventListener("click", toggleDataReview);
+      civilizationDataSelect.addEventListener("change", renderEndingCharts);
       endingSeedForm.addEventListener("submit", restartGameWithSeed);
       window.addEventListener("keydown", (event) => {
         if (shouldIgnoreShortcut(event)) return;

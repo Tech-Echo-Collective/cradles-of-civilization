@@ -10,7 +10,7 @@ const ECO_METER_CAP = 300000;
 const EERF_MAX_LEVEL = 5;
 const BASE_RESTART_POP = 2600;
 const MIN_SUSTAINABLE_POP = 1200;
-const SAVE_VERSION = 4;
+const SAVE_VERSION = 5;
 const STORE_KEY = "three-sun-chronicle:v1";
 const ENDING_STORE_KEY = "three-sun-chronicle:ending:v1";
 const ENDING_STATS_STORE_KEY = "three-sun-chronicle:ending-stats:v1";
@@ -24,6 +24,24 @@ const METRIC_SAMPLE_LIMIT = 80;
 const METRIC_CHART_WINDOW = 15;
 const CIVILIZATION_SAMPLE_LIMIT = 64;
 const FINAL_METRIC_ARCHIVE_LIMIT = 32;
+const MAP_OWNER_PLAYER = "player";
+const MAP_OWNER_NEUTRAL = "neutral";
+const MAP_OWNER_RIVAL = "rival";
+const MAP_REGIONS = [
+  { id: "northReach", name: "北境冰原", x: 47, y: 10, strength: 78, neighbors: ["ironHills", "sunCoast"] },
+  { id: "ironHills", name: "铁山关", x: 21, y: 28, strength: 62, neighbors: ["northReach", "capital", "westernMarch"] },
+  { id: "sunCoast", name: "日冕海岸", x: 73, y: 28, strength: 58, neighbors: ["northReach", "capital", "easternBasin"] },
+  { id: "westernMarch", name: "西陲旷野", x: 12, y: 55, strength: 48, neighbors: ["ironHills", "capital", "saltFlats"] },
+  { id: "capital", name: "中央盆地", x: 47, y: 50, strength: 70, core: true, neighbors: ["ironHills", "sunCoast", "westernMarch", "easternBasin", "southGate"] },
+  { id: "easternBasin", name: "东部城邦", x: 82, y: 55, strength: 52, neighbors: ["sunCoast", "capital", "ashRiver"] },
+  { id: "saltFlats", name: "盐湖废原", x: 26, y: 78, strength: 45, neighbors: ["westernMarch", "southGate"] },
+  { id: "southGate", name: "南门高地", x: 50, y: 84, strength: 56, neighbors: ["capital", "saltFlats", "ashRiver"] },
+  { id: "ashRiver", name: "灰河三角洲", x: 77, y: 78, strength: 68, neighbors: ["easternBasin", "southGate"] }
+];
+const INITIAL_PLAYER_REGIONS = ["capital", "westernMarch", "southGate"];
+const INITIAL_RIVAL_REGIONS = ["northReach", "ashRiver"];
+const MILITARY_FORCE_CAP = 120000;
+const MAP_EVENT_NONE = "边境暂无大规模军事行动。";
 const KNOWLEDGE_TREND_RESTART_RATES = [0, 0.08, 0.12, 0.16, 0.2, 0.25];
 const KNOWLEDGE_TREND_RESTART_CAPS = [0, 8, 14, 20, 28, 36];
 const KNOWLEDGE_TREND_STAGES = [
@@ -76,31 +94,34 @@ const ENDING_THRESHOLDS = {
 
 const SPECIAL_DECISIONS = {
   levyHost: {
-    label: "征召军役",
+    label: "征兵",
     stage: "war-prelude",
-    visible: false,
-    description: "为地图与战争系统预留的兵役动员决策。",
-    cooldownYears: 6,
-    requirements: { pop: 18000, eco: 70000, stability: 45 },
-    effects: { pop: -1800, eco: -22000, stability: -6 }
+    visible: true,
+    description: "抽调青壮年扩充常备军。",
+    cooldownYears: 4,
+    requirements: { pop: 7000, eco: 32000, stability: 30 },
+    effects: { pop: -1600, eco: -18000, stability: -4 },
+    military: { force: 5200, attack: 3, defense: 1 }
   },
   secureFrontier: {
     label: "边疆戒严",
     stage: "war-prelude",
-    visible: false,
-    description: "为地图系统预留的边疆控制决策。",
+    visible: true,
+    description: "把边境纳入战时管制。",
     cooldownYears: 5,
-    requirements: { eco: 52000, stability: 35 },
-    effects: { eco: -18000, stability: 9 }
+    requirements: { eco: 30000, stability: 24 },
+    effects: { eco: -16000, stability: 8 },
+    military: { force: 1400, attack: -1, defense: 7 }
   },
   crownAuthority: {
     label: "强化王权",
     stage: "war-prelude",
-    visible: false,
-    description: "为 K/L 结局与战争系统预留的主权决策。",
+    visible: true,
+    description: "以中央权威整合军政命令。",
     cooldownYears: 8,
     requirements: { sc: 4000, be: 4000, stability: 55 },
-    effects: { eco: -26000, stability: 12 }
+    effects: { eco: -26000, stability: 12 },
+    military: { force: 2200, attack: 3, defense: 4 }
   }
 };
 
@@ -223,6 +244,53 @@ const ACTIONS = {
     text: "牛奶会有的，面包也会有的。一切都会有的！\n ——弗拉基米尔·伊里奇·列宁，1917年",
     chronicleText: "粮仓、工坊和税制重新开始工作，文明卖出了理想，得到了现金。"
   },
+  militaryCampaign: {
+    label: "发动远征",
+    type: "special",
+    delta: { sc: 12, be: -4, pop: -900, eco: -24000, stability: -4 },
+    text: "边境军团向下一片土地推进。",
+    chronicleText: "军旗越过边境线，地图第一次不再只是地图。",
+    militaryIntent: "attack"
+  },
+  levyHost: {
+    label: SPECIAL_DECISIONS.levyHost.label,
+    type: "special",
+    policyId: "levyHost",
+    delta() {
+      return policyDelta("levyHost");
+    },
+    text: "征兵令贴满城门，青壮年被编入新的军团。",
+    chronicleText: "征兵令扩充了军队，也把家庭、粮仓与工坊拖进战争。",
+    effect() {
+      applyPolicyActionEffect("levyHost");
+    }
+  },
+  secureFrontier: {
+    label: SPECIAL_DECISIONS.secureFrontier.label,
+    type: "special",
+    policyId: "secureFrontier",
+    delta() {
+      return policyDelta("secureFrontier");
+    },
+    text: "边疆进入戒严，烽火台、关卡和军需账簿同时运转。",
+    chronicleText: "边疆戒严提高了防御，也让贸易路线变得僵硬。",
+    effect() {
+      applyPolicyActionEffect("secureFrontier");
+    }
+  },
+  crownAuthority: {
+    label: SPECIAL_DECISIONS.crownAuthority.label,
+    type: "special",
+    policyId: "crownAuthority",
+    delta() {
+      return policyDelta("crownAuthority");
+    },
+    text: "中央命令压过诸侯私令，王权重新接管军政。",
+    chronicleText: "强化王权让军队更像国家的手臂，而不是地方领主的私产。",
+    effect() {
+      applyPolicyActionEffect("crownAuthority");
+    }
+  },
   buildEerf: {
     label: "建造 EERF",
     type: "special",
@@ -303,6 +371,10 @@ const ACTION_SHORTCUTS = [
   { key: "h", actionId: "hibernate", label: "H" },
   { key: "l", actionId: "arts", label: "L" },
   { key: "e", actionId: "economy", label: "E" },
+  { key: "m", actionId: "militaryCampaign", label: "M" },
+  { key: "v", actionId: "levyHost", label: "V" },
+  { key: "x", actionId: "secureFrontier", label: "X" },
+  { key: "c", actionId: "crownAuthority", label: "C" },
   { key: "f", actionId: "buildEerf", label: "F" },
   { key: "u", actionId: "upgradeEerf", label: "U" },
   { key: "o", actionId: "recovery", label: "O" },
@@ -385,6 +457,8 @@ function createNewState(seedValue = Date.now()) {
     focusMetric: null,
     metricTrends: { sc: 0, be: 0, la: 0, pop: 0, eco: 0, stability: 0 },
     metricSamples: [createMetricSample(0, 1, initialSnapshot, { label: "文明苏醒" })],
+    map: createInitialMapState(),
+    military: createInitialMilitaryState(initialSnapshot),
     specialDecisionState: createSpecialDecisionState(),
     awaitingCivilizationRestart: false,
     pendingRestart: null,
@@ -452,6 +526,105 @@ function createCivilizationStats(civilization, startTurn, initialSnapshot = {}) 
   };
 }
 
+function createInitialMapState(source = {}) {
+  const sourceRegions = Array.isArray(source.regions) ? source.regions : [];
+  const regionLookup = new Map(sourceRegions.map((region) => [region.id, region]));
+  return {
+    lastEvent: source.lastEvent && typeof source.lastEvent === "object"
+      ? {
+          title: String(source.lastEvent.title || "边境静默"),
+          text: String(source.lastEvent.text || MAP_EVENT_NONE),
+          type: String(source.lastEvent.type || "none")
+        }
+      : { title: "边境静默", text: MAP_EVENT_NONE, type: "none" },
+    regions: MAP_REGIONS.map((region) => {
+      const stored = regionLookup.get(region.id) || {};
+      const initialOwner = INITIAL_PLAYER_REGIONS.includes(region.id)
+        ? MAP_OWNER_PLAYER
+        : INITIAL_RIVAL_REGIONS.includes(region.id)
+          ? MAP_OWNER_RIVAL
+          : MAP_OWNER_NEUTRAL;
+      return {
+        id: region.id,
+        owner: normalizeMapOwner(stored.owner || initialOwner),
+        fortification: clamp(Math.round(finiteOr(stored.fortification, region.strength)), 20, 140)
+      };
+    })
+  };
+}
+
+function createInitialMilitaryState(current = {}) {
+  return {
+    force: clamp(Math.round(finiteOr(current.force, 6200 + Math.sqrt(Math.max(0, finiteOr(current.pop, 7600))) * 18)), 0, MILITARY_FORCE_CAP),
+    attackModifier: clamp(Math.round(finiteOr(current.attackModifier, 0)), -40, 80),
+    defenseModifier: clamp(Math.round(finiteOr(current.defenseModifier, 0)), -40, 80),
+    warWeariness: clamp(Math.round(finiteOr(current.warWeariness, 0)), 0, 100),
+    campaigns: Math.max(0, Math.round(finiteOr(current.campaigns, 0))),
+    lastBattle: current.lastBattle && typeof current.lastBattle === "object"
+      ? {
+          title: String(current.lastBattle.title || "边境静默"),
+          text: String(current.lastBattle.text || MAP_EVENT_NONE),
+          type: String(current.lastBattle.type || "none")
+        }
+      : { title: "边境静默", text: MAP_EVENT_NONE, type: "none" }
+  };
+}
+
+function normalizeMilitaryState(source = {}, current = {}) {
+  const base = createInitialMilitaryState(current);
+  const safe = source && typeof source === "object" ? source : {};
+  return {
+    ...base,
+    force: clamp(Math.round(finiteOr(safe.force, base.force)), 0, MILITARY_FORCE_CAP),
+    attackModifier: clamp(Math.round(finiteOr(safe.attackModifier, base.attackModifier)), -40, 80),
+    defenseModifier: clamp(Math.round(finiteOr(safe.defenseModifier, base.defenseModifier)), -40, 80),
+    warWeariness: clamp(Math.round(finiteOr(safe.warWeariness, base.warWeariness)), 0, 100),
+    campaigns: Math.max(0, Math.round(finiteOr(safe.campaigns, base.campaigns))),
+    lastBattle: safe.lastBattle && typeof safe.lastBattle === "object"
+      ? {
+          title: String(safe.lastBattle.title || base.lastBattle.title),
+          text: String(safe.lastBattle.text || base.lastBattle.text),
+          type: String(safe.lastBattle.type || base.lastBattle.type)
+        }
+      : base.lastBattle
+  };
+}
+
+function normalizeMapOwner(owner) {
+  return [MAP_OWNER_PLAYER, MAP_OWNER_NEUTRAL, MAP_OWNER_RIVAL].includes(owner)
+    ? owner
+    : MAP_OWNER_NEUTRAL;
+}
+
+function mapRegionById(regionId) {
+  return MAP_REGIONS.find((region) => region.id === regionId) || null;
+}
+
+function mapStateRegion(regionId) {
+  return state.map?.regions?.find((region) => region.id === regionId) || null;
+}
+
+function mapOwnerCounts(mapState = state.map) {
+  const regions = Array.isArray(mapState?.regions) ? mapState.regions : [];
+  return regions.reduce((counts, region) => {
+    const owner = normalizeMapOwner(region.owner);
+    counts[owner] = (counts[owner] || 0) + 1;
+    return counts;
+  }, { player: 0, neutral: 0, rival: 0 });
+}
+
+function isMapConquered() {
+  if (!state.map?.regions?.length) return false;
+  const counts = mapOwnerCounts();
+  return counts.player >= MAP_REGIONS.length;
+}
+
+function isNationExtinct() {
+  if (!state.map?.regions?.length) return false;
+  const counts = mapOwnerCounts();
+  return counts.player <= 0;
+}
+
 function createSpecialDecisionState(source = {}) {
   const decisions = {};
   Object.keys(SPECIAL_DECISIONS).forEach((decisionId) => {
@@ -480,6 +653,62 @@ function canApplySpecialDecision(decisionId, current = snapshot()) {
   const record = state.specialDecisionState?.[decisionId] || {};
   if (finiteOr(record.cooldown, 0) > 0) return false;
   return Object.entries(decision.requirements || {}).every(([key, value]) => finiteOr(current[key], 0) >= value);
+}
+
+function policyDelta(policyId) {
+  return { ...(SPECIAL_DECISIONS[policyId]?.effects || {}) };
+}
+
+function policyDisabledReason(policyId, current = snapshot()) {
+  const decision = SPECIAL_DECISIONS[policyId];
+  if (!decision) return "未知政策";
+  const record = state.specialDecisionState?.[policyId] || {};
+  if (finiteOr(record.cooldown, 0) > 0) return `冷却 ${formatNumber(record.cooldown)} 年`;
+
+  const missing = Object.entries(decision.requirements || {}).find(([key, value]) => finiteOr(current[key], 0) < value);
+  if (!missing) return "";
+  const [key, value] = missing;
+  return `${metricLabel(key)} 需 ${formatNumber(value)}`;
+}
+
+function metricLabel(key) {
+  return {
+    sc: "SC",
+    be: "BE",
+    la: "LA",
+    pop: "POP",
+    eco: "ECO",
+    stability: "秩序",
+    force: "军力"
+  }[key] || key.toUpperCase();
+}
+
+function applyPolicyActionEffect(policyId) {
+  const decision = SPECIAL_DECISIONS[policyId];
+  if (!decision) return;
+  if (!state.specialDecisionState) state.specialDecisionState = createSpecialDecisionState();
+  const record = state.specialDecisionState[policyId] || { cooldown: 0, used: 0 };
+  state.specialDecisionState[policyId] = {
+    cooldown: Math.max(0, Math.round(finiteOr(decision.cooldownYears, 0))),
+    used: Math.max(0, Math.round(finiteOr(record.used, 0))) + 1
+  };
+  applyMilitaryPolicy(decision);
+}
+
+function applyMilitaryPolicy(decision) {
+  if (!state.military) state.military = createInitialMilitaryState(snapshot());
+  const military = decision.military || {};
+  state.military.force = clamp(Math.round(finiteOr(state.military.force, 0) + finiteOr(military.force, 0)), 0, MILITARY_FORCE_CAP);
+  state.military.attackModifier = clamp(Math.round(finiteOr(state.military.attackModifier, 0) + finiteOr(military.attack, 0)), -40, 80);
+  state.military.defenseModifier = clamp(Math.round(finiteOr(state.military.defenseModifier, 0) + finiteOr(military.defense, 0)), -40, 80);
+  state.military.lastBattle = {
+    title: decision.label,
+    text: decision.description,
+    type: "policy"
+  };
+  if (state.map) {
+    state.map.lastEvent = { ...state.military.lastBattle };
+  }
 }
 
 function applySpecialDecision(decisionId) {
@@ -637,6 +866,13 @@ function cacheDom() {
   dom.focusMetricChart = document.querySelector("#focusMetricChart");
   dom.chartEerfValue = document.querySelector("#chartEerfValue");
   dom.chartEerfText = document.querySelector("#chartEerfText");
+  dom.worldMap = document.querySelector("#worldMap");
+  dom.mapStatus = document.querySelector("#mapStatus");
+  dom.mapFeed = document.querySelector("#mapFeed");
+  dom.militaryForceValue = document.querySelector("#militaryForceValue");
+  dom.militaryAttackValue = document.querySelector("#militaryAttackValue");
+  dom.militaryDefenseValue = document.querySelector("#militaryDefenseValue");
+  dom.frontierValue = document.querySelector("#frontierValue");
   dom.endingWatchList = document.querySelector("#endingWatchList");
   dom.eerfDetailList = document.querySelector("#eerfDetailList");
   dom.endingStatsStatus = document.querySelector("#endingStatsStatus");
@@ -1097,6 +1333,8 @@ function advanceRound(actionId) {
     }
     return;
   }
+  const militaryReport = resolveMilitaryYear(action, rand);
+  if (maybeFinishGame({ kind: "military", trigger: militaryReport.title, rand })) return;
   updateEnding();
 
   const countdownDisaster = tickCivilizationTimers();
@@ -1133,6 +1371,7 @@ function advanceRound(actionId) {
     text: [
       event.text,
       actionResult.text,
+      militaryReport.text,
       describeSystemPressure(pressureDelta),
       describeChronicleState(before, after, event, action),
       populationWasLocked ? "只生一个好，政府来养老。本年所有人口变化均被回滚。" : ""
@@ -1277,6 +1516,10 @@ function actionTrendShift(action, key) {
   if (action === ACTIONS.arts) return key === "sc" ? 4 : 6;
   if (action === ACTIONS.economy) return key === "sc" ? 7 : 4;
   if (action === ACTIONS.population) return key === "sc" ? 3 : 6;
+  if (action === ACTIONS.militaryCampaign) return key === "sc" ? 2 : -2;
+  if (action === ACTIONS.levyHost) return key === "sc" ? -3 : 1;
+  if (action === ACTIONS.secureFrontier) return key === "sc" ? 2 : 4;
+  if (action === ACTIONS.crownAuthority) return key === "sc" ? 3 : 5;
   if (action === ACTIONS.buildEerf) return key === "sc" ? -12 : -10;
   if (action === ACTIONS.upgradeEerf) return key === "sc" ? -10 : -8;
   if (action === ACTIONS.recovery) return key === "sc" ? -14 : -9;
@@ -1437,6 +1680,233 @@ function computeSystemPressure(current) {
     pop: popPressure,
     eco: ecoPressure,
     stability: orderPressure
+  };
+}
+
+function resolveMilitaryYear(action, rand) {
+  ensureMilitaryMapState();
+  recoverMilitaryForce();
+  decayMilitaryModifiers();
+
+  const playerCounts = mapOwnerCounts();
+  if (playerCounts.player <= 0) {
+    return updateMapEvent("国家灭亡", "中央政府已经失去全部区域，王旗落地。", "defeat");
+  }
+
+  if (action === ACTIONS.militaryCampaign) {
+    state.military.campaigns += 1;
+    return attemptPlayerOffensive(rand, 18);
+  }
+
+  if ((rand + state.turn) % 6 === 0 && hasAttackTarget()) {
+    return attemptPlayerOffensive(rand, 0);
+  }
+
+  if ((Math.floor(rand / 10) + state.turn) % 5 === 0 && hasDefensiveFrontier()) {
+    return attemptRivalOffensive(rand);
+  }
+
+  const quiet = updateMapEvent("边境静默", MAP_EVENT_NONE, "none");
+  return quiet;
+}
+
+function ensureMilitaryMapState() {
+  if (!state.map?.regions?.length) state.map = createInitialMapState(state.map);
+  if (!state.military) state.military = createInitialMilitaryState(snapshot());
+}
+
+function recoverMilitaryForce() {
+  const current = snapshot();
+  const counts = mapOwnerCounts();
+  const baseRecruitment = Math.round(current.pop * 0.0028 + Math.sqrt(Math.max(0, current.eco)) * 4 + counts.player * 230);
+  const orderFactor = 0.7 + current.stability / 180;
+  const attrition = Math.round(finiteOr(state.military.force, 0) * (0.028 + state.military.warWeariness / 1800));
+  state.military.force = clamp(
+    Math.round(finiteOr(state.military.force, 0) + baseRecruitment * orderFactor - attrition),
+    0,
+    MILITARY_FORCE_CAP
+  );
+  state.military.warWeariness = clamp(Math.round(finiteOr(state.military.warWeariness, 0) * 0.88), 0, 100);
+}
+
+function decayMilitaryModifiers() {
+  state.military.attackModifier = Math.round(finiteOr(state.military.attackModifier, 0) * 0.82);
+  state.military.defenseModifier = Math.round(finiteOr(state.military.defenseModifier, 0) * 0.86);
+}
+
+function militaryStats(current = snapshot()) {
+  ensureMilitaryMapState();
+  const counts = mapOwnerCounts();
+  const force = finiteOr(state.military.force, 0);
+  const economyIndex = current.eco <= 0 ? 0 : clamp(Math.log10(current.eco + 10) / 6, 0, 1);
+  const scienceIndex = clamp(current.sc / CAP, 0, 1);
+  const beliefIndex = clamp(current.be / CAP, 0, 1);
+  const orderIndex = clamp(current.stability, 0, 100) / 100;
+  const territorySupport = counts.player * 1.35;
+  const attack = Math.round(
+    force / 760 +
+      scienceIndex * 24 +
+      economyIndex * 14 +
+      orderIndex * 9 +
+      territorySupport +
+      finiteOr(state.military.attackModifier, 0)
+  );
+  const defense = Math.round(
+    force / 820 +
+      beliefIndex * 10 +
+      orderIndex * 22 +
+      economyIndex * 8 +
+      counts.player * 2.2 +
+      (state.eerfLevel || 0) * 1.8 +
+      finiteOr(state.military.defenseModifier, 0)
+  );
+  return {
+    force: Math.round(force),
+    attack: Math.max(0, attack),
+    defense: Math.max(0, defense)
+  };
+}
+
+function enemyMilitaryScore(rand = state.lastRand || 0) {
+  const counts = mapOwnerCounts();
+  const yearPressure = Math.min(42, Math.floor(state.turn / 7));
+  const rivalTerritory = counts.rival * 11 + counts.neutral * 2;
+  const instabilityLift = Math.max(0, 58 - state.stability) * 0.32;
+  const jitter = ((rand % 31) - 15);
+  return Math.max(18, Math.round(34 + rivalTerritory + yearPressure + instabilityLift + jitter));
+}
+
+function hasAttackTarget() {
+  return Boolean(selectAttackTarget());
+}
+
+function hasDefensiveFrontier() {
+  return Boolean(selectPlayerFrontierRegion());
+}
+
+function selectAttackTarget() {
+  ensureMilitaryMapState();
+  const regions = state.map.regions;
+  const candidates = regions
+    .filter((region) => region.owner !== MAP_OWNER_PLAYER)
+    .map((region) => {
+      const definition = mapRegionById(region.id);
+      const touchesPlayer = definition?.neighbors?.some((neighborId) => mapStateRegion(neighborId)?.owner === MAP_OWNER_PLAYER);
+      if (!touchesPlayer) return null;
+      const ownerWeight = region.owner === MAP_OWNER_NEUTRAL ? 0 : 28;
+      return {
+        region,
+        score: finiteOr(region.fortification, definition?.strength || 50) + ownerWeight
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => left.score - right.score);
+  return candidates[0]?.region || null;
+}
+
+function selectPlayerFrontierRegion() {
+  ensureMilitaryMapState();
+  const candidates = state.map.regions
+    .filter((region) => region.owner === MAP_OWNER_PLAYER)
+    .map((region) => {
+      const definition = mapRegionById(region.id);
+      const touchesRival = definition?.neighbors?.some((neighborId) => mapStateRegion(neighborId)?.owner === MAP_OWNER_RIVAL);
+      if (!touchesRival) return null;
+      return {
+        region,
+        score: finiteOr(region.fortification, definition?.strength || 50) + (definition?.core ? 35 : 0)
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => left.score - right.score);
+  return candidates[0]?.region || null;
+}
+
+function attemptPlayerOffensive(rand, campaignBonus = 0) {
+  const target = selectAttackTarget();
+  if (!target) return updateMapEvent("边境静默", "没有可进攻的接壤区域。", "none");
+
+  const stats = militaryStats();
+  const definition = mapRegionById(target.id);
+  const previousOwner = target.owner;
+  const targetStrength = finiteOr(target.fortification, definition?.strength || 50);
+  const enemy = enemyMilitaryScore(rand) + targetStrength * 0.45 + (target.owner === MAP_OWNER_RIVAL ? 12 : 0);
+  const attackScore = stats.attack + campaignBonus + ((rand % 27) - 10);
+  const won = attackScore >= enemy;
+  const casualties = Math.round((won ? 900 : 2100) + enemy * 32 + (target.owner === MAP_OWNER_RIVAL ? 500 : 0));
+  state.military.force = clamp(stats.force - casualties, 0, MILITARY_FORCE_CAP);
+  state.military.warWeariness = clamp(state.military.warWeariness + (won ? 4 : 9), 0, 100);
+
+  if (!won) {
+    state.stability = clamp(state.stability - 1, 0, 100);
+    return updateMapEvent(
+      "远征受挫",
+      `${definition.name} 的防线没有被突破，军队损失 ${formatNumber(casualties)}。`,
+      "failed-attack"
+    );
+  }
+
+  target.owner = MAP_OWNER_PLAYER;
+  target.fortification = clamp(Math.round(targetStrength * 0.82), 20, 140);
+  const eventType = previousOwner === MAP_OWNER_NEUTRAL ? "expansion" : "conquest";
+  const title = eventType === "expansion" ? "边境扩张" : "区域征服";
+  const text = `${definition.name} 已纳入本国控制，军队损失 ${formatNumber(casualties)}。`;
+  return updateMapEvent(title, text, eventType);
+}
+
+function attemptRivalOffensive(rand) {
+  const target = selectPlayerFrontierRegion();
+  if (!target) return updateMapEvent("边境静默", "敌国没有找到可突破的边境。", "none");
+
+  const stats = militaryStats();
+  const definition = mapRegionById(target.id);
+  const targetStrength = finiteOr(target.fortification, definition?.strength || 50);
+  const attackScore = enemyMilitaryScore(rand) + targetStrength * 0.32 + ((Math.floor(rand / 7) % 29) - 9);
+  const defenseScore = stats.defense + targetStrength * 0.42;
+  const lost = attackScore > defenseScore;
+  const casualties = Math.round((lost ? 2300 : 1200) + attackScore * 25);
+  state.military.force = clamp(stats.force - casualties, 0, MILITARY_FORCE_CAP);
+  state.military.warWeariness = clamp(state.military.warWeariness + (lost ? 10 : 4), 0, 100);
+
+  if (!lost) {
+    target.fortification = clamp(Math.round(targetStrength + 5), 20, 140);
+    return updateMapEvent(
+      "守住边境",
+      `${definition.name} 击退敌军，军队损失 ${formatNumber(casualties)}。`,
+      "defense"
+    );
+  }
+
+  target.owner = MAP_OWNER_RIVAL;
+  target.fortification = clamp(Math.round(targetStrength * 0.9), 20, 140);
+  state.stability = clamp(state.stability - (definition.core ? 12 : 4), 0, 100);
+  const counts = mapOwnerCounts();
+  const title = counts.player <= 0 ? "国家灭亡" : "区域失守";
+  const text = `${definition.name} 失守，军队损失 ${formatNumber(casualties)}。`;
+  return updateMapEvent(title, text, counts.player <= 0 ? "defeat" : "lost");
+}
+
+function updateMapEvent(title, text, type) {
+  const event = { title, text, type };
+  if (!state.map) state.map = createInitialMapState();
+  if (!state.military) state.military = createInitialMilitaryState(snapshot());
+  state.map.lastEvent = event;
+  state.military.lastBattle = event;
+  return event;
+}
+
+function collapseMapState(cause) {
+  return {
+    lastEvent: {
+      title: "文明毁灭",
+      text: `${cause} 之后，旧地图失效。`,
+      type: "collapse"
+    },
+    regions: MAP_REGIONS.map((region) => ({
+      id: region.id,
+      owner: MAP_OWNER_RIVAL,
+      fortification: region.strength
+    }))
   };
 }
 
@@ -2598,6 +3068,8 @@ function collapseCivilization(event, before, rand, options = {}) {
   state.pop = 0;
   state.eco = 0;
   state.stability = Math.max(0, Math.floor(before.stability * 0.2));
+  state.map = collapseMapState(event.title);
+  state.military = createInitialMilitaryState({ force: 0, pop: 0 });
   updateMetricTrends(diff(before, snapshot()));
   recordMetricSample({ collapse: event.title });
   state.weather = event.title;
@@ -2637,6 +3109,8 @@ function restartCivilizationFromPending() {
   state.restartPopulationSeed = restart.pop;
   resetCivilizationModifiers();
   state.count = restart.nextCount;
+  state.map = createInitialMapState();
+  state.military = createInitialMilitaryState(snapshot());
   state.currentCivilization = createCivilizationStats(state.count, state.turn, snapshot());
   state.awaitingCivilizationRestart = false;
   state.pendingRestart = null;
@@ -2796,6 +3270,10 @@ function updateEnding() {
     state.ending = `永志不忘观测：连续 ${currentInclusiveLaMemoryStreak()}/${J_MEMORY_CIVILIZATION_STREAK} 代文明曾使 LA 满值`;
   } else if (currentInclusiveLowOrderStreak() > 0) {
     state.ending = `罗马再临观测：连续 ${currentInclusiveLowOrderStreak()}/${I_LOW_ORDER_CIVILIZATION_STREAK} 代文明以无政府收束`;
+  } else if (isMapConquered()) {
+    state.ending = "全图征服已经完成，万王之王等待加冕。";
+  } else if (mapOwnerCounts().player <= 1) {
+    state.ending = "国土濒临灭亡，末代皇帝的阴影逼近。";
   } else if (isEconomicCrisis()) {
     state.ending = "经济危机：科学与神学的正向发展冻结";
   } else if (state.sc >= CAP && state.be < CAP) {
@@ -2848,6 +3326,14 @@ function canHoldEndingCandidate(context = {}) {
 function resolveEnding(context = {}, current = snapshot()) {
   const harmony = knowledgeHarmony(current.sc, current.be);
   const thresholds = ENDING_THRESHOLDS;
+
+  if (isNationExtinct()) {
+    return "L";
+  }
+
+  if (isMapConquered()) {
+    return "K";
+  }
 
   if (
     current.sc >= thresholds.exodusKnowledge &&
@@ -3026,6 +3512,7 @@ function civilizationStreakEndingTrigger(endingId) {
 }
 
 function resolveAutomaticEnding(context = {}, current = snapshot()) {
+  if (isNationExtinct()) return "L";
   if (currentInclusiveLaMemoryStreak() >= J_MEMORY_CIVILIZATION_STREAK) return "J";
   if (currentInclusiveLowOrderStreak() >= I_LOW_ORDER_CIVILIZATION_STREAK) return "I";
   const scienceAtCap = current.sc >= CAP;
@@ -3075,6 +3562,8 @@ function finishGame(endingId, context = {}) {
     snapshot: { ...finalSnapshot },
     peakSnapshot: runPeakSnapshot(finalSnapshot),
     metricArchive: buildMetricArchive(finalSnapshot),
+    mapArchive: buildMapArchive(),
+    military: { ...militaryStats(finalSnapshot) },
     endingStats,
     createdAt: new Date().toISOString()
   };
@@ -3142,6 +3631,24 @@ function buildMetricArchive(finalSnapshot = snapshot()) {
       ? entry.metricSamples.slice(-CIVILIZATION_SAMPLE_LIMIT).map((sample) => normalizeMetricSample(sample))
       : []
   }));
+}
+
+function buildMapArchive() {
+  ensureMilitaryMapState();
+  return {
+    status: mapStrategicStatus(),
+    counts: mapOwnerCounts(),
+    lastEvent: state.map?.lastEvent || null,
+    regions: state.map.regions.map((region) => {
+      const definition = mapRegionById(region.id);
+      return {
+        id: region.id,
+        name: definition?.name || region.id,
+        owner: normalizeMapOwner(region.owner),
+        fortification: clamp(Math.round(finiteOr(region.fortification, definition?.strength || 50)), 20, 140)
+      };
+    })
+  };
 }
 
 function endingCopyFor(endingId) {
@@ -3351,6 +3858,7 @@ function render() {
   renderEerfDetails();
   renderEndingStats();
   renderActionButtons();
+  renderMap();
   renderLog();
   renderArchive();
   renderSpecialNotice();
@@ -3393,6 +3901,57 @@ function renderMetricTrend(key, value, valueNode, stageNode) {
   const trend = Math.round(finiteOr(value, 0));
   if (valueNode) valueNode.textContent = `${formatSignedNumber(trend)}/年`;
   if (stageNode) stageNode.textContent = metricTrendStageFor(key, trend);
+}
+
+function renderMap() {
+  if (!dom.worldMap) return;
+  ensureMilitaryMapState();
+  const counts = mapOwnerCounts();
+  const stats = militaryStats();
+  dom.worldMap.innerHTML = "";
+  const fragment = document.createDocumentFragment();
+
+  MAP_REGIONS.forEach((definition) => {
+    const regionState = mapStateRegion(definition.id) || { owner: MAP_OWNER_NEUTRAL, fortification: definition.strength };
+    const region = document.createElement("div");
+    region.className = `map-region owner-${regionState.owner}`;
+    region.style.left = `${definition.x}%`;
+    region.style.top = `${definition.y}%`;
+    region.dataset.region = definition.id;
+    region.innerHTML = `
+      <strong>${definition.name}</strong>
+      <span>${mapOwnerLabel(regionState.owner)}</span>
+      <small>防御 ${formatNumber(regionState.fortification)}</small>
+    `;
+    fragment.append(region);
+  });
+
+  dom.worldMap.append(fragment);
+  if (dom.mapStatus) {
+    dom.mapStatus.textContent = `本国 ${formatNumber(counts.player)}｜中立 ${formatNumber(counts.neutral)}｜敌国 ${formatNumber(counts.rival)}｜${mapStrategicStatus(counts)}`;
+  }
+  if (dom.militaryForceValue) dom.militaryForceValue.textContent = formatNumber(stats.force);
+  if (dom.militaryAttackValue) dom.militaryAttackValue.textContent = formatNumber(stats.attack);
+  if (dom.militaryDefenseValue) dom.militaryDefenseValue.textContent = formatNumber(stats.defense);
+  if (dom.frontierValue) dom.frontierValue.textContent = `${formatNumber(counts.player)}/${formatNumber(counts.neutral)}/${formatNumber(counts.rival)}`;
+  if (dom.mapFeed) {
+    const event = state.map?.lastEvent || state.military?.lastBattle;
+    dom.mapFeed.textContent = event ? `${event.title}：${event.text}` : MAP_EVENT_NONE;
+  }
+}
+
+function mapOwnerLabel(owner) {
+  if (owner === MAP_OWNER_PLAYER) return "本国";
+  if (owner === MAP_OWNER_RIVAL) return "敌国";
+  return "中立";
+}
+
+function mapStrategicStatus(counts = mapOwnerCounts()) {
+  if (counts.player <= 0) return "国家灭亡";
+  if (counts.player >= MAP_REGIONS.length) return "全图征服";
+  if (counts.player <= 1) return "危急存亡";
+  if (counts.rival <= 0) return "征服在望";
+  return "边境拉锯";
 }
 
 function metricTrendStageFor(key, value) {
@@ -3652,7 +4211,12 @@ function chartY(value, plot) {
 function renderEndingWatch() {
   if (!dom.endingWatchList) return;
 
-  const items = endingWatchItems().slice(0, 3);
+  const watchItems = endingWatchItems();
+  const featured = watchItems.filter((item) => ["K", "L"].includes(item.id));
+  const items = [
+    ...featured,
+    ...watchItems.filter((item) => !["K", "L"].includes(item.id)).slice(0, 3)
+  ];
   dom.endingWatchList.innerHTML = "";
   if (!items.length) {
     const empty = document.createElement("li");
@@ -3690,6 +4254,19 @@ function endingWatchItems() {
       id: "B",
       reqs: [
         singleLineCapRequirement("BE", current.be, "SC", current.sc)
+      ]
+    },
+    {
+      id: "K",
+      reqs: [
+        minimumRequirement("控制区域", mapOwnerCounts().player, MAP_REGIONS.length),
+        minimumRequirement("军力", militaryStats(current).force, 18000)
+      ]
+    },
+    {
+      id: "L",
+      reqs: [
+        maximumRequirement("剩余区域", mapOwnerCounts().player, 0)
       ]
     },
     {
@@ -3888,6 +4465,16 @@ function actionDisabledReason(action) {
   if (!crisis && action.crisisOnly) return "ECO 尚未归零";
 
   if (state.controlLocked && !action.crisisOnly) return "文明不再响应控制";
+
+  if (action.policyId) {
+    const reason = policyDisabledReason(action.policyId);
+    if (reason) return reason;
+  }
+
+  if (action === ACTIONS.militaryCampaign) {
+    if (!hasAttackTarget()) return "没有可进攻边境";
+    if (finiteOr(state.military?.force, 0) < 1800) return "军力不足";
+  }
 
   if (action === ACTIONS.buildEerf && state.eerfLevel > 0) return "EERF 已建成";
   if (action === ACTIONS.upgradeEerf && state.eerfLevel <= 0) return "尚未建造 EERF";
@@ -4800,8 +5387,8 @@ function loadState() {
       KNOWLEDGE_TREND_MIN,
       KNOWLEDGE_TREND_MAX
     );
-    migrated.dashboardMode = migrated.dashboardMode === "chart" ? "chart" : "cards";
-    migrated.focusMetric = metricSeriesByKey(migrated.focusMetric) ? String(migrated.focusMetric) : null;
+    migrated.dashboardMode = "cards";
+    migrated.focusMetric = null;
     migrated.metricTrends = migrated.metricTrends && typeof migrated.metricTrends === "object"
       ? {
           sc: Math.round(finiteOr(migrated.metricTrends.sc, 0)),
@@ -4815,6 +5402,8 @@ function loadState() {
     migrated.metricSamples = Array.isArray(migrated.metricSamples) && migrated.metricSamples.length
       ? migrated.metricSamples.slice(-METRIC_SAMPLE_LIMIT).map((sample) => normalizeMetricSample(sample))
       : [createMetricSample(migrated.turn, migrated.count, migrated)];
+    migrated.map = createInitialMapState(migrated.map);
+    migrated.military = normalizeMilitaryState(migrated.military, migrated);
     migrated.specialDecisionState = createSpecialDecisionState(migrated.specialDecisionState);
     migrated.populationGrowthMultiplier = finiteOr(migrated.populationGrowthMultiplier, 1);
     migrated.knowledgeGrowthMultiplier = finiteOr(migrated.knowledgeGrowthMultiplier, 1);

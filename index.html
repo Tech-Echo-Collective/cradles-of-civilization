@@ -6,7 +6,7 @@
     <meta name="author" content="Noah Walker">
     <meta name="copyright" content="Original concept by Noah Walker">
     <title>文明摇篮：文明文字模拟</title>
-    <link rel="stylesheet" href="styles.css?v=20260709-v02">
+    <link rel="stylesheet" href="styles.css?v=20260710-v03">
   </head>
   <body>
     <main class="shell">
@@ -72,7 +72,6 @@
         <section class="dashboard-panel" aria-label="文明状态仪表">
           <div class="dashboard-head">
             <h2>状态仪表</h2>
-            <button id="dashboardToggleButton" type="button" aria-pressed="false">折线图</button>
           </div>
           <div class="dashboard-view" data-dashboard-view="cards">
             <section class="stats-grid" aria-label="核心变量">
@@ -83,6 +82,7 @@
                 </div>
                 <div class="meter" aria-hidden="true"><span id="scMeter"></span></div>
                 <p id="scEra">石器时代</p>
+                <div class="stat-trend"><strong id="scTrendValue">+0/年</strong><span id="scTrendStage">停滞</span></div>
               </article>
               <article class="stat-card be-card">
                 <div class="stat-head">
@@ -91,6 +91,7 @@
                 </div>
                 <div class="meter" aria-hidden="true"><span id="beMeter"></span></div>
                 <p id="beEra">巫祝萌芽</p>
+                <div class="stat-trend"><strong id="beTrendValue">+0/年</strong><span id="beTrendStage">停滞</span></div>
               </article>
               <article class="stat-card pop-card">
                 <div class="stat-head">
@@ -99,6 +100,7 @@
                 </div>
                 <div class="meter" aria-hidden="true"><span id="popMeter"></span></div>
                 <p id="stabilityValue">秩序 50</p>
+                <div class="stat-trend"><strong id="popTrendValue">+0/年</strong><span id="popTrendStage">平稳</span></div>
               </article>
               <article class="stat-card eco-card">
                 <div class="stat-head">
@@ -107,6 +109,7 @@
                 </div>
                 <div class="meter" aria-hidden="true"><span id="ecoMeter"></span></div>
                 <p id="ecoStatus">预算、产业与粮仓</p>
+                <div class="stat-trend"><strong id="ecoTrendValue">+0/年</strong><span id="ecoTrendStage">平稳</span></div>
               </article>
               <article class="stat-card eerf-card">
                 <div class="stat-head">
@@ -115,6 +118,7 @@
                 </div>
                 <div class="meter" aria-hidden="true"><span id="eerfMeter"></span></div>
                 <p id="eerfStatus">无地下种子库</p>
+                <div class="stat-trend"><strong id="orderTrendValue">+0/年</strong><span id="orderTrendStage">平稳</span></div>
               </article>
               <article class="stat-card la-card">
                 <div class="stat-head">
@@ -123,89 +127,36 @@
                 </div>
                 <div class="meter" aria-hidden="true"><span id="laMeter"></span></div>
                 <p id="laStatus">记忆、艺术与档案</p>
+                <div class="stat-trend"><strong id="laTrendValue">+0/年</strong><span id="laTrendStage">平稳</span></div>
               </article>
             </section>
           </div>
-          <div class="dashboard-view chart-view" data-dashboard-view="chart" hidden>
-            <div class="chart-grid">
-              <article class="chart-card knowledge-chart-card">
-                <div class="chart-card-head">
-                  <h3>知识与记忆</h3>
-                  <div class="chart-legend" aria-label="知识与记忆图例">
-                    <button type="button" data-metric-focus="sc" class="legend-sc">SC</button>
-                    <button type="button" data-metric-focus="be" class="legend-be">BE</button>
-                    <button type="button" data-metric-focus="la" class="legend-la">LA</button>
-                  </div>
-                </div>
-                <canvas id="knowledgeChart" class="metrics-chart" width="420" height="260" aria-label="科学、神学与文学艺术折线图"></canvas>
-              </article>
-              <article class="chart-card economy-chart-card">
-                <div class="chart-card-head">
-                  <h3>经济</h3>
-                  <div class="chart-legend" aria-label="经济图例">
-                    <button type="button" data-metric-focus="eco" class="legend-eco">ECO</button>
-                  </div>
-                </div>
-                <canvas id="economyChart" class="metrics-chart" width="360" height="260" aria-label="经济折线图"></canvas>
-              </article>
-              <article class="chart-card population-chart-card">
-                <div class="chart-card-head">
-                  <h3>人口</h3>
-                  <div class="chart-legend" aria-label="人口与秩序图例">
-                    <button type="button" data-metric-focus="pop" class="legend-pop">POP</button>
-                    <button type="button" data-metric-focus="stability" class="legend-order">ORDER</button>
-                  </div>
-                </div>
-                <canvas id="populationChart" class="metrics-chart" width="360" height="260" aria-label="人口与秩序折线图"></canvas>
-              </article>
-              <aside class="eerf-chart-panel" aria-label="EERF 状态">
-                <div class="eerf-chip">
-                  <span>EERF</span>
-                  <strong id="chartEerfValue">0/5</strong>
-                </div>
-                <p id="chartEerfText">无地下种子库</p>
-              </aside>
+        </section>
+
+        <section class="map-panel" aria-label="三恒星战略地图">
+          <div class="map-head">
+            <div>
+              <h2>战略地图</h2>
+              <p id="mapStatus">边境观测尚未开始</p>
             </div>
-            <section class="focus-chart-panel" id="focusChartPanel" aria-label="单项指标折线图" hidden>
-              <div class="focus-chart-head">
-                <h3 id="focusChartTitle">SC 单项趋势</h3>
-                <button id="clearFocusMetricButton" type="button">全部趋势</button>
-              </div>
-              <canvas id="focusMetricChart" class="metrics-chart" width="960" height="300" aria-label="单项指标折线图"></canvas>
-            </section>
+            <div class="map-legend" aria-label="地图图例">
+              <span class="legend-player">本国</span>
+              <span class="legend-neutral">中立</span>
+              <span class="legend-rival">敌国</span>
+            </div>
           </div>
-          <section class="trend-strip" aria-label="变量趋势">
-            <div class="trend-pill science-trend">
-              <span>科学趋势</span>
-              <strong id="scTrendValue">+0/年</strong>
-              <small id="scTrendStage">停滞</small>
-            </div>
-            <div class="trend-pill belief-trend">
-              <span>神学趋势</span>
-              <strong id="beTrendValue">+0/年</strong>
-              <small id="beTrendStage">停滞</small>
-            </div>
-            <div class="trend-pill population-trend">
-              <span>人口趋势</span>
-              <strong id="popTrendValue">+0/年</strong>
-              <small id="popTrendStage">平稳</small>
-            </div>
-            <div class="trend-pill economy-trend">
-              <span>经济趋势</span>
-              <strong id="ecoTrendValue">+0/年</strong>
-              <small id="ecoTrendStage">平稳</small>
-            </div>
-            <div class="trend-pill arts-trend">
-              <span>艺术趋势</span>
-              <strong id="laTrendValue">+0/年</strong>
-              <small id="laTrendStage">平稳</small>
-            </div>
-            <div class="trend-pill order-trend">
-              <span>秩序趋势</span>
-              <strong id="orderTrendValue">+0/年</strong>
-              <small id="orderTrendStage">平稳</small>
-            </div>
-          </section>
+          <div class="map-layout">
+            <div class="world-map" id="worldMap" aria-label="区域归属图"></div>
+            <aside class="military-panel" aria-label="军事状态">
+              <dl>
+                <div><dt>军力</dt><dd id="militaryForceValue">0</dd></div>
+                <div><dt>进攻</dt><dd id="militaryAttackValue">0</dd></div>
+                <div><dt>防守</dt><dd id="militaryDefenseValue">0</dd></div>
+                <div><dt>战线</dt><dd id="frontierValue">0/0/0</dd></div>
+              </dl>
+              <p id="mapFeed">没有战报。</p>
+            </aside>
+          </div>
         </section>
 
         <section class="control-groups" aria-label="玩家行动">
@@ -300,6 +251,43 @@
             </div>
           </div>
           <div class="control-group">
+            <h2>军事与特殊政策</h2>
+            <div class="controls policy-controls">
+              <button class="action-button military-action" type="button" data-action="militaryCampaign">
+                <span class="button-mark">ATK</span>
+                <span class="action-copy">
+                  <strong>发动远征</strong>
+                  <small>向边境推进，夺取中立地带或敌国领土。</small>
+                </span>
+                <span class="disabled-reason" aria-hidden="true"></span>
+              </button>
+              <button class="action-button policy-action" type="button" data-action="levyHost">
+                <span class="button-mark">LEV</span>
+                <span class="action-copy">
+                  <strong>征兵</strong>
+                  <small>抽调青壮年扩充军队。</small>
+                </span>
+                <span class="disabled-reason" aria-hidden="true"></span>
+              </button>
+              <button class="action-button policy-action" type="button" data-action="secureFrontier">
+                <span class="button-mark">DEF</span>
+                <span class="action-copy">
+                  <strong>边疆戒严</strong>
+                  <small>把边境纳入战时管制。</small>
+                </span>
+                <span class="disabled-reason" aria-hidden="true"></span>
+              </button>
+              <button class="action-button policy-action" type="button" data-action="crownAuthority">
+                <span class="button-mark">LAW</span>
+                <span class="action-copy">
+                  <strong>强化王权</strong>
+                  <small>以中央权威整合军政命令。</small>
+                </span>
+                <span class="disabled-reason" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
+          <div class="control-group">
             <h2>特殊设施建设</h2>
             <div class="controls facility-controls">
               <button class="action-button eerf-action" type="button" data-action="buildEerf">
@@ -375,7 +363,7 @@
               </div>
               <div>
                 <dt>变量</dt>
-                <dd>SC、BE、LA 上限均为 20000；POP、ECO 和秩序共同决定文明承压能力。EERF 会在灾后保存人口、知识和趋势，LA 越高保存越多。</dd>
+                <dd>SC、BE、LA 上限均为 20000；POP、ECO、秩序、军力与地图归属共同决定文明承压能力。</dd>
               </div>
               <div>
                 <dt>年流程</dt>
@@ -383,7 +371,7 @@
               </div>
               <div>
                 <dt>结局</dt>
-                <dd>A/B 为单线封顶自动结算；多数结局需点击“脱离苦海”。C/I/J 按连续文明代际隐藏判定：低科学、无政府秩序、文明记忆分别走向不同终局。</dd>
+                <dd>A/B 为单线封顶自动结算；K 为全图征服，L 为国家灭亡。多数结局需点击“脱离苦海”。</dd>
               </div>
               <div>
                 <dt>快捷键</dt>
