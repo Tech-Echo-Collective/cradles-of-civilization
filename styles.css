@@ -23,6 +23,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   min-height: 100%;
@@ -197,6 +201,179 @@ input {
   width: min(1360px, calc(100vw - 32px));
   margin: 0 auto;
   padding: 24px 0 36px;
+}
+
+.setup-panel {
+  min-height: calc(100vh - 60px);
+  display: grid;
+  grid-template-columns: minmax(260px, 0.78fr) minmax(0, 1.22fr);
+  align-items: center;
+  gap: clamp(28px, 6vw, 92px);
+  padding: clamp(30px, 7vw, 92px);
+  background:
+    linear-gradient(135deg, rgba(11, 20, 31, 0.98), rgba(6, 10, 16, 0.98)),
+    repeating-linear-gradient(90deg, transparent 0 47px, rgba(84, 216, 255, 0.04) 47px 48px);
+  border: 1px solid rgba(84, 216, 255, 0.2);
+  border-radius: 8px;
+  box-shadow: 0 24px 70px var(--shadow);
+}
+
+.setup-brand h1 {
+  margin: 0;
+  color: #f5fbff;
+  font-size: clamp(2.4rem, 5vw, 5rem);
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.setup-step {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  padding: clamp(20px, 3vw, 36px);
+  background: rgba(4, 9, 15, 0.76);
+  border: 1px solid rgba(84, 216, 255, 0.16);
+  border-left: 4px solid var(--science);
+}
+
+.setup-index {
+  color: var(--science);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.setup-step label,
+.setup-step h2 {
+  margin: 0;
+  color: #f2f7fb;
+  font-size: 1.18rem;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.setup-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.setup-input-row input {
+  min-width: 0;
+  height: 50px;
+  padding: 0 14px;
+  color: var(--ink);
+  background: #080e16;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  outline: none;
+}
+
+.setup-input-row input:focus {
+  border-color: var(--science);
+  box-shadow: 0 0 0 3px rgba(84, 216, 255, 0.12);
+}
+
+.setup-input-row button,
+.setup-actions button {
+  min-height: 46px;
+  padding: 0 16px;
+  color: #071017;
+  background: var(--science);
+  border: 1px solid var(--science);
+  border-radius: 4px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.difficulty-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.difficulty-options button {
+  display: grid;
+  gap: 5px;
+  min-height: 86px;
+  padding: 12px;
+  color: var(--ink);
+  text-align: left;
+  background: #0b121c;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.difficulty-options button[aria-pressed="true"] {
+  border-color: var(--science);
+  background: #102434;
+  box-shadow: inset 3px 0 0 var(--science);
+}
+
+.difficulty-options strong {
+  font-size: 0.9rem;
+}
+
+.difficulty-options small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.aggression-setup {
+  display: grid;
+  gap: 8px;
+}
+
+.aggression-setup h3 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  letter-spacing: 0;
+}
+
+.aggression-options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.aggression-options button {
+  min-height: 38px;
+  color: #cbd5e1;
+  background: #0b121c;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.aggression-options button[aria-pressed="true"] {
+  color: #071017;
+  background: #ffb86b;
+  border-color: #ffb86b;
+}
+
+.setup-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.setup-actions #backToNameButton {
+  color: #cbd5e1;
+  background: transparent;
+  border-color: var(--line-strong);
+}
+
+.realm-identity {
+  margin: 8px 0 0;
+  color: #b9d7e9;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  font-weight: 800;
 }
 
 .game-panel {
@@ -973,32 +1150,33 @@ h2 {
   background: currentColor;
 }
 
-.legend-player {
+.map-legend .legend-player {
   color: var(--people);
 }
 
-.legend-neutral {
+.map-legend .legend-neutral {
   color: #8ea2b8;
 }
 
-.legend-rival {
+.map-legend .legend-rival {
   color: var(--danger);
 }
 
 .map-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.34fr);
+  grid-template-columns: minmax(0, 1fr) minmax(292px, 0.36fr);
   gap: 12px;
   align-items: stretch;
 }
 
 .world-map {
   position: relative;
-  min-height: 360px;
+  min-height: 570px;
   overflow: hidden;
   background:
-    radial-gradient(circle at 44% 47%, rgba(84, 216, 255, 0.12), transparent 28%),
-    linear-gradient(145deg, rgba(12, 24, 32, 0.96), rgba(5, 9, 14, 0.98));
+    linear-gradient(rgba(4, 10, 15, 0.16), rgba(4, 10, 15, 0.42)),
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 10px),
+    #071018;
   border: 1px solid rgba(84, 216, 255, 0.14);
   border-radius: 6px;
 }
@@ -1006,50 +1184,285 @@ h2 {
 .world-map::before {
   content: "";
   position: absolute;
-  inset: 14px;
-  background:
-    repeating-linear-gradient(90deg, transparent 0 63px, rgba(255, 255, 255, 0.045) 63px 64px),
-    repeating-linear-gradient(0deg, transparent 0 63px, rgba(255, 255, 255, 0.035) 63px 64px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(84, 216, 255, 0.04), transparent);
   pointer-events: none;
 }
 
-.map-region {
+.world-map-svg {
   position: absolute;
-  display: grid;
-  gap: 3px;
-  width: clamp(112px, 13vw, 168px);
-  min-height: 72px;
-  padding: 9px;
-  transform: translate(-50%, -50%);
-  background: rgba(13, 20, 30, 0.94);
-  border: 1px solid currentColor;
-  border-radius: 6px;
-  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.34);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
 }
 
-.map-region strong {
-  color: #f4f8fb;
-  font-size: 0.82rem;
+.map-road {
+  fill: none;
+  stroke: rgba(226, 232, 240, 0.48);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
 }
 
-.map-region span,
-.map-region small {
-  color: #cbd5e1;
-  font-size: 0.72rem;
+.map-road.available {
+  stroke: rgba(84, 216, 255, 0.84);
+  stroke-width: 2.5;
+}
+
+.map-region {
+  cursor: pointer;
+  outline: none;
+}
+
+.map-territory {
+  fill: #243341;
+  stroke: rgba(233, 241, 247, 0.44);
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+  transition: filter 120ms ease, stroke 120ms ease;
+}
+
+.map-region:hover .map-territory,
+.map-region:focus-visible .map-territory {
+  filter: brightness(1.22);
+  stroke: #f8fafc;
+  stroke-width: 2.4;
+}
+
+.map-region.available-target .map-territory {
+  stroke: var(--science);
+  stroke-width: 2.8;
+}
+
+.map-region.selected-region .map-territory {
+  filter: brightness(1.18);
+  stroke: #ffffff;
+  stroke-width: 3;
+}
+
+.map-region-label {
+  fill: #f5f8fb;
+  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 2.35px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: rgba(4, 8, 12, 0.88);
+  stroke-width: 0.7px;
+  pointer-events: none;
+}
+
+.map-region-label .map-region-meta {
+  fill: #d6e1e9;
+  font-size: 1.72px;
   font-weight: 800;
 }
 
-.owner-player {
+.map-region.entity-player-realm .map-territory {
+  fill: #1c654f;
+}
+
+.map-region.entity-free-cities .map-territory {
+  fill: #3d5368;
+}
+
+.map-region.entity-coastal-republic .map-territory {
+  fill: #276676;
+}
+
+.map-region.entity-solar-court .map-territory {
+  fill: #7d3539;
+}
+
+.map-region.entity-ash-confederacy .map-territory {
+  fill: #75502d;
+}
+
+.map-region.owner-hostile-neutral .map-territory {
+  stroke: #ff9f68;
+}
+
+.army-token {
+  position: absolute;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  color: #071017;
+  background: #d5e6f3;
+  border: 2px solid #071017;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px currentColor, 0 8px 18px rgba(0, 0, 0, 0.5);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.65rem;
+  font-weight: 1000;
+  cursor: pointer;
+}
+
+.army-token.army-player {
   color: var(--people);
+  background: #b8f2d4;
 }
 
-.owner-neutral {
+.army-token.army-neutral {
   color: #8ea2b8;
+  background: #d6e0e9;
 }
 
-.owner-rival {
+.army-token.army-rival {
   color: var(--danger);
+  background: #ffc4c4;
+}
+
+.army-token.army-hostile-neutral {
+  color: #ff9f68;
+  background: #ffd2ba;
+}
+
+.army-token[aria-pressed="true"] {
+  outline: 2px solid #f8fafc;
+  outline-offset: 3px;
+}
+
+.army-token:focus-visible {
+  outline: 2px solid var(--science);
+  outline-offset: 3px;
+}
+
+.map-sidebar {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.political-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(5, 10, 16, 0.76);
+  border: 1px solid rgba(84, 216, 255, 0.12);
+  border-radius: 6px;
+}
+
+.panel-mini-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.panel-mini-head span {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.panel-mini-head strong {
+  color: #f5fbff;
+  font-size: 0.88rem;
+  text-align: right;
+}
+
+.entity-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.entity-card {
+  display: grid;
+  gap: 3px;
+  min-height: 60px;
+  padding: 8px;
+  color: #dce7ef;
+  text-align: left;
+  background: #0b121b;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.entity-card strong {
+  overflow: hidden;
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entity-card small {
+  color: var(--muted);
+  font-size: 0.64rem;
+}
+
+.entity-card[aria-pressed="true"] {
+  border-color: var(--science);
+  box-shadow: inset 3px 0 0 var(--science);
+}
+
+.entity-card.is-eliminated {
+  opacity: 0.45;
+  filter: grayscale(1);
+}
+
+.entity-detail-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.entity-detail-list div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.entity-detail-list dt {
+  color: #8ea2b8;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.entity-detail-list dd {
+  margin: 0;
+  color: #eef5fb;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 900;
+}
+
+.entity-strategy-control {
+  display: grid;
+  gap: 6px;
+}
+
+.entity-strategy-control span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.entity-strategy-control select {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 9px;
+  color: var(--ink);
+  background: #0a1119;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+}
+
+.political-panel p {
+  color: #afbdca;
+  font-size: 0.75rem;
+  line-height: 1.45;
 }
 
 .military-panel {
@@ -1060,6 +1473,32 @@ h2 {
   background: rgba(5, 10, 16, 0.76);
   border: 1px solid rgba(84, 216, 255, 0.12);
   border-radius: 6px;
+}
+
+.selected-army-head {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(84, 216, 255, 0.14);
+}
+
+.selected-army-head span {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.selected-army-head strong {
+  color: #f5fbff;
+  font-size: 0.94rem;
+}
+
+.military-panel .deployment-hint {
+  padding: 9px;
+  color: #b9d7e9;
+  background: rgba(84, 216, 255, 0.06);
+  border-left: 3px solid rgba(84, 216, 255, 0.56);
 }
 
 .military-panel dl {
@@ -1132,7 +1571,7 @@ h2 {
 }
 
 .policy-controls {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .action-button {
@@ -1949,6 +2388,17 @@ h2 {
 }
 
 @media (max-width: 860px) {
+  .setup-panel {
+    min-height: calc(100vh - 32px);
+    grid-template-columns: 1fr;
+    align-content: center;
+    padding: 28px;
+  }
+
+  .setup-brand h1 {
+    font-size: 3rem;
+  }
+
   .shell {
     width: min(100vw - 20px, 720px);
     padding-top: 10px;
@@ -2020,6 +2470,24 @@ h2 {
 }
 
 @media (max-width: 520px) {
+  .setup-panel {
+    padding: 20px 14px;
+  }
+
+  .setup-input-row,
+  .difficulty-options {
+    grid-template-columns: 1fr;
+  }
+
+  .aggression-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .setup-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
   .controls {
     grid-template-columns: 1fr;
   }
@@ -2043,11 +2511,12 @@ h2 {
   }
 
   .world-map {
-    min-height: 520px;
+    min-height: 620px;
   }
 
-  .map-region {
-    width: min(42vw, 150px);
+  .army-token {
+    width: 34px;
+    height: 34px;
   }
 
   .metrics-chart {

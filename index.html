@@ -6,16 +6,55 @@
     <meta name="author" content="Noah Walker">
     <meta name="copyright" content="Original concept by Noah Walker">
     <title>文明摇篮：文明文字模拟</title>
-    <link rel="stylesheet" href="styles.css?v=20260710-v03">
+    <link rel="stylesheet" href="styles.css?v=20260710-v032">
   </head>
   <body>
     <main class="shell">
-      <section class="game-panel" aria-label="文明摇篮文字游戏">
+      <section class="setup-panel" id="setupPanel" aria-label="建立国度">
+        <header class="setup-brand">
+          <p class="kicker">Cradles Of Civilization</p>
+          <h1>文明摇篮</h1>
+          <p class="origin-mark">原创企划 / Original concept: Noah Walker</p>
+        </header>
+        <form class="setup-step" id="realmNameForm">
+          <span class="setup-index">01 / 国度命名</span>
+          <label for="realmNameInput">你的国度</label>
+          <div class="setup-input-row">
+            <input id="realmNameInput" name="realmName" type="text" maxlength="24" autocomplete="off" placeholder="输入国名" required>
+            <button type="submit">确认国名</button>
+          </div>
+        </form>
+        <section class="setup-step" id="difficultyStep" hidden>
+          <span class="setup-index">02 / 难度选择</span>
+          <h2 id="setupRealmPreview">无名国度</h2>
+          <div class="difficulty-options" role="group" aria-label="选择难度">
+            <button type="button" data-difficulty="easy"><strong>简单</strong><small>敌军与中立军较弱，边境反应较慢</small></button>
+            <button type="button" data-difficulty="normal" aria-pressed="true"><strong>普通</strong><small>标准军力、攻防与边境压力</small></button>
+            <button type="button" data-difficulty="hard"><strong>困难</strong><small>敌军更强，进攻频率更高</small></button>
+            <button type="button" data-difficulty="ultimate"><strong>终极困难</strong><small>敌对势力全面强化，容错极低</small></button>
+          </div>
+          <div class="aggression-setup">
+            <h3>AI 侵略性</h3>
+            <div class="aggression-options" role="group" aria-label="选择 AI 侵略性">
+              <button type="button" data-aggression="restrained">克制</button>
+              <button type="button" data-aggression="standard" aria-pressed="true">标准</button>
+              <button type="button" data-aggression="aggressive">好战</button>
+              <button type="button" data-aggression="total">全面战争</button>
+            </div>
+          </div>
+          <div class="setup-actions">
+            <button id="backToNameButton" type="button">返回命名</button>
+            <button id="startCivilizationButton" type="button">开始演化</button>
+          </div>
+        </section>
+      </section>
+
+      <section class="game-panel" id="gamePanel" aria-label="文明摇篮文字游戏" hidden>
         <header class="topbar">
           <div>
             <p class="kicker">Cradles Of Civilization</p>
             <h1>文明摇篮</h1>
-            <p class="origin-mark">原创企划 / Original concept: Noah Walker</p>
+            <p class="realm-identity" id="realmIdentity">无名国度｜普通</p>
           </div>
           <div class="turn-board" aria-label="文明状态">
             <div>
@@ -147,15 +186,51 @@
           </div>
           <div class="map-layout">
             <div class="world-map" id="worldMap" aria-label="区域归属图"></div>
-            <aside class="military-panel" aria-label="军事状态">
-              <dl>
-                <div><dt>军力</dt><dd id="militaryForceValue">0</dd></div>
-                <div><dt>进攻</dt><dd id="militaryAttackValue">0</dd></div>
-                <div><dt>防守</dt><dd id="militaryDefenseValue">0</dd></div>
-                <div><dt>战线</dt><dd id="frontierValue">0/0/0</dd></div>
-              </dl>
-              <p id="mapFeed">没有战报。</p>
-            </aside>
+            <div class="map-sidebar">
+              <section class="political-panel" aria-label="政治实体">
+                <div class="panel-mini-head">
+                  <span>政治实体</span>
+                  <strong id="entityPanelName">长生军</strong>
+                </div>
+                <div class="entity-cards" id="entityCards"></div>
+                <dl class="entity-detail-list">
+                  <div><dt>关系</dt><dd id="entityRelationValue">本国</dd></div>
+                  <div><dt>领土</dt><dd id="entityTerritoryValue">0</dd></div>
+                  <div><dt>军力</dt><dd id="entityForceValue">0</dd></div>
+                  <div><dt>发展</dt><dd id="entityDevelopmentValue">0</dd></div>
+                  <div><dt>技术</dt><dd id="entityTechnologyValue">0</dd></div>
+                </dl>
+                <label class="entity-strategy-control" for="entityStrategySelect">
+                  <span>国家策略</span>
+                  <select id="entityStrategySelect">
+                    <option value="balanced">均衡发展</option>
+                    <option value="science">技术优先</option>
+                    <option value="fortress">要塞国家</option>
+                    <option value="expansion">扩张主义</option>
+                    <option value="trade">商业网络</option>
+                    <option value="faith">正信共同体</option>
+                  </select>
+                </label>
+                <p id="entityStrategyText">稳定积累发展、技术与军备。</p>
+              </section>
+              <aside class="military-panel" aria-label="军事状态">
+                <div class="selected-army-head">
+                  <span>选中军队</span>
+                  <strong id="selectedArmyName">第一军团</strong>
+                </div>
+                <dl>
+                  <div><dt>阵营</dt><dd id="selectedArmyOwner">本国</dd></div>
+                  <div><dt>驻地</dt><dd id="selectedArmyRegion">中央盆地</dd></div>
+                  <div><dt>兵力</dt><dd id="militaryForceValue">0</dd></div>
+                  <div><dt>进攻</dt><dd id="militaryAttackValue">0</dd></div>
+                  <div><dt>防守</dt><dd id="militaryDefenseValue">0</dd></div>
+                  <div><dt>科技加成</dt><dd id="militaryTechnologyValue">0</dd></div>
+                  <div><dt>战线</dt><dd id="frontierValue">0/0/0</dd></div>
+                </dl>
+                <p class="deployment-hint" id="deploymentHint">选择本国军队，再点击道路相连的地区进行部署。</p>
+                <p id="mapFeed">没有战报。</p>
+              </aside>
+            </div>
           </div>
         </section>
 
@@ -285,6 +360,22 @@
                 </span>
                 <span class="disabled-reason" aria-hidden="true"></span>
               </button>
+              <button class="action-button military-action" type="button" data-action="trainLegion">
+                <span class="button-mark">TRN</span>
+                <span class="action-copy">
+                  <strong>整训军团</strong>
+                  <small>提升军团进攻能力。</small>
+                </span>
+                <span class="disabled-reason" aria-hidden="true"></span>
+              </button>
+              <button class="action-button policy-action" type="button" data-action="fieldWorks">
+                <span class="button-mark">FORT</span>
+                <span class="action-copy">
+                  <strong>构筑工事</strong>
+                  <small>强化当前驻地与军团防御。</small>
+                </span>
+                <span class="disabled-reason" aria-hidden="true"></span>
+              </button>
             </div>
           </div>
           <div class="control-group">
@@ -370,6 +461,10 @@
                 <dd>每次行动推进一年：掷 Rand 与隐藏 SPEC，结算趋势、灾变、事件、行动与系统压力。文明毁灭后需重启文明，游戏终点是抵达结局。</dd>
               </div>
               <div>
+                <dt>地图</dt>
+                <dd>16 个区域和道路随 seed 生成。点选军队后沿路部署；进入己方为防守，进入他国为进攻。科技增强战力，攻击中立国会使其敌对，失去全部领土即灭国并解散军队。</dd>
+              </div>
+              <div>
                 <dt>结局</dt>
                 <dd>A/B 为单线封顶自动结算；K 为全图征服，L 为国家灭亡。多数结局需点击“脱离苦海”。</dd>
               </div>
@@ -402,8 +497,8 @@
       </section>
     </main>
 
-    <script src="endings.js"></script>
-    <script src="game.js"></script>
-    <script src="desktop.js"></script>
+    <script src="endings.js?v=20260710-v032"></script>
+    <script src="game.js?v=20260710-v032"></script>
+    <script src="desktop.js?v=20260710-v032"></script>
   </body>
 </html>

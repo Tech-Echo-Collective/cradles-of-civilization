@@ -6,7 +6,7 @@
     <meta name="author" content="Noah Walker">
     <meta name="copyright" content="Original concept by Noah Walker">
     <title>文明摇篮：终局</title>
-    <link rel="stylesheet" href="styles.css?v=20260710-v03">
+    <link rel="stylesheet" href="styles.css?v=20260710-v032">
   </head>
   <body class="ending-body">
     <main class="ending-shell" aria-label="文明摇篮终局">
@@ -56,7 +56,7 @@
       </section>
     </main>
 
-    <script src="endings.js"></script>
+    <script src="endings.js?v=20260710-v032"></script>
     <script src="desktop.js"></script>
     <script>
       "use strict";
@@ -145,11 +145,14 @@
         const snapshot = storedEnding?.snapshot || {};
         const peak = storedEnding?.peakSnapshot || snapshot;
         const endingStats = storedEnding?.endingStats || {};
+        const difficultyLabels = { easy: "简单", normal: "普通", hard: "困难", ultimate: "终极困难" };
+        const aggressionLabels = { restrained: "克制", standard: "标准", aggressive: "好战", total: "全面战争" };
         const unique = endingStats.endings
           ? Object.values(endingStats.endings).filter((count) => count > 0).length
           : 0;
         const rows = [
           ["种子", storedEnding?.seed ?? "未知"],
+          ["战局", `${difficultyLabels[storedEnding?.difficulty] || "普通"} / AI ${aggressionLabels[storedEnding?.aiAggression || storedEnding?.mapArchive?.aiAggression] || "标准"}`],
           ["文明", storedEnding?.civilization ? `第 ${formatNumber(storedEnding.civilization)} 号` : "未知"],
           ["年份", storedEnding?.turn ? `${formatNumber(storedEnding.turn)} 年` : "未知"],
           ["触发", storedEnding?.trigger || ending.name],
