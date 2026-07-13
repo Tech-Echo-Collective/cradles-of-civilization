@@ -147,7 +147,7 @@ vm.runInContext(`
       if (state.sc < 4200) return __maintainCivilization("science");
       if (__canAction("trainLegion")) return "trainLegion";
       if (state.eco < 80000) return __firstAction(["economy", "balance"]);
-      return __firstAction(["secureFrontier", "balance", "economy", "population"]);
+      return __firstAction(["militaryCampaign", "secureFrontier", "balance", "economy", "population"]);
     }
     if (strategy === "collapse") return __firstAction(["balance", "economy", "hibernate"]);
     if (strategy === "stagnation") {
@@ -214,14 +214,6 @@ vm.runInContext(`
       if (state.awaitingCivilizationRestart) {
         restartCivilizationFromPending();
         continue;
-      }
-
-      if (strategy === "conquest" && state.mapUiExpanded) {
-        state.selectedArmyId = PLAYER_ARMY_ID;
-        const army = primaryPlayerArmy();
-        const campaignReady = state.military.force >= 11000 && state.sc >= 4000 && state.eco >= 52000;
-        const target = army && campaignReady ? __conquestDeploymentTarget(army) : null;
-        if (army && target && army.lastMovedTurn < state.turn) deploySelectedArmy(target.id);
       }
 
       if (state.finished) break;

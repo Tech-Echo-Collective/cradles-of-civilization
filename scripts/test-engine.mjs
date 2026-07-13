@@ -81,6 +81,21 @@ const report = vm.runInContext(`(() => {
   alignArmiesWithEntityTerritories();
   check(entityRegions(PLAYER_ENTITY_ID).length === 5, "the chosen capital must generate five starting territories");
   check(mapStateRegion("capital").controllerId === PLAYER_ENTITY_ID, "the chosen starting region must belong to the player");
+  const levyRegion = mapStateRegion(primaryPlayerArmy().regionId);
+  state.selectedRegionId = levyRegion.id;
+  state.selectedArmyId = primaryPlayerArmy().id;
+  const levyArmyCount = entityArmies(PLAYER_ENTITY_ID).length;
+  const levyForceBefore = primaryPlayerArmy().force;
+  applyMilitaryPolicy(SPECIAL_DECISIONS.levyHost);
+  check(entityArmies(PLAYER_ENTITY_ID).length === levyArmyCount, "levying on an occupied region must merge into its army");
+  check(primaryPlayerArmy().force > levyForceBefore, "a merged levy must increase the stationed army force");
+  const emptyLevyRegion = entityRegions(PLAYER_ENTITY_ID).find((region) => !armiesAtRegion(region.id).some((army) => army.entityId === PLAYER_ENTITY_ID));
+  state.selectedRegionId = emptyLevyRegion.id;
+  applyMilitaryPolicy(SPECIAL_DECISIONS.levyHost);
+  const fieldArmy = entityArmies(PLAYER_ENTITY_ID).find((army) => army.regionId === emptyLevyRegion.id);
+  check(Boolean(fieldArmy), "levying on an empty controlled region must create a field army");
+  state.military = normalizeMilitaryState(state.military, state);
+  check(Boolean(armyById(fieldArmy.id)), "custom field armies must survive save normalization");
   const inheritedSnapshot = createTerritoryInheritanceSnapshot();
   check(
     inheritedSnapshot.regions.every((region) => !Object.prototype.hasOwnProperty.call(region, "fortification")),
@@ -120,20 +135,31 @@ const report = vm.runInContext(`(() => {
   const highTechnologyBonus = militaryTechnologyBonus(primaryPlayerArmy());
   check(highTechnologyBonus > lowTechnologyBonus, "science must increase military technology bonus");
 
-  const decisive = BALANCE_MODEL.resolveDecisiveBattle({
+  const casualtyBattle = BALANCE_MODEL.resolveBattleCasualties({
     attackerForce: 9000,
-    defenderForce: 7000,
-    garrisonForce: 1200,
-    attackRating: 42,
-    defenseRating: 36,
-    terrainAttack: 2,
-    terrainDefense: 2,
+    defenderForce: 8200,
+    combatDifference: 24,
+    technologyGap: 1,
     seed: 1058
   });
   check(
-    decisive.attackerSurvivors === 0 || decisive.defenderSurvivors === 0,
-    "a decisive battle must completely destroy one side"
+    casualtyBattle.attackerCasualtyRate >= 0.05 && casualtyBattle.attackerCasualtyRate <= 0.95 &&
+      casualtyBattle.defenderCasualtyRate >= 0.05 && casualtyBattle.defenderCasualtyRate <= 0.95,
+    "an era-advantaged battle must keep casualty rates within 5%-95%"
   );
+  check(casualtyBattle.attackerSurvivors > 0 && casualtyBattle.defenderSurvivors > 0, "surviving armies must be able to retreat");
+  const battleScales = new Set();
+  for (let roll = 1; roll <= 10000; roll += 1) {
+    const sample = BALANCE_MODEL.resolveBattleCasualties({
+      attackerForce: 8000,
+      defenderForce: 8000,
+      combatDifference: (roll % 3 - 1) * 48,
+      technologyGap: roll % 2,
+      seed: roll
+    });
+    battleScales.add(sample.scale);
+  }
+  check(["conflict", "battle", "bloodbath"].every((scale) => battleScales.has(scale)), "the casualty model must produce conflicts, battles, and bloodbaths");
   const destroyedRoster = { ...state.military, armies: armies().filter((army) => army.entityId !== PLAYER_ENTITY_ID) };
   state.military = normalizeMilitaryState(destroyedRoster, state);
   check(!primaryPlayerArmy(), "loading a save must not resurrect a destroyed player army");
@@ -145,6 +171,11 @@ const report = vm.runInContext(`(() => {
   state.governorId = "listener";
   check(visibleMilitaryRegionIds().size === MAP_REGIONS.length, "the listener must remove the fog of war");
   check(foggedRegions < MAP_REGIONS.length, "ordinary governors must retain fog of war");
+  const collapsedMap = collapseMapState("测试灾变");
+  check(
+    collapsedMap.regions.every((region) => region.owner === MAP_OWNER_RUINS && region.controllerId === null),
+    "civilization collapse must create red ruins without granting the map to a rival state"
+  );
 
   const disasterRates = {};
   ["easy", "normal", "hard", "ultimate"].forEach((difficulty) => {
@@ -181,7 +212,7 @@ const report = vm.runInContext(`(() => {
     connectedRegions: connectedRegionCount(firstMap),
     eliminatedEntity: eliminated.find((entity) => entity.id === NEUTRAL_ENTITY_ID)?.name,
     technologyBonus: [lowTechnologyBonus, highTechnologyBonus],
-    decisiveBattle: decisive,
+    casualtyBattle,
     foggedRegions,
     disasterRates
   };

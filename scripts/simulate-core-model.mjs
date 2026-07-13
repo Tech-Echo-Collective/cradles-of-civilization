@@ -14,21 +14,31 @@ const trials = Math.max(1000, Math.round(Number(process.argv[2]) || 20000));
 
 function winRate(terrain, governorId) {
   let wins = 0;
+  let attackerCasualtyTotal = 0;
+  let defenderCasualtyTotal = 0;
+  const scales = { conflict: 0, battle: 0, bloodbath: 0 };
   const profile = model.terrainProfile(terrain, governorId);
   for (let seed = 1; seed <= trials; seed += 1) {
-    const result = model.resolveDecisiveBattle({
+    const result = model.resolveBattleCasualties({
       attackerForce: 7000,
-      defenderForce: 5200,
-      garrisonForce: 1750,
-      attackRating: 34,
-      defenseRating: 38,
-      terrainAttack: profile.attack,
-      terrainDefense: model.terrainProfile(terrain).defense,
+      defenderForce: 6950,
+      combatDifference: 34 + profile.attack - 38 - model.terrainProfile(terrain).defense,
+      technologyGap: 0,
       seed
     });
     if (result.attackerWon) wins += 1;
+    attackerCasualtyTotal += result.attackerCasualtyRate;
+    defenderCasualtyTotal += result.defenderCasualtyRate;
+    scales[result.scale] += 1;
   }
-  return Math.round(wins / trials * 1000) / 10;
+  return {
+    winRate: Math.round(wins / trials * 1000) / 10,
+    attackerCasualtyRate: Math.round(attackerCasualtyTotal / trials * 1000) / 10,
+    defenderCasualtyRate: Math.round(defenderCasualtyTotal / trials * 1000) / 10,
+    conflictRate: Math.round(scales.conflict / trials * 1000) / 10,
+    battleRate: Math.round(scales.battle / trials * 1000) / 10,
+    bloodbathRate: Math.round(scales.bloodbath / trials * 1000) / 10
+  };
 }
 
 function expectedStreakCivilizations(successChance, streak) {
@@ -55,7 +65,7 @@ const memoryStreak = [0.25, 0.35, 0.45, 0.55, 0.65, 0.75].map((chance) => ({
 console.log(JSON.stringify({
   trials,
   assumptions: {
-    battle: "7000 attackers versus 5200 defenders plus 1750 garrison",
+    battle: "7000 attackers versus 6950 defenders; casualty rates use P(attack-defense)",
     jEnding: "three consecutive civilizations reach LA 18000"
   },
   terrainWinRatesPercent: terrainRates,

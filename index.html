@@ -6,7 +6,7 @@
     <meta name="author" content="Noah Walker">
     <meta name="copyright" content="Original concept by Noah Walker">
     <title>文明摇篮：文明文字模拟</title>
-    <link rel="stylesheet" href="styles.css?v=20260712-v034">
+    <link rel="stylesheet" href="styles.css?v=20260713-v035">
   </head>
   <body>
     <main class="shell">
@@ -26,6 +26,14 @@
           <div class="setup-input-row">
             <input id="realmNameInput" name="realmName" type="text" maxlength="24" autocomplete="off" placeholder="输入国名" required>
             <button type="submit">确认国名</button>
+          </div>
+          <div class="setup-seed-control">
+            <label for="seedInput">世界种子</label>
+            <div>
+              <input id="seedInput" name="seed" inputmode="numeric" pattern="[0-9]*" placeholder="输入种子，例如 1058">
+              <button id="newGameButton" type="button">随机世界</button>
+            </div>
+            <p>同一种子会生成相同的地块、道路与随机序列。</p>
           </div>
         </form>
         <section class="setup-step" id="difficultyStep" hidden>
@@ -58,22 +66,34 @@
             <button type="button" data-governor="east-asian-man" aria-pressed="true">
               <img src="assets/governor-east-asian-man.png" alt="执政官 I 像">
               <strong>杨卫平</strong>
-              <small>汉人血统。<br>他坚信空谈误国，实干兴邦。<br>他也坚信：历来强盗要侵入，最终必送命。</small>
+              <span class="governor-copy">
+                <small class="governor-caption">汉人血统。<br>他坚信空谈误国，实干兴邦。<br>他也坚信：历来强盗要侵入，最终必送命。</small>
+                <small class="governor-skill">民生防线｜人口正增长 +8%；防御 +6。</small>
+              </span>
             </button>
             <button type="button" data-governor="white-woman">
               <img src="assets/governor-white-woman.png" alt="执政官 II 像">
               <strong>克莱尔·英格丽德·麦克劳德</strong>
-              <small>维京-凯尔特血统。<br>当然，她可以是一位优秀的执政官。<br>但她更想成为一位女武神。</small>
+              <span class="governor-copy">
+                <small class="governor-caption">维京-凯尔特血统。<br>当然，她可以是一位优秀的执政官。<br>但她更想成为一位女武神。</small>
+                <small class="governor-skill">女武神｜神学正增长 +8%；攻击 +6。</small>
+              </span>
             </button>
             <button type="button" data-governor="black-man">
               <img src="assets/governor-black-man.png" alt="执政官 III 像">
               <strong>拉特尔·“公羊”·塞万提斯三世</strong>
-              <small>拉美-非洲混血。<br>他有自己的梦想，比如有一天，殖民者能停止掠夺他的家乡。<br>当然，只是个梦想。</small>
+              <span class="governor-copy">
+                <small class="governor-caption">拉美-非洲混血。<br>他有自己的梦想，比如有一天，殖民者能停止掠夺他的家乡。<br>当然，只是个梦想。</small>
+                <small class="governor-skill">公羊之梦｜经济正增长 +10%；强化有利地形并减轻地形惩罚。</small>
+              </span>
             </button>
             <button type="button" data-governor="listener">
               <img src="assets/governor-trisolaran-listener.png" alt="三体监听员像">
               <strong>三体监听员</strong>
-              <small>三体世界的监听员。<br>你已经是身经百战见得多了。<br>你觉得三体世界不好，现在，你来建设它。</small>
+              <span class="governor-copy">
+                <small class="governor-caption">三体世界的监听员。<br>你已经是身经百战见得多了。<br>你觉得三体世界不好，现在，你来建设它。</small>
+                <small class="governor-skill">监听者｜取消战争迷雾，显示全图军事动向。</small>
+              </span>
             </button>
           </div>
           <div class="setup-actions">
@@ -500,55 +520,10 @@
             <ol id="logList"></ol>
           </article>
 
-          <aside class="rules-panel" aria-label="规则摘要">
+          <aside class="system-panel" aria-label="文明系统">
             <div class="section-head">
-              <h2>规则</h2>
-              <button id="newGameButton" type="button">新世界</button>
+              <h2>文明系统</h2>
             </div>
-            <form class="seed-form" id="seedForm" autocomplete="off">
-              <label for="seedInput">指定种子</label>
-              <div>
-                <input id="seedInput" name="seed" inputmode="numeric" pattern="[0-9]*" placeholder="例如 1058">
-                <button id="seedStartButton" type="submit" aria-label="使用指定种子开始，快捷键 Enter">
-                  <span>开始</span>
-                  <span class="inline-shortcut" aria-hidden="true">Enter</span>
-                </button>
-              </div>
-            </form>
-            <dl>
-              <div>
-                <dt>种子</dt>
-                <dd id="seedValue">----</dd>
-              </div>
-              <div>
-                <dt>存档</dt>
-                <dd id="saveStatus">自动保存开启</dd>
-              </div>
-              <div>
-                <dt>终局统计</dt>
-                <dd>每次抵达终局只记录结局种类与次数；未触发结局在统计中隐藏名称。</dd>
-              </div>
-              <div>
-                <dt>变量</dt>
-                <dd>SC、BE、LA 上限均为 20000；POP、ECO、秩序、军力与地图归属共同决定文明承压能力。</dd>
-              </div>
-              <div>
-                <dt>年流程</dt>
-                <dd>每次行动推进一年：掷 Rand 与隐藏 SPEC，结算趋势、灾变、事件、行动与系统压力。文明毁灭后需重启文明，游戏终点是抵达结局。</dd>
-              </div>
-              <div data-map-expansion>
-                <dt>地图</dt>
-                <dd>25 个区域和道路随 seed 生成。移动即时结算，地形改变攻防；两军相遇必战至一方全灭。普通执政官只能观察本国及相邻领土的军队，监听员不受战争迷雾影响。</dd>
-              </div>
-              <div>
-                <dt>结局</dt>
-                <dd>A/B 为单线封顶自动结算；K 为全图征服，L 为国家灭亡。多数结局需点击“脱离苦海”。</dd>
-              </div>
-              <div>
-                <dt>快捷键</dt>
-                <dd>按钮右上角会显示快捷键；种子可手动输入，也可用新世界自动生成。</dd>
-              </div>
-            </dl>
             <section class="watch-panel" aria-label="终局观测">
               <h2>终局观测</h2>
               <ol id="endingWatchList"></ol>
@@ -573,9 +548,9 @@
       </section>
     </main>
 
-    <script src="endings.js?v=20260712-v034"></script>
-    <script src="balance-model.js?v=20260712-v034"></script>
-    <script src="game.js?v=20260712-v034"></script>
-    <script src="desktop.js?v=20260712-v034"></script>
+    <script src="endings.js?v=20260713-v035"></script>
+    <script src="balance-model.js?v=20260713-v035"></script>
+    <script src="game.js?v=20260713-v035"></script>
+    <script src="desktop.js?v=20260713-v035"></script>
   </body>
 </html>

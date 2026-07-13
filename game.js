@@ -11,7 +11,7 @@ const ECO_METER_CAP = 300000;
 const EERF_MAX_LEVEL = 5;
 const BASE_RESTART_POP = 2600;
 const MIN_SUSTAINABLE_POP = 1200;
-const SAVE_VERSION = 9;
+const SAVE_VERSION = 10;
 const STORE_KEY = "three-sun-chronicle:v1";
 const ENDING_STORE_KEY = "three-sun-chronicle:ending:v1";
 const ENDING_STATS_STORE_KEY = "three-sun-chronicle:ending-stats:v1";
@@ -28,6 +28,7 @@ const FINAL_METRIC_ARCHIVE_LIMIT = 32;
 const MAP_OWNER_PLAYER = "player";
 const MAP_OWNER_NEUTRAL = "neutral";
 const MAP_OWNER_RIVAL = "rival";
+const MAP_OWNER_RUINS = "ruins";
 const PLAYER_ENTITY_ID = "player-realm";
 const NEUTRAL_ENTITY_ID = "free-cities";
 const NEUTRAL_COAST_ENTITY_ID = "coastal-republic";
@@ -47,22 +48,26 @@ const GOVERNORS = {
   "east-asian-man": {
     label: "杨卫平",
     caption: "汉人血统。\n他坚信空谈误国，实干兴邦。\n他也坚信：历来强盗要侵入，最终必送命。",
-    image: "assets/governor-east-asian-man.png"
+    image: "assets/governor-east-asian-man.png",
+    skill: "民生防线｜人口正增长 +8%；防御 +6。"
   },
   "white-woman": {
     label: "克莱尔·英格丽德·麦克劳德",
     caption: "维京-凯尔特血统。\n当然，她可以是一位优秀的执政官。\n但她更想成为一位女武神。",
-    image: "assets/governor-white-woman.png"
+    image: "assets/governor-white-woman.png",
+    skill: "女武神｜神学正增长 +8%；攻击 +6。"
   },
   "black-man": {
     label: "拉特尔·‘公羊’·塞万提斯三世",
     caption: "拉美-非洲混血。\n他有自己的梦想，比如有一天，殖民者能停止掠夺他的家乡。\n当然，只是个梦想。",
-    image: "assets/governor-black-man.png"
+    image: "assets/governor-black-man.png",
+    skill: "公羊之梦｜经济正增长 +10%；强化有利地形并减轻地形惩罚。"
   },
   listener: {
     label: "监听员",
     caption: "三体世界的监听员。\n你已经是身经百战见得多了。\n你觉得三体世界不好，现在，你来建设它。",
-    image: "assets/governor-trisolaran-listener.png"
+    image: "assets/governor-trisolaran-listener.png",
+    skill: "监听者｜取消战争迷雾，显示全图军事动向。"
   }
 };
 const AI_AGGRESSIONS = {
@@ -457,7 +462,7 @@ const ACTIONS = {
     delta() {
       return policyDelta("trainLegion");
     },
-    text: "军官重编队列、旗语与补给章程，军团的进攻能力得到提升。",
+    text: "胜兵先胜而后求战，败兵先战而后求胜。\n——《孙子兵法》",
     chronicleText: "军团完成整训，新的进攻章程开始生效。",
     effect() {
       applyPolicyActionEffect("trainLegion");
@@ -471,7 +476,7 @@ const ACTIONS = {
     delta() {
       return policyDelta("fieldWorks");
     },
-    text: "军队在当前驻地构筑壕沟、粮站与永久防线。",
+    text: "高筑墙、广积粮、缓称王。\n——朱升，1356年",
     chronicleText: "军团在驻地构筑工事，区域防御随之增强。",
     effect() {
       applyPolicyActionEffect("fieldWorks");
@@ -577,7 +582,7 @@ const ACTION_SHORTCUT_LABELS = ACTION_SHORTCUTS.reduce((labels, shortcut) => {
 
 const UTILITY_SHORTCUTS = [
   { key: "l", shiftKey: true, buttonId: "clearLogButton", label: "Shift+L", run: clearChronicle },
-  { key: "n", shiftKey: true, buttonId: "newGameButton", label: "Shift+N", run: startNewGame }
+  { key: "n", shiftKey: true, buttonId: "newGameButton", label: "Shift+N", run: randomizeOrStartNewWorld }
 ];
 
 const dom = {};
@@ -1092,7 +1097,13 @@ function createInitialMapState(source = {}, options = {}) {
       const owner = storedController
         ? entities[storedController].owner
         : normalizeMapOwner(stored.owner || fallbackOwner);
-      const controllerId = storedController || (Object.keys(stored).length ? entityIdForOwner(owner) : fallbackController);
+      const controllerId = storedController || (
+        owner === MAP_OWNER_RUINS
+          ? null
+          : Object.keys(stored).length
+            ? entityIdForOwner(owner)
+            : fallbackController
+      );
       const ownerScale = owner === MAP_OWNER_RIVAL
         ? config.rivalPower
         : owner === MAP_OWNER_NEUTRAL
@@ -1166,25 +1177,39 @@ function createInitialArmies(current = {}, difficulty = "normal") {
   const sourceLookup = new Map(sourceArmies.map((army) => [army.id, army]));
 
   const defeatedEntityIds = Array.isArray(current.defeatedEntityIds) ? current.defeatedEntityIds : [];
-  return defaults
+  const defaultIds = new Set(defaults.map((army) => army.id));
+  const normalizedDefaults = defaults
     .filter((fallback) => !defeatedEntityIds.includes(fallback.entityId))
     .filter((fallback) => !hasStoredRoster || sourceLookup.has(fallback.id))
-    .map((fallback) => {
-    const stored = sourceLookup.get(fallback.id) || {};
-    return {
-      id: fallback.id,
-      name: String(stored.name || fallback.name),
-      entityId: POLITICAL_ENTITY_IDS.includes(stored.entityId)
-        ? stored.entityId
-        : fallback.entityId,
-      regionId: mapRegionById(stored.regionId) ? stored.regionId : fallback.regionId,
-      force: clamp(Math.round(finiteOr(stored.force, fallback.force)), 0, MILITARY_FORCE_CAP),
-      attackBonus: clamp(Math.round(finiteOr(stored.attackBonus, fallback.attackBonus)), -30, 80),
-      defenseBonus: clamp(Math.round(finiteOr(stored.defenseBonus, fallback.defenseBonus)), -30, 80),
-      posture: ["attack", "defense", "march"].includes(stored.posture) ? stored.posture : "defense",
-      lastMovedTurn: Math.round(finiteOr(stored.lastMovedTurn, -1))
-    };
-    });
+    .map((fallback) => normalizeArmyRecord(sourceLookup.get(fallback.id), fallback));
+  const customArmies = sourceArmies
+    .filter((army) => army && !defaultIds.has(army.id))
+    .filter((army) => POLITICAL_ENTITY_IDS.includes(army.entityId) && !defeatedEntityIds.includes(army.entityId))
+    .map((army, index) => normalizeArmyRecord(army, {
+      id: String(army.id || `field-army-${index}`),
+      name: String(army.name || "野战军团"),
+      entityId: army.entityId,
+      regionId: mapRegionById(army.regionId)?.id || "capital",
+      force: finiteOr(army.force, 0),
+      attackBonus: finiteOr(army.attackBonus, 0),
+      defenseBonus: finiteOr(army.defenseBonus, 0)
+    }));
+  return [...normalizedDefaults, ...customArmies];
+}
+
+function normalizeArmyRecord(stored = {}, fallback) {
+  const safe = stored && typeof stored === "object" ? stored : {};
+  return {
+    id: String(safe.id || fallback.id),
+    name: String(safe.name || fallback.name),
+    entityId: POLITICAL_ENTITY_IDS.includes(safe.entityId) ? safe.entityId : fallback.entityId,
+    regionId: mapRegionById(safe.regionId) ? safe.regionId : fallback.regionId,
+    force: clamp(Math.round(finiteOr(safe.force, fallback.force)), 0, MILITARY_FORCE_CAP),
+    attackBonus: clamp(Math.round(finiteOr(safe.attackBonus, fallback.attackBonus)), -30, 80),
+    defenseBonus: clamp(Math.round(finiteOr(safe.defenseBonus, fallback.defenseBonus)), -30, 80),
+    posture: ["attack", "defense", "march"].includes(safe.posture) ? safe.posture : "defense",
+    lastMovedTurn: Math.round(finiteOr(safe.lastMovedTurn, -1))
+  };
 }
 
 function createInitialMilitaryState(current = {}, options = {}) {
@@ -1237,7 +1262,7 @@ function normalizeMilitaryState(source = {}, current = {}) {
 }
 
 function normalizeMapOwner(owner) {
-  return [MAP_OWNER_PLAYER, MAP_OWNER_NEUTRAL, MAP_OWNER_RIVAL].includes(owner)
+  return [MAP_OWNER_PLAYER, MAP_OWNER_NEUTRAL, MAP_OWNER_RIVAL, MAP_OWNER_RUINS].includes(owner)
     ? owner
     : MAP_OWNER_NEUTRAL;
 }
@@ -1390,10 +1415,28 @@ function selectedArmy() {
 
 function setPlayerMilitaryForce(value) {
   const nextForce = clamp(Math.round(finiteOr(value, 0)), 0, MILITARY_FORCE_CAP);
-  const playerArmy = primaryPlayerArmy();
-  if (playerArmy) playerArmy.force = nextForce;
-  state.military.force = nextForce;
-  return nextForce;
+  const playerArmies = entityArmies(PLAYER_ENTITY_ID);
+  const currentForce = playerArmies.reduce((sum, army) => sum + army.force, 0);
+  let delta = nextForce - currentForce;
+  if (delta > 0 && playerArmies.length) {
+    const receivingArmy = selectedArmy()?.entityId === PLAYER_ENTITY_ID ? selectedArmy() : playerArmies[0];
+    receivingArmy.force = clamp(receivingArmy.force + delta, 0, MILITARY_FORCE_CAP);
+  } else if (delta < 0) {
+    let remainingLoss = Math.abs(delta);
+    [...playerArmies].sort((left, right) => right.force - left.force).forEach((army) => {
+      if (remainingLoss <= 0) return;
+      const loss = Math.min(army.force, remainingLoss);
+      army.force -= loss;
+      remainingLoss -= loss;
+    });
+  }
+  return syncPlayerMilitaryForce();
+}
+
+function syncPlayerMilitaryForce() {
+  const total = clamp(Math.round(entityMilitaryForce(PLAYER_ENTITY_ID)), 0, MILITARY_FORCE_CAP);
+  state.military.force = total;
+  return total;
 }
 
 function armyOwner(army) {
@@ -1465,7 +1508,7 @@ function policyDisabledReason(policyId, current = snapshot()) {
   if (!decision) return "未知政策";
   const record = state.specialDecisionState?.[policyId] || {};
   if (finiteOr(record.cooldown, 0) > 0) return `冷却 ${formatNumber(record.cooldown)} 年`;
-  if (policyId === "levyHost" && !primaryPlayerArmy()) {
+  if (policyId === "levyHost") {
     const selectedRegion = mapStateRegion(state.selectedRegionId);
     if (selectedRegion?.controllerId !== PLAYER_ENTITY_ID) return "先在地图上选择一块本国领土";
   }
@@ -1503,27 +1546,31 @@ function applyPolicyActionEffect(policyId) {
 function applyMilitaryPolicy(decision) {
   if (!state.military) state.military = createInitialMilitaryState(snapshot(), { difficulty: state.difficulty });
   const military = decision.military || {};
-  if (decision === SPECIAL_DECISIONS.levyHost && !primaryPlayerArmy()) {
+  if (decision === SPECIAL_DECISIONS.levyHost) {
     const selectedRegion = mapStateRegion(state.selectedRegionId);
     const recruitmentRegion = selectedRegion?.controllerId === PLAYER_ENTITY_ID
       ? selectedRegion
       : entityRegions(PLAYER_ENTITY_ID)[0];
     if (recruitmentRegion) {
-      const force = maximumSustainableLevy();
-      state.military.armies.push({
-        id: PLAYER_ARMY_ID,
-        name: "新生军团",
+      const existingArmy = armiesAtRegion(recruitmentRegion.id)
+        .find((army) => army.entityId === PLAYER_ENTITY_ID);
+      const force = primaryPlayerArmy() ? finiteOr(military.force, 0) : maximumSustainableLevy();
+      const recruitedArmy = existingArmy || {
+        id: primaryPlayerArmy() ? `player-field-army-${state.turn}-${state.specialDecisionState?.levyHost?.used || 1}` : PLAYER_ARMY_ID,
+        name: existingArmy ? existingArmy.name : primaryPlayerArmy() ? "地方军团" : "新生军团",
         entityId: PLAYER_ENTITY_ID,
         regionId: recruitmentRegion.id,
-        force,
+        force: 0,
         attackBonus: 2,
         defenseBonus: 4,
         posture: "defense",
         lastMovedTurn: state.turn - 1
-      });
-      state.selectedArmyId = PLAYER_ARMY_ID;
+      };
+      if (!existingArmy) state.military.armies.push(recruitedArmy);
+      recruitedArmy.force = clamp(recruitedArmy.force + force, 0, MILITARY_FORCE_CAP);
+      state.selectedArmyId = recruitedArmy.id;
       state.selectedRegionId = recruitmentRegion.id;
-      state.military.force = force;
+      syncPlayerMilitaryForce();
     }
   } else {
     setPlayerMilitaryForce(finiteOr(state.military.force, 0) + finiteOr(military.force, 0));
@@ -1729,11 +1776,7 @@ function cacheDom() {
   dom.specialTitle = document.querySelector("#specialTitle");
   dom.specialText = document.querySelector("#specialText");
   dom.specialDelta = document.querySelector("#specialDelta");
-  dom.seedValue = document.querySelector("#seedValue");
-  dom.seedForm = document.querySelector("#seedForm");
   dom.seedInput = document.querySelector("#seedInput");
-  dom.seedStartButton = document.querySelector("#seedStartButton");
-  dom.saveStatus = document.querySelector("#saveStatus");
   dom.dashboardToggleButton = document.querySelector("#dashboardToggleButton");
   dom.mapExpansionToggle = document.querySelector("#mapExpansionToggle");
   dom.mapExpansionSections = Array.from(document.querySelectorAll("[data-map-expansion]"));
@@ -1878,8 +1921,7 @@ function bindEvents() {
     button.addEventListener("click", () => advanceRound(button.dataset.action));
   });
 
-  dom.newGameButton.addEventListener("click", startNewGame);
-  dom.seedForm?.addEventListener("submit", startNewGameFromSeed);
+  dom.newGameButton?.addEventListener("click", randomizeOrStartNewWorld);
   dom.dashboardToggleButton?.addEventListener("click", toggleDashboardMode);
   dom.metricFocusButtons.forEach((button) => {
     button.addEventListener("click", () => setFocusMetric(button.dataset.metricFocus));
@@ -1971,16 +2013,19 @@ function startNewGame() {
   startNewGameWithSeed(Date.now());
 }
 
-function startNewGameFromSeed(event) {
-  event.preventDefault();
-  const seedText = dom.seedInput?.value.trim() || "";
-  if (!seedText) {
+function randomizeOrStartNewWorld() {
+  if (state?.setupComplete) {
     startNewGame();
     return;
   }
 
-  if (!confirmNewWorld()) return;
-  startNewGameWithSeed(seedText);
+  const draftName = String(dom.realmNameInput?.value || state?.realmName || "").trim().slice(0, 24);
+  cancelAutoRun();
+  clearStoredEnding();
+  state = createNewState(Date.now());
+  state.realmName = draftName;
+  saveState();
+  render();
 }
 
 function startNewGameWithSeed(seedValue) {
@@ -2000,8 +2045,11 @@ function confirmRealmName(event) {
     return;
   }
 
-  state.realmName = realmName;
-  state.setupStage = "difficulty";
+  const requestedSeed = dom.seedInput?.value.trim() || state.seed;
+  const nextState = createNewState(requestedSeed);
+  nextState.realmName = realmName;
+  nextState.setupStage = "difficulty";
+  state = nextState;
   if (state.map?.entities?.[PLAYER_ENTITY_ID]) {
     state.map.entities[PLAYER_ENTITY_ID].name = realmName;
   }
@@ -2191,7 +2239,6 @@ function hasMetricCharts() {
 function clearChronicle() {
   state.log = [];
   saveState();
-  if (dom.saveStatus) dom.saveStatus.textContent = saveStatusText();
   renderLog();
 }
 
@@ -2801,14 +2848,15 @@ function resolveMilitaryYear(action, rand) {
 
   if (action === ACTIONS.militaryCampaign) {
     state.military.campaigns += 1;
-    return attemptPlayerOffensive(rand, 14);
+    return attemptPlayerOffensive(rand, 28);
   }
 
   const attackInterval = Math.max(
     3,
     Math.round(difficultyConfig().enemyAttackInterval * aiAggressionConfig().intervalScale)
   );
-  if ((Math.floor(rand / 10) + state.turn) % attackInterval === 0 && hasDefensiveFrontier()) {
+  const civilizationAge = Math.max(0, state.turn - finiteOr(state.currentCivilization?.startTurn, 0));
+  if (civilizationAge >= 12 && (Math.floor(rand / 10) + state.turn) % attackInterval === 0 && hasDefensiveFrontier()) {
     return attemptRivalOffensive(rand);
   }
 
@@ -3004,14 +3052,14 @@ function decayMilitaryModifiers() {
   state.military.defenseModifier = Math.round(finiteOr(state.military.defenseModifier, 0) * 0.92);
 }
 
-function militaryStats(current = snapshot(), region = null) {
+function militaryStats(current = snapshot(), region = null, armyOverride = null) {
   ensureMilitaryMapState();
-  const army = primaryPlayerArmy();
+  const army = armyOverride || primaryPlayerArmy();
   const governor = governorBalanceEffects();
   const entity = politicalEntityById(PLAYER_ENTITY_ID);
   const strategy = politicalStrategyConfig(entity?.strategy);
   const counts = mapOwnerCounts();
-  const force = finiteOr(state.military.force, 0);
+  const force = armyOverride ? finiteOr(armyOverride.force, 0) : finiteOr(state.military.force, 0);
   const economyIndex = current.eco <= 0 ? 0 : clamp(Math.log10(current.eco + 10) / 6, 0, 1);
   const beliefIndex = clamp(current.be / CAP, 0, 1);
   const orderIndex = clamp(current.stability, 0, 100) / 100;
@@ -3061,7 +3109,7 @@ function militaryTechnologyBonus(army) {
 
 function armyCombatStats(army, region = mapStateRegion(army?.regionId)) {
   if (!army) return { force: 0, attack: 0, defense: 0 };
-  if (army.entityId === PLAYER_ENTITY_ID) return militaryStats(snapshot(), region);
+  if (army.entityId === PLAYER_ENTITY_ID) return militaryStats(snapshot(), region, army);
 
   const owner = armyOwner(army);
   const entity = politicalEntityById(army.entityId);
@@ -3121,7 +3169,22 @@ function regionDefenseScore(region, rand = 0) {
 }
 
 function hasAttackTarget() {
-  return Boolean(selectAttackTarget());
+  if (selectAttackTarget()) return true;
+  const playerArmy = selectedArmy()?.entityId === PLAYER_ENTITY_ID ? selectedArmy() : primaryPlayerArmy();
+  if (!playerArmy) return false;
+  const queue = [playerArmy.regionId];
+  const visited = new Set(queue);
+  while (queue.length) {
+    const regionId = queue.shift();
+    if (attackTargetsForArmy({ ...playerArmy, regionId }).length) return true;
+    roadNeighbors(regionId).forEach((neighborId) => {
+      const region = mapStateRegion(neighborId);
+      if (!region || region.controllerId !== playerArmy.entityId || visited.has(neighborId)) return;
+      visited.add(neighborId);
+      queue.push(neighborId);
+    });
+  }
+  return false;
 }
 
 function hasDefensiveFrontier() {
@@ -3197,9 +3260,14 @@ function attemptPlayerOffensive(rand, campaignBonus = 0) {
   let report = null;
   let captured = 0;
   for (let step = 0; step < 3 && army.force > 0; step += 1) {
-    const candidates = attackTargetsForArmy(army)
+    let candidates = attackTargetsForArmy(army)
       .map((regionId) => mapStateRegion(regionId))
       .filter(Boolean);
+    if (!candidates.length && marchArmyToNearestFrontier(army)) {
+      candidates = attackTargetsForArmy(army)
+        .map((regionId) => mapStateRegion(regionId))
+        .filter(Boolean);
+    }
     if (!candidates.length) break;
     const target = candidates[(rand + step * 97 + state.turn * 13) % candidates.length];
     report = resolvePlayerDeploymentBattle(army, target, rand + step * 211, campaignBonus);
@@ -3215,12 +3283,36 @@ function attemptPlayerOffensive(rand, campaignBonus = 0) {
   return report;
 }
 
+function marchArmyToNearestFrontier(army) {
+  if (!army) return false;
+  const queue = [army.regionId];
+  const visited = new Set(queue);
+  while (queue.length) {
+    const regionId = queue.shift();
+    const hostileNeighbors = roadNeighbors(regionId).filter((neighborId) => {
+      const neighbor = mapStateRegion(neighborId);
+      return neighbor && neighbor.controllerId !== army.entityId;
+    });
+    if (hostileNeighbors.length) {
+      army.regionId = regionId;
+      return true;
+    }
+    roadNeighbors(regionId).forEach((neighborId) => {
+      const neighbor = mapStateRegion(neighborId);
+      if (!neighbor || neighbor.controllerId !== army.entityId || visited.has(neighborId)) return;
+      visited.add(neighborId);
+      queue.push(neighborId);
+    });
+  }
+  return false;
+}
+
 function attemptRivalOffensive(rand) {
   const plan = selectEnemyOffensivePlan();
   if (!plan) return updateMapEvent("边境静默", "敌国没有找到可突破的道路。", "none");
 
   const { army, target } = plan;
-  return resolveDecisiveRegionBattle(army, target, rand, aiAggressionConfig().attackBonus);
+  return resolveRegionBattle(army, target, rand, aiAggressionConfig().attackBonus);
 }
 
 function nextStrategicRand(maximum = 10000) {
@@ -3353,47 +3445,61 @@ function resolvePlayerDeploymentBattle(army, target, rand, campaignBonus = 0) {
   const previousOwner = mapRegionOwner(target);
   const previousController = target.controllerId;
   if (previousOwner === MAP_OWNER_NEUTRAL) makeEntityHostile(previousController);
-  return resolveDecisiveRegionBattle(army, target, rand, campaignBonus);
+  return resolveRegionBattle(army, target, rand, campaignBonus);
 }
 
-function resolveDecisiveRegionBattle(attacker, target, rand, attackBonus = 0) {
+function resolveRegionBattle(attacker, target, rand, attackBonus = 0) {
   const definition = mapRegionById(target.id);
   const defender = defendingArmyForRegion(target);
   const attackerEntity = politicalEntityById(attacker.entityId);
   const defenderEntity = politicalEntityById(target.controllerId);
+  const sourceRegionId = attacker.regionId;
   const attackerStats = armyCombatStats(attacker, target);
   const defenderStats = defender
     ? armyCombatStats(defender, target)
     : { force: 0, attack: 0, defense: regionDefenseScore(target, rand) };
-  const terrain = terrainCombatProfile(target, attacker);
+  const attackTerrain = terrainCombatProfile(target, attacker);
+  const defenseTerrain = terrainCombatProfile(target, defender);
   const garrisonForce = Math.round(350 + finiteOr(target.fortification, definition?.strength || 40) * 28);
-  const result = BALANCE_MODEL.resolveDecisiveBattle({
+  const defenderEngagedForce = finiteOr(defender?.force, 0) + garrisonForce;
+  const technologyGap = scienceEraIndexForEntity(attacker.entityId) - scienceEraIndexForEntity(target.controllerId);
+  const combatDifference =
+    attackerStats.attack +
+    attackBonus +
+    attackTerrain.attack -
+    defenderStats.defense -
+    defenseTerrain.defense;
+  const result = BALANCE_MODEL.resolveBattleCasualties({
     attackerForce: attacker.force,
-    defenderForce: defender?.force || 0,
-    garrisonForce,
-    attackRating: attackerStats.attack + attackBonus,
-    defenseRating: defenderStats.defense,
-    terrainAttack: terrain.attack,
-    terrainDefense: terrainCombatProfile(target, defender).defense,
+    defenderForce: defenderEngagedForce,
+    combatDifference,
+    technologyGap,
     seed: rand
   });
 
   attacker.force = clamp(result.attackerSurvivors, 0, MILITARY_FORCE_CAP);
-  if (defender) defender.force = clamp(result.defenderSurvivors, 0, MILITARY_FORCE_CAP);
+  if (defender) {
+    const armyShare = defenderEngagedForce > 0 ? defender.force / defenderEngagedForce : 0;
+    const armyCasualties = Math.round(result.defenderCasualties * armyShare);
+    defender.force = clamp(defender.force - armyCasualties, 0, MILITARY_FORCE_CAP);
+  }
   attacker.posture = "attack";
   const previousController = target.controllerId;
   const previousOwner = mapRegionOwner(target);
+  let retreatRegion = null;
   if (result.attackerWon) {
     setRegionController(target, attacker.entityId);
     attacker.regionId = target.id;
-    target.fortification = clamp(Math.round(target.fortification * 0.68), 5, 140);
+    retreatRegion = retreatArmyToAdjacent(defender, target.id, previousController);
   } else {
-    target.fortification = clamp(Math.round(target.fortification * 0.84), 5, 140);
+    retreatRegion = retreatArmyToAdjacent(attacker, target.id, attacker.entityId, sourceRegionId);
   }
+  const heaviestLoss = Math.max(result.attackerCasualtyRate, result.defenderCasualtyRate);
+  target.fortification = clamp(Math.round(target.fortification * (0.94 - heaviestLoss * 0.24)), 5, 140);
 
   if (attacker.entityId === PLAYER_ENTITY_ID || previousController === PLAYER_ENTITY_ID) {
     state.military.warWeariness = clamp(
-      state.military.warWeariness + (result.attackerWon === (attacker.entityId === PLAYER_ENTITY_ID) ? 5 : 10),
+      state.military.warWeariness + Math.round(3 + heaviestLoss * 9),
       0,
       100
     );
@@ -3404,10 +3510,13 @@ function resolveDecisiveRegionBattle(attacker, target, rand, attackBonus = 0) {
   removeDestroyedArmies();
   const eliminated = eliminateDefeatedEntities();
   const winner = result.attackerWon ? attackerEntity : defenderEntity;
-  const battleLabel = result.scale === "bloodbath" ? "血战" : "战役";
+  const battleLabel = result.scale === "bloodbath" ? "血战" : result.scale === "conflict" ? "冲突" : "战役";
   const title = `${definition?.name || target.id}${battleLabel}`;
-  const text = `${attackerEntity?.name || "进攻方"}和${defenderEntity?.name || "守军"}的军队在${definition?.name || target.id}相遇，并决死厮杀。最终${winner?.name || "守军"}取得了胜利。` +
-    ` 进攻方损失 ${formatNumber(result.attackerCasualties)}，守军损失 ${formatNumber(result.defenderCasualties)}。${entityEliminationText(eliminated)}`;
+  const retreatText = retreatRegion
+    ? `败军撤往${mapRegionById(retreatRegion.id)?.name || retreatRegion.id}。`
+    : "败军无路可退，残部就地溃散。";
+  const text = `${attackerEntity?.name || "进攻方"}和${defenderEntity?.name || "守军"}的军队在${definition?.name || target.id}相遇。最终${winner?.name || "守军"}取得了胜利，${retreatText}` +
+    ` 进攻方阵亡 ${formatNumber(result.attackerCasualties)}（${formatPercent(result.attackerCasualtyRate)}），守军阵亡 ${formatNumber(result.defenderCasualties)}（${formatPercent(result.defenderCasualtyRate)}）。${entityEliminationText(eliminated)}`;
   const eventType = result.attackerWon
     ? attacker.entityId === PLAYER_ENTITY_ID
       ? previousOwner === MAP_OWNER_NEUTRAL ? "expansion" : "conquest"
@@ -3421,9 +3530,30 @@ function resolveDecisiveRegionBattle(attacker, target, rand, attackBonus = 0) {
   return report;
 }
 
+function scienceEraIndexForEntity(entityId) {
+  if (entityId === PLAYER_ENTITY_ID) return eraIndexFor(state.sc, SCIENCE_ERAS);
+  const technology = clamp(finiteOr(politicalEntityById(entityId)?.technology, 0), 0, 100);
+  return eraIndexFor(technology / 100 * CAP, SCIENCE_ERAS);
+}
+
+function retreatArmyToAdjacent(army, contestedRegionId, controllerId, preferredRegionId = null) {
+  if (!army || army.force <= 0) return null;
+  const candidates = roadNeighbors(contestedRegionId)
+    .map((regionId) => mapStateRegion(regionId))
+    .filter((region) => region?.controllerId === controllerId);
+  const destination = candidates.find((region) => region.id === preferredRegionId) || candidates[0] || null;
+  if (!destination) {
+    army.force = 0;
+    return null;
+  }
+  army.regionId = destination.id;
+  army.posture = "defense";
+  return destination;
+}
+
 function removeDestroyedArmies() {
   state.military.armies = armies().filter((army) => army.force > 0);
-  state.military.force = entityMilitaryForce(PLAYER_ENTITY_ID);
+  syncPlayerMilitaryForce();
   if (!armyById(state.selectedArmyId)) {
     state.selectedArmyId = primaryPlayerArmy()?.id || armies()[0]?.id || null;
   }
@@ -3461,8 +3591,8 @@ function collapseMapState(cause) {
   const blueprint = normalizeMapBlueprint(state?.map, seed);
   const entities = createPoliticalEntities(state?.map?.entities, state?.realmName || DEFAULT_REALM_NAME, seed);
   Object.values(entities).forEach((entity) => {
-    entity.eliminated = entity.id !== RIVAL_ENTITY_ID;
-    entity.eliminatedYear = entity.eliminated ? state.turn : null;
+    entity.eliminated = true;
+    entity.eliminatedYear = state.turn;
   });
   return {
     seed,
@@ -3477,8 +3607,8 @@ function collapseMapState(cause) {
     },
     regions: MAP_REGIONS.map((region) => ({
       id: region.id,
-      owner: MAP_OWNER_RIVAL,
-      controllerId: RIVAL_ENTITY_ID,
+      owner: MAP_OWNER_RUINS,
+      controllerId: null,
       fortification: region.strength
     }))
   };
@@ -5531,6 +5661,9 @@ function renderSetup() {
   if (dom.realmNameInput && document.activeElement !== dom.realmNameInput) {
     dom.realmNameInput.value = state?.realmName || "";
   }
+  if (dom.seedInput && document.activeElement !== dom.seedInput) {
+    dom.seedInput.value = String(state?.seed || "");
+  }
   if (dom.setupRealmPreview) dom.setupRealmPreview.textContent = state?.realmName || DEFAULT_REALM_NAME;
   dom.difficultyButtons.forEach((button) => {
     button.setAttribute("aria-pressed", button.dataset.difficulty === normalizeDifficulty(state?.difficulty) ? "true" : "false");
@@ -5543,10 +5676,12 @@ function renderSetup() {
     const governor = GOVERNORS[governorId];
     button.setAttribute("aria-pressed", governorId === normalizeGovernorId(state?.governorId) ? "true" : "false");
     const name = button.querySelector("strong");
-    const copy = button.querySelector("small");
+    const caption = button.querySelector(".governor-caption");
+    const skill = button.querySelector(".governor-skill");
     if (name) name.textContent = governor.label;
-    if (copy) copy.textContent = governor.caption;
-    button.title = governor.caption;
+    if (caption) caption.textContent = governor.caption;
+    if (skill) skill.textContent = governor.skill;
+    button.title = `${governor.caption}\n${governor.skill}`;
   });
   dom.mapModeButtons.forEach((button) => {
     const mode = state?.mapUiExpanded === false ? "collapsed" : "expanded";
@@ -5621,8 +5756,6 @@ function render() {
   if (dom.laStatus) dom.laStatus.textContent = laStatusText();
   dom.weatherLabel.textContent = state.weather;
   dom.endingLabel.textContent = state.ending;
-  dom.seedValue.textContent = state.seed;
-  if (dom.saveStatus) dom.saveStatus.textContent = saveStatusText();
   renderEndingWatch();
   renderEerfDetails();
   renderEndingStats();
@@ -6021,6 +6154,7 @@ function mapOwnerLabel(regionOrOwner) {
   }
   if (owner === MAP_OWNER_PLAYER) return "本国";
   if (owner === MAP_OWNER_RIVAL) return "敌国";
+  if (owner === MAP_OWNER_RUINS) return "文明废墟";
   return "中立";
 }
 
@@ -6554,7 +6688,7 @@ function actionDisabledReason(action) {
     const playerArmy = selectedArmy()?.entityId === PLAYER_ENTITY_ID ? selectedArmy() : primaryPlayerArmy();
     if (playerArmy?.lastMovedTurn >= state.turn) return "军队本年已部署";
     if (!hasAttackTarget()) return "没有可进攻边境";
-    if (finiteOr(state.military?.force, 0) < 1800) return "军力不足";
+    if (finiteOr(playerArmy?.force, 0) < 1800) return "选中军队兵力不足";
   }
 
   if (action === ACTIONS.buildEerf && state.eerfLevel > 0) return "EERF 已建成";
@@ -7662,26 +7796,6 @@ function normalizeCivilizationArchiveEntry(entry, fallbackCivilization = 1) {
       ? safe.metricSamples.slice(-CIVILIZATION_SAMPLE_LIMIT).map((sample) => normalizeMetricSample(sample))
       : fallbackSamples
   };
-}
-
-function saveStatusText() {
-  const savedAt = formatSavedAt(state.lastSavedAt);
-  return state.loadedFromSave
-    ? `已继续上次存档；最近保存 ${savedAt}`
-    : `自动保存开启；最近保存 ${savedAt}`;
-}
-
-function formatSavedAt(value) {
-  if (!value) return "尚未写入";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "未知时间";
-
-  return new Intl.DateTimeFormat("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(date);
 }
 
 function formatNumber(value) {

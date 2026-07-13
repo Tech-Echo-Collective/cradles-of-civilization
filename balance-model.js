@@ -41,54 +41,52 @@
     };
   }
 
-  function resolveDecisiveBattle(input = {}) {
+  function casualtyProbability(combatDifference, engagementIntensity, hasEraAdvantage) {
+    const minimum = 0.05;
+    const maximum = hasEraAdvantage ? 0.95 : 0.8;
+    const scale = hasEraAdvantage ? 16 : 24;
+    const logistic = 1 / (1 + Math.exp(-Number(combatDifference || 0) / scale));
+    const intensity = clamp(Number(engagementIntensity) || 0, 0, 1);
+    return clamp(minimum + (maximum - minimum) * intensity * logistic, minimum, maximum);
+  }
+
+  function resolveBattleCasualties(input = {}) {
     const attackerForce = Math.max(0, Math.round(Number(input.attackerForce) || 0));
     const defenderForce = Math.max(0, Math.round(Number(input.defenderForce) || 0));
-    const garrisonForce = Math.max(0, Math.round(Number(input.garrisonForce) || 0));
     const seed = Math.abs(Math.round(Number(input.seed) || 1));
-    const swing = 0.92 + (seed % 1601) / 10000;
-    const attackEfficiency = clamp(
-      (1 + (Number(input.attackRating) || 0) / 180) * (1 + (Number(input.terrainAttack) || 0) / 100) * swing,
-      0.35,
-      2.2
-    );
-    const defenseEfficiency = clamp(
-      (1 + (Number(input.defenseRating) || 0) / 180) * (1 + (Number(input.terrainDefense) || 0) / 100) / swing,
-      0.35,
-      2.35
-    );
-    const attackPower = attackerForce * attackEfficiency;
-    const defenseBase = defenderForce + garrisonForce;
-    const defensePower = defenseBase * defenseEfficiency;
-    const attackerWon = attackPower >= defensePower && attackerForce > 0;
-    const engaged = attackerForce + defenderForce + garrisonForce;
-
-    if (attackerWon) {
-      const ratio = attackPower > 0 ? clamp(defensePower / attackPower, 0, 0.9999) : 1;
-      const survivors = Math.max(1, Math.round(attackerForce * Math.sqrt(1 - ratio * ratio) * 0.94));
-      return {
-        attackerWon: true,
-        attackerSurvivors: survivors,
-        defenderSurvivors: 0,
-        attackerCasualties: attackerForce - survivors,
-        defenderCasualties: defenderForce,
-        engaged,
-        scale: engaged >= 20000 ? "bloodbath" : "battle"
-      };
-    }
-
-    const ratio = defensePower > 0 ? clamp(attackPower / defensePower, 0, 0.9999) : 1;
-    const combinedSurvivors = Math.max(1, Math.round(defenseBase * Math.sqrt(1 - ratio * ratio) * 0.94));
-    const defenderShare = defenseBase > 0 ? defenderForce / defenseBase : 0;
-    const defenderSurvivors = Math.max(0, Math.round(combinedSurvivors * defenderShare));
+    const technologyGap = Math.round(Number(input.technologyGap) || 0);
+    const hasEraAdvantage = Math.abs(technologyGap) >= 1;
+    const engagementIntensity = 0.08 + ((seed * 73) % 9201) / 10000;
+    const randomSwing = ((seed * 37) % 17) - 8;
+    const difference = Number(input.combatDifference || 0) + technologyGap * 18 + randomSwing;
+    const defenderCasualtyRate = casualtyProbability(difference, engagementIntensity, hasEraAdvantage);
+    const attackerCasualtyRate = casualtyProbability(-difference, engagementIntensity, hasEraAdvantage);
+    const attackerCasualties = Math.min(attackerForce, Math.max(attackerForce > 0 ? 1 : 0, Math.round(attackerForce * attackerCasualtyRate)));
+    const defenderCasualties = Math.min(defenderForce, Math.max(defenderForce > 0 ? 1 : 0, Math.round(defenderForce * defenderCasualtyRate)));
+    const attackerSurvivors = attackerForce - attackerCasualties;
+    const defenderSurvivors = defenderForce - defenderCasualties;
+    const victoryProbability = 1 / (1 + Math.exp(-difference / 18));
+    const victoryRoll = ((seed * 97) % 10000) / 10000;
+    const attackerWon = victoryRoll < victoryProbability;
+    const maximumCasualtyRate = Math.max(attackerCasualtyRate, defenderCasualtyRate);
+    const scale = maximumCasualtyRate > 0.8
+      ? "bloodbath"
+      : maximumCasualtyRate > 0.1
+        ? "battle"
+        : "conflict";
     return {
-      attackerWon: false,
-      attackerSurvivors: 0,
+      attackerWon,
+      attackerSurvivors,
       defenderSurvivors,
-      attackerCasualties: attackerForce,
-      defenderCasualties: Math.max(0, defenderForce - defenderSurvivors),
-      engaged,
-      scale: engaged >= 20000 ? "bloodbath" : "battle"
+      attackerCasualties,
+      defenderCasualties,
+      attackerCasualtyRate,
+      defenderCasualtyRate,
+      engagementIntensity,
+      combatDifference: difference,
+      victoryProbability,
+      technologyGap,
+      scale
     };
   }
 
@@ -108,7 +106,8 @@
     GOVERNOR_EFFECTS,
     governorEffects,
     terrainProfile,
-    resolveDecisiveBattle,
+    casualtyProbability,
+    resolveBattleCasualties,
     territoryDevelopmentEffects
   });
 })(typeof window !== "undefined" ? window : globalThis);
