@@ -10,6 +10,7 @@ const maxYears = Math.max(80, Number.parseInt(process.argv[3] || "720", 10));
 const requestedDifficulty = process.argv[4] || "normal";
 const requestedStrategy = process.argv[5] || "all";
 const requestedAggression = process.argv[6] || "standard";
+const requestedMapMode = process.argv[7] || "expanded";
 const difficulties = requestedDifficulty === "all"
   ? ["easy", "normal", "hard", "ultimate"]
   : [requestedDifficulty];
@@ -48,6 +49,7 @@ context.window.history = context.history;
 context.window.location = context.location;
 
 vm.runInContext(fs.readFileSync(path.join(projectRoot, "endings.js"), "utf8"), context, { filename: "endings.js" });
+vm.runInContext(fs.readFileSync(path.join(projectRoot, "balance-model.js"), "utf8"), context, { filename: "balance-model.js" });
 vm.runInContext(fs.readFileSync(path.join(projectRoot, "game.js"), "utf8"), context, { filename: "game.js" });
 
 vm.runInContext(`
@@ -67,12 +69,13 @@ vm.runInContext(`
     return actionIds.find((actionId) => __canAction(actionId)) || null;
   }
 
-  function __prepareSimulation(seed, difficulty, aggression) {
+  function __prepareSimulation(seed, difficulty, aggression, mapMode) {
     localStorage.clear();
     state = createNewState(seed);
     state.realmName = "模拟国度";
     state.difficulty = normalizeDifficulty(difficulty);
     state.aiAggression = normalizeAiAggression(aggression);
+    state.mapUiExpanded = mapMode !== "collapsed";
     state.setupComplete = true;
     state.setupStage = "complete";
     state.map = createInitialMapState({}, {
@@ -82,6 +85,8 @@ vm.runInContext(`
     });
     state.military = createInitialMilitaryState(snapshot(), { difficulty: state.difficulty });
     state.selectedArmyId = PLAYER_ARMY_ID;
+    state.selectedRegionId = state.startingRegionId;
+    alignArmiesWithEntityTerritories();
     state.log = [];
   }
 
@@ -151,7 +156,7 @@ vm.runInContext(`
     }
     if (strategy === "anarchy") return __firstAction(["suppressBelief", "science", "population", "hibernate"]);
     if (strategy === "memory") {
-      if (state.la < LA_CAP) return __firstAction(["arts", "economy", "population"]);
+      if (state.la < J_MEMORY_LA_THRESHOLD) return __maintainCivilization("arts");
       return __firstAction(["balance", "economy", "hibernate"]);
     }
     return __firstAction(["arts", "science", "belief", "balance"]);
@@ -166,7 +171,8 @@ vm.runInContext(`
       balance: "F",
       authority: "H",
       conquest: "K",
-      collapse: "G"
+      collapse: "G",
+      memory: "J"
     }[strategy] || null;
   }
 
@@ -190,8 +196,8 @@ vm.runInContext(`
     return null;
   }
 
-  function __runSimulation(seed, strategy, difficulty, aggression, limit) {
-    __prepareSimulation(seed, difficulty, aggression);
+  function __runSimulation(seed, strategy, difficulty, aggression, mapMode, limit) {
+    __prepareSimulation(seed, difficulty, aggression, mapMode);
     const politicalStrategy = {
       science: "science",
       "exodus-science": "science",
@@ -210,7 +216,7 @@ vm.runInContext(`
         continue;
       }
 
-      if (strategy === "conquest") {
+      if (strategy === "conquest" && state.mapUiExpanded) {
         state.selectedArmyId = PLAYER_ARMY_ID;
         const army = primaryPlayerArmy();
         const campaignReady = state.military.force >= 11000 && state.sc >= 4000 && state.eco >= 52000;
@@ -285,7 +291,7 @@ for (const difficulty of difficulties) {
     const results = [];
     for (let index = 0; index < sampleCount; index += 1) {
       const seed = 100003 + index * 7919 + strategies.indexOf(strategy) * 101 + difficulties.indexOf(difficulty) * 1000003;
-      results.push(vm.runInContext(`__runSimulation(${seed}, ${JSON.stringify(strategy)}, ${JSON.stringify(difficulty)}, ${JSON.stringify(requestedAggression)}, ${maxYears})`, context));
+      results.push(vm.runInContext(`__runSimulation(${seed}, ${JSON.stringify(strategy)}, ${JSON.stringify(difficulty)}, ${JSON.stringify(requestedAggression)}, ${JSON.stringify(requestedMapMode)}, ${maxYears})`, context));
     }
 
     const endingCounts = results.reduce((counts, result) => {
@@ -304,6 +310,7 @@ for (const difficulty of difficulties) {
     report.push({
       difficulty,
       aggression: requestedAggression,
+      mapMode: requestedMapMode,
       strategy,
       samples: sampleCount,
       completionRate: Number((completed.length / sampleCount * 100).toFixed(1)),
@@ -319,4 +326,4 @@ for (const difficulty of difficulties) {
   }
 }
 
-console.log(JSON.stringify({ sampleCount, maxYears, aggression: requestedAggression, report }, null, 2));
+console.log(JSON.stringify({ sampleCount, maxYears, aggression: requestedAggression, mapMode: requestedMapMode, report }, null, 2));

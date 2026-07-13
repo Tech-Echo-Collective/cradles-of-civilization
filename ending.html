@@ -6,7 +6,7 @@
     <meta name="author" content="Noah Walker">
     <meta name="copyright" content="Original concept by Noah Walker">
     <title>文明摇篮：终局</title>
-    <link rel="stylesheet" href="styles.css?v=20260710-v032">
+    <link rel="stylesheet" href="styles.css?v=20260712-v034">
   </head>
   <body class="ending-body">
     <main class="ending-shell" aria-label="文明摇篮终局">
@@ -56,7 +56,7 @@
       </section>
     </main>
 
-    <script src="endings.js?v=20260710-v032"></script>
+    <script src="endings.js?v=20260712-v034"></script>
     <script src="desktop.js"></script>
     <script>
       "use strict";
@@ -152,6 +152,7 @@
           : 0;
         const rows = [
           ["种子", storedEnding?.seed ?? "未知"],
+          ["执政官", storedEnding?.governorLabel || "未记录"],
           ["战局", `${difficultyLabels[storedEnding?.difficulty] || "普通"} / AI ${aggressionLabels[storedEnding?.aiAggression || storedEnding?.mapArchive?.aiAggression] || "标准"}`],
           ["文明", storedEnding?.civilization ? `第 ${formatNumber(storedEnding.civilization)} 号` : "未知"],
           ["年份", storedEnding?.turn ? `${formatNumber(storedEnding.turn)} 年` : "未知"],
@@ -232,13 +233,18 @@
         context.clearRect(0, 0, width, height);
         context.fillStyle = "#050a10";
         context.fillRect(0, 0, width, height);
+        const plot = { left: 52, right: width - 72, top: 22, bottom: height - 42 };
         context.strokeStyle = "rgba(84, 216, 255, 0.14)";
         for (let line = 0; line <= 4; line += 1) {
-          const y = 18 + (height - 50) * (line / 4);
+          const y = plot.top + (plot.bottom - plot.top) * (line / 4);
           context.beginPath();
-          context.moveTo(36, y);
-          context.lineTo(width - 14, y);
+          context.moveTo(plot.left, y);
+          context.lineTo(plot.right, y);
           context.stroke();
+          context.fillStyle = "#718096";
+          context.font = "700 9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+          context.textAlign = "right";
+          context.fillText(`${100 - line * 25}%`, plot.left - 7, y + 3);
         }
         if (samples.length < 2) {
           context.fillStyle = "#8ea2b8";
@@ -247,10 +253,11 @@
           context.fillText("无足够样本", width / 2, height / 2);
           return;
         }
-        keys.forEach((key) => drawEndingSeries(context, samples, key, width, height));
+        keys.forEach((key, index) => drawEndingSeries(context, samples, key, plot, index, keys.length));
+        drawEndingYearAxis(context, samples, plot);
       }
 
-      function drawEndingSeries(context, samples, key, width, height) {
+      function drawEndingSeries(context, samples, key, plot, seriesIndex, seriesCount) {
         const series = {
           sc: ["SC", "#54d8ff", 20000],
           be: ["BE", "#ffd166", 20000],
@@ -260,8 +267,7 @@
           stability: ["ORDER", "#e2e8f0", 100]
         }[key];
         if (!series) return;
-        const [, color, cap] = series;
-        const plot = { left: 36, right: width - 14, top: 18, bottom: height - 32 };
+        const [label, color, cap] = series;
         context.save();
         context.strokeStyle = color;
         context.lineWidth = 2;
@@ -273,7 +279,44 @@
           else context.lineTo(x, y);
         });
         context.stroke();
+        context.fillStyle = color;
+        samples.forEach((sample, index) => {
+          const x = plot.left + (plot.right - plot.left) * (index / Math.max(1, samples.length - 1));
+          const y = plot.bottom - (plot.bottom - plot.top) * Math.max(0, Math.min(1, (Number(sample[key]) || 0) / cap));
+          context.beginPath();
+          context.arc(x, y, 2.2, 0, Math.PI * 2);
+          context.fill();
+        });
+        const last = samples[samples.length - 1];
+        const lastY = plot.bottom - (plot.bottom - plot.top) * Math.max(0, Math.min(1, (Number(last[key]) || 0) / cap));
+        const offset = (seriesIndex - (seriesCount - 1) / 2) * 11;
+        context.font = "800 9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+        context.textAlign = "left";
+        context.fillText(`${label} ${formatChartValue(last[key])}`, plot.right + 6, Math.max(plot.top + 8, Math.min(plot.bottom, lastY + offset)));
         context.restore();
+      }
+
+      function drawEndingYearAxis(context, samples, plot) {
+        const tickCount = Math.min(5, samples.length);
+        const indexes = Array.from({ length: tickCount }, (_, index) => {
+          return Math.round(index * (samples.length - 1) / Math.max(1, tickCount - 1));
+        });
+        context.save();
+        context.fillStyle = "#8ea2b8";
+        context.font = "700 9px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+        context.textAlign = "center";
+        indexes.forEach((sampleIndex) => {
+          const x = plot.left + (plot.right - plot.left) * (sampleIndex / Math.max(1, samples.length - 1));
+          context.fillText(`Y${formatNumber(samples[sampleIndex]?.turn)}`, x, plot.bottom + 18);
+        });
+        context.restore();
+      }
+
+      function formatChartValue(value) {
+        const number = Math.round(Number(value) || 0);
+        if (Math.abs(number) >= 1000000) return `${(number / 1000000).toFixed(1)}m`;
+        if (Math.abs(number) >= 1000) return `${(number / 1000).toFixed(number >= 10000 ? 0 : 1)}k`;
+        return String(number);
       }
 
       function restartGame() {

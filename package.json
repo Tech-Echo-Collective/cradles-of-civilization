@@ -1,11 +1,12 @@
 {
   "name": "cradles-of-civilization",
-  "version": "0.3.2",
+  "version": "0.3.4",
   "private": true,
   "scripts": {
     "test": "node scripts/test-engine.mjs",
     "package": "node scripts/package-game.mjs",
     "balance": "node scripts/simulate-balance.mjs",
+    "model": "node scripts/simulate-core-model.mjs",
     "desktop:build-ui": "node scripts/build-desktop-ui.mjs",
     "desktop:serve": "python3 -m http.server 1420",
     "desktop:dev": "tauri dev",

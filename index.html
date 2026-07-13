@@ -6,7 +6,7 @@
     <meta name="author" content="Noah Walker">
     <meta name="copyright" content="Original concept by Noah Walker">
     <title>文明摇篮：文明文字模拟</title>
-    <link rel="stylesheet" href="styles.css?v=20260710-v032">
+    <link rel="stylesheet" href="styles.css?v=20260712-v034">
   </head>
   <body>
     <main class="shell">
@@ -16,6 +16,10 @@
           <h1>文明摇篮</h1>
           <p class="origin-mark">原创企划 / Original concept: Noah Walker</p>
         </header>
+        <blockquote class="setup-quote" id="setupQuote">
+          <strong>人类从历史中学到的唯一教训，<br>就是人类从未从历史中学到任何教训。</strong>
+          <cite>——格奥尔格·威廉·弗里德里希·黑格尔，1837年</cite>
+        </blockquote>
         <form class="setup-step" id="realmNameForm">
           <span class="setup-index">01 / 国度命名</span>
           <label for="realmNameInput">你的国度</label>
@@ -28,10 +32,10 @@
           <span class="setup-index">02 / 难度选择</span>
           <h2 id="setupRealmPreview">无名国度</h2>
           <div class="difficulty-options" role="group" aria-label="选择难度">
-            <button type="button" data-difficulty="easy"><strong>简单</strong><small>敌军与中立军较弱，边境反应较慢</small></button>
-            <button type="button" data-difficulty="normal" aria-pressed="true"><strong>普通</strong><small>标准军力、攻防与边境压力</small></button>
-            <button type="button" data-difficulty="hard"><strong>困难</strong><small>敌军更强，进攻频率更高</small></button>
-            <button type="button" data-difficulty="ultimate"><strong>终极困难</strong><small>敌对势力全面强化，容错极低</small></button>
+            <button type="button" data-difficulty="easy"><strong>简单</strong><small>敌军与灾变较弱，边境反应较慢</small></button>
+            <button type="button" data-difficulty="normal" aria-pressed="true"><strong>普通</strong><small>标准军力、灾变与边境压力</small></button>
+            <button type="button" data-difficulty="hard"><strong>困难</strong><small>敌军更强，灾变和进攻更频繁</small></button>
+            <button type="button" data-difficulty="ultimate"><strong>终极困难</strong><small>战争与灾变全面强化，容错极低</small></button>
           </div>
           <div class="aggression-setup">
             <h3>AI 侵略性</h3>
@@ -44,6 +48,55 @@
           </div>
           <div class="setup-actions">
             <button id="backToNameButton" type="button">返回命名</button>
+            <button id="continueToGovernorButton" type="button">选择执政官</button>
+          </div>
+        </section>
+        <section class="setup-step" id="governorStep" hidden>
+          <span class="setup-index">03 / 执政官</span>
+          <h2>选择初始执政官</h2>
+          <div class="governor-options" role="group" aria-label="选择执政官">
+            <button type="button" data-governor="east-asian-man" aria-pressed="true">
+              <img src="assets/governor-east-asian-man.png" alt="执政官 I 像">
+              <strong>杨卫平</strong>
+              <small>汉人血统。<br>他坚信空谈误国，实干兴邦。<br>他也坚信：历来强盗要侵入，最终必送命。</small>
+            </button>
+            <button type="button" data-governor="white-woman">
+              <img src="assets/governor-white-woman.png" alt="执政官 II 像">
+              <strong>克莱尔·英格丽德·麦克劳德</strong>
+              <small>维京-凯尔特血统。<br>当然，她可以是一位优秀的执政官。<br>但她更想成为一位女武神。</small>
+            </button>
+            <button type="button" data-governor="black-man">
+              <img src="assets/governor-black-man.png" alt="执政官 III 像">
+              <strong>拉特尔·“公羊”·塞万提斯三世</strong>
+              <small>拉美-非洲混血。<br>他有自己的梦想，比如有一天，殖民者能停止掠夺他的家乡。<br>当然，只是个梦想。</small>
+            </button>
+            <button type="button" data-governor="listener">
+              <img src="assets/governor-trisolaran-listener.png" alt="三体监听员像">
+              <strong>三体监听员</strong>
+              <small>三体世界的监听员。<br>你已经是身经百战见得多了。<br>你觉得三体世界不好，现在，你来建设它。</small>
+            </button>
+          </div>
+          <div class="setup-actions">
+            <button id="backToDifficultyButton" type="button">返回难度</button>
+            <button id="continueToTerritoryButton" type="button">选择起始地块</button>
+          </div>
+        </section>
+        <section class="setup-step territory-setup-step" id="territoryStep" hidden>
+          <span class="setup-index">04 / 文明发源地</span>
+          <div class="territory-setup-head">
+            <h2 id="startRegionName">中央盆地</h2>
+            <p id="startRegionDescription">选择一块区域作为首都，初始疆域将在其周围生成。</p>
+          </div>
+          <div class="start-region-map" id="startRegionMap" aria-label="选择起始地块"></div>
+          <div class="map-mode-setup">
+            <h3>战略拓展</h3>
+            <div class="map-mode-options" role="group" aria-label="选择战略拓展模式">
+              <button type="button" data-map-mode="expanded" aria-pressed="true">启用地图</button>
+              <button type="button" data-map-mode="collapsed">纯数值模式</button>
+            </div>
+          </div>
+          <div class="setup-actions">
+            <button id="backToGovernorButton" type="button">返回执政官</button>
             <button id="startCivilizationButton" type="button">开始演化</button>
           </div>
         </section>
@@ -55,6 +108,13 @@
             <p class="kicker">Cradles Of Civilization</p>
             <h1>文明摇篮</h1>
             <p class="realm-identity" id="realmIdentity">无名国度｜普通</p>
+          </div>
+          <div class="governor-identity" aria-label="当前执政官">
+            <img id="activeGovernorPortrait" src="assets/governor-east-asian-man.png" alt="当前执政官像">
+            <div>
+              <span>执政官</span>
+              <strong id="activeGovernorName">执政官 I</strong>
+            </div>
           </div>
           <div class="turn-board" aria-label="文明状态">
             <div>
@@ -111,6 +171,7 @@
         <section class="dashboard-panel" aria-label="文明状态仪表">
           <div class="dashboard-head">
             <h2>状态仪表</h2>
+            <button id="mapExpansionToggle" class="map-expansion-toggle" type="button" aria-pressed="true">战略拓展：展开</button>
           </div>
           <div class="dashboard-view" data-dashboard-view="cards">
             <section class="stats-grid" aria-label="核心变量">
@@ -172,7 +233,7 @@
           </div>
         </section>
 
-        <section class="map-panel" aria-label="三恒星战略地图">
+        <section class="map-panel" data-map-expansion aria-label="三恒星战略地图">
           <div class="map-head">
             <div>
               <h2>战略地图</h2>
@@ -187,6 +248,20 @@
           <div class="map-layout">
             <div class="world-map" id="worldMap" aria-label="区域归属图"></div>
             <div class="map-sidebar">
+              <section class="region-intel-panel" aria-label="地块情报">
+                <div class="panel-mini-head">
+                  <span>地块情报</span>
+                  <strong id="selectedRegionName">中央盆地</strong>
+                </div>
+                <dl class="entity-detail-list">
+                  <div><dt>地形攻防</dt><dd id="selectedRegionTerrain">盆地｜攻 +2｜防 +2</dd></div>
+                  <div><dt>归属</dt><dd id="selectedRegionController">本国</dd></div>
+                  <div><dt>防御</dt><dd id="selectedRegionDefense">0</dd></div>
+                  <div><dt>道路</dt><dd id="selectedRegionRoads">0</dd></div>
+                  <div><dt>驻军</dt><dd id="selectedRegionArmies">无</dd></div>
+                </dl>
+                <button id="deployArmyButton" class="region-deploy-button" type="button">部署选中军队</button>
+              </section>
               <section class="political-panel" aria-label="政治实体">
                 <div class="panel-mini-head">
                   <span>政治实体</span>
@@ -225,6 +300,7 @@
                   <div><dt>进攻</dt><dd id="militaryAttackValue">0</dd></div>
                   <div><dt>防守</dt><dd id="militaryDefenseValue">0</dd></div>
                   <div><dt>科技加成</dt><dd id="militaryTechnologyValue">0</dd></div>
+                  <div><dt>战斗力</dt><dd id="militaryPowerValue">I</dd></div>
                   <div><dt>战线</dt><dd id="frontierValue">0/0/0</dd></div>
                 </dl>
                 <p class="deployment-hint" id="deploymentHint">选择本国军队，再点击道路相连的地区进行部署。</p>
@@ -325,14 +401,14 @@
               </button>
             </div>
           </div>
-          <div class="control-group">
+          <div class="control-group" data-map-expansion>
             <h2>军事与特殊政策</h2>
             <div class="controls policy-controls">
               <button class="action-button military-action" type="button" data-action="militaryCampaign">
                 <span class="button-mark">ATK</span>
                 <span class="action-copy">
                   <strong>发动远征</strong>
-                  <small>向边境推进，夺取中立地带或敌国领土。</small>
+                  <small>高成本远征：随机沿道路连续征服至多三块领土，首败即止。</small>
                 </span>
                 <span class="disabled-reason" aria-hidden="true"></span>
               </button>
@@ -340,7 +416,7 @@
                 <span class="button-mark">LEV</span>
                 <span class="action-copy">
                   <strong>征兵</strong>
-                  <small>抽调青壮年扩充军队。</small>
+                  <small>抽调青壮年扩军；全军覆没后可在选中的本国领土重建军团。</small>
                 </span>
                 <span class="disabled-reason" aria-hidden="true"></span>
               </button>
@@ -460,9 +536,9 @@
                 <dt>年流程</dt>
                 <dd>每次行动推进一年：掷 Rand 与隐藏 SPEC，结算趋势、灾变、事件、行动与系统压力。文明毁灭后需重启文明，游戏终点是抵达结局。</dd>
               </div>
-              <div>
+              <div data-map-expansion>
                 <dt>地图</dt>
-                <dd>16 个区域和道路随 seed 生成。点选军队后沿路部署；进入己方为防守，进入他国为进攻。科技增强战力，攻击中立国会使其敌对，失去全部领土即灭国并解散军队。</dd>
+                <dd>25 个区域和道路随 seed 生成。移动即时结算，地形改变攻防；两军相遇必战至一方全灭。普通执政官只能观察本国及相邻领土的军队，监听员不受战争迷雾影响。</dd>
               </div>
               <div>
                 <dt>结局</dt>
@@ -497,8 +573,9 @@
       </section>
     </main>
 
-    <script src="endings.js?v=20260710-v032"></script>
-    <script src="game.js?v=20260710-v032"></script>
-    <script src="desktop.js?v=20260710-v032"></script>
+    <script src="endings.js?v=20260712-v034"></script>
+    <script src="balance-model.js?v=20260712-v034"></script>
+    <script src="game.js?v=20260712-v034"></script>
+    <script src="desktop.js?v=20260712-v034"></script>
   </body>
 </html>

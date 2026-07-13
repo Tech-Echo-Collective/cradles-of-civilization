@@ -226,6 +226,29 @@ input {
   letter-spacing: 0;
 }
 
+.setup-quote {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+  padding: 16px 18px;
+  color: #d9f7ff;
+  background: rgba(7, 14, 22, 0.72);
+  border-left: 3px solid var(--science);
+  font-size: clamp(0.84rem, 1.8vw, 1rem);
+  line-height: 1.7;
+}
+
+.setup-quote cite {
+  justify-self: end;
+  max-width: 90%;
+  padding-left: 12%;
+  color: #9fb0c5;
+  font-size: 0.74rem;
+  font-style: normal;
+  text-align: left;
+  white-space: nowrap;
+}
+
 .setup-step {
   display: grid;
   gap: 18px;
@@ -362,10 +385,165 @@ input {
   gap: 10px;
 }
 
-.setup-actions #backToNameButton {
+.setup-actions button:first-child {
   color: #cbd5e1;
   background: transparent;
   border-color: var(--line-strong);
+}
+
+.governor-options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.governor-options button {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 8px;
+  color: var(--ink);
+  text-align: left;
+  background: #0a1119;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.governor-options button[aria-pressed="true"] {
+  border-color: var(--science);
+  box-shadow: inset 0 -3px 0 var(--science);
+}
+
+.governor-options img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: #050a10;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  image-rendering: pixelated;
+}
+
+.governor-options strong {
+  min-height: 2.7em;
+  overflow: hidden;
+  font-size: 0.76rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.governor-options small {
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.45;
+  white-space: pre-line;
+}
+
+.territory-setup-step {
+  gap: 12px;
+}
+
+.territory-setup-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.territory-setup-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  text-align: right;
+}
+
+.start-region-map {
+  position: relative;
+  min-height: 460px;
+  overflow: hidden;
+  background: #071018;
+  border: 1px solid rgba(84, 216, 255, 0.18);
+  border-radius: 4px;
+}
+
+.start-region-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.start-region {
+  cursor: pointer;
+  outline: none;
+}
+
+.start-region polygon {
+  fill: #243341;
+  stroke: rgba(226, 232, 240, 0.42);
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+  transition: fill 120ms ease, stroke 120ms ease;
+}
+
+.start-region:hover polygon,
+.start-region:focus-visible polygon {
+  fill: #315168;
+  stroke: #f8fafc;
+  stroke-width: 2;
+}
+
+.start-region.is-selected polygon {
+  fill: #1c654f;
+  stroke: var(--people);
+  stroke-width: 3;
+}
+
+.start-region text {
+  fill: #f8fafc;
+  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 2.2px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: #071018;
+  stroke-width: 0.65px;
+  pointer-events: none;
+}
+
+.map-mode-setup {
+  display: grid;
+  gap: 7px;
+}
+
+.map-mode-setup h3 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.map-mode-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.map-mode-options button {
+  min-height: 40px;
+  color: #cbd5e1;
+  background: #0b121c;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.map-mode-options button[aria-pressed="true"] {
+  color: #071017;
+  background: var(--people);
+  border-color: var(--people);
 }
 
 .realm-identity {
@@ -374,6 +552,40 @@ input {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.75rem;
   font-weight: 800;
+}
+
+.governor-identity {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 174px;
+}
+
+.governor-identity img {
+  width: 58px;
+  height: 58px;
+  object-fit: cover;
+  border: 1px solid rgba(84, 216, 255, 0.28);
+  border-radius: 4px;
+  image-rendering: pixelated;
+}
+
+.governor-identity div {
+  display: grid;
+  gap: 4px;
+}
+
+.governor-identity span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.governor-identity strong {
+  color: #edf8ff;
+  font-size: 0.82rem;
 }
 
 .game-panel {
@@ -1166,12 +1378,14 @@ h2 {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(292px, 0.36fr);
   gap: 12px;
-  align-items: stretch;
+  align-items: start;
 }
 
 .world-map {
   position: relative;
-  min-height: 570px;
+  width: 100%;
+  height: min(72vw, 760px);
+  min-height: 660px;
   overflow: hidden;
   background:
     linear-gradient(rgba(4, 10, 15, 0.16), rgba(4, 10, 15, 0.42)),
@@ -1242,10 +1456,37 @@ h2 {
   stroke-width: 3;
 }
 
+.map-region.army-region .map-territory {
+  box-shadow: none;
+  stroke-dasharray: 5 3;
+}
+
+.map-entity-name {
+  fill: rgba(245, 251, 255, 0.19);
+  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 5.2px;
+  font-weight: 1000;
+  letter-spacing: 0;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: rgba(3, 7, 12, 0.3);
+  stroke-width: 0.5px;
+  filter: blur(0.18px);
+  pointer-events: none;
+}
+
+.map-entity-name-player {
+  fill: rgba(170, 255, 211, 0.25);
+}
+
+.map-entity-name-rival {
+  fill: rgba(255, 194, 194, 0.22);
+}
+
 .map-region-label {
   fill: #f5f8fb;
   font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
-  font-size: 2.35px;
+  font-size: 1.9px;
   font-weight: 900;
   letter-spacing: 0;
   text-anchor: middle;
@@ -1257,7 +1498,7 @@ h2 {
 
 .map-region-label .map-region-meta {
   fill: #d6e1e9;
-  font-size: 1.72px;
+  font-size: 1.42px;
   font-weight: 800;
 }
 
@@ -1290,8 +1531,8 @@ h2 {
   z-index: 4;
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
+  width: 48px;
+  height: 44px;
   padding: 0;
   transform: translate(-50%, -50%);
   color: #071017;
@@ -1300,9 +1541,25 @@ h2 {
   border-radius: 4px;
   box-shadow: 0 0 0 1px currentColor, 0 8px 18px rgba(0, 0, 0, 0.5);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.65rem;
+  font-size: 0.68rem;
   font-weight: 1000;
   cursor: pointer;
+}
+
+.army-token strong,
+.army-token small {
+  display: block;
+  line-height: 1;
+}
+
+.army-token strong {
+  font-size: 0.72rem;
+}
+
+.army-token small {
+  margin-top: 3px;
+  font-size: 0.56rem;
+  font-weight: 900;
 }
 
 .army-token.army-player {
@@ -1339,6 +1596,32 @@ h2 {
   display: grid;
   align-content: start;
   gap: 12px;
+}
+
+.region-intel-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(5, 10, 16, 0.76);
+  border: 1px solid rgba(116, 224, 168, 0.18);
+  border-radius: 6px;
+}
+
+.region-deploy-button {
+  min-height: 38px;
+  color: #071017;
+  background: var(--people);
+  border: 1px solid var(--people);
+  border-radius: 4px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.region-deploy-button:disabled {
+  color: #718096;
+  background: #111923;
+  border-color: var(--line);
+  cursor: not-allowed;
 }
 
 .political-panel {
@@ -2448,6 +2731,10 @@ h2 {
     grid-template-columns: 1fr;
   }
 
+  .governor-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .chart-grid {
     grid-template-columns: 1fr 1fr;
   }
@@ -2477,6 +2764,23 @@ h2 {
   .setup-input-row,
   .difficulty-options {
     grid-template-columns: 1fr;
+  }
+
+  .setup-quote cite {
+    padding-left: 8%;
+    white-space: normal;
+  }
+
+  .territory-setup-head {
+    display: grid;
+  }
+
+  .territory-setup-head p {
+    text-align: left;
+  }
+
+  .start-region-map {
+    min-height: 430px;
   }
 
   .aggression-options {
@@ -2515,8 +2819,8 @@ h2 {
   }
 
   .army-token {
-    width: 34px;
-    height: 34px;
+    width: 42px;
+    height: 38px;
   }
 
   .metrics-chart {

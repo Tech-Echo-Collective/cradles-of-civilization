@@ -1,4 +1,4 @@
-import { copyFile, mkdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, cp, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const root = process.cwd();
@@ -8,6 +8,7 @@ const files = [
   "index.html",
   "ending.html",
   "endings.js",
+  "balance-model.js",
   "game.js",
   "styles.css",
   "desktop.js"
@@ -19,6 +20,7 @@ await mkdir(desktopDir, { recursive: true });
 await Promise.all(files.map(async (file) => {
   await copyFile(path.join(root, file), path.join(desktopDir, file));
 }));
+await cp(path.join(root, "assets"), path.join(desktopDir, "assets"), { recursive: true });
 
 await writeFile(
   path.join(desktopDir, "ORIGINAL_WORK.txt"),

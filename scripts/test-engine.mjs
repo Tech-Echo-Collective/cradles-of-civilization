@@ -37,6 +37,7 @@ context.window.history = context.history;
 context.window.location = context.location;
 
 vm.runInContext(fs.readFileSync(path.join(projectRoot, "endings.js"), "utf8"), context, { filename: "endings.js" });
+vm.runInContext(fs.readFileSync(path.join(projectRoot, "balance-model.js"), "utf8"), context, { filename: "balance-model.js" });
 vm.runInContext(fs.readFileSync(path.join(projectRoot, "game.js"), "utf8"), context, { filename: "game.js" });
 
 const report = vm.runInContext(`(() => {
@@ -62,8 +63,8 @@ const report = vm.runInContext(`(() => {
   const firstMap = generateMapBlueprint(314159);
   const sameMap = generateMapBlueprint(314159);
   const secondMap = generateMapBlueprint(271828);
-  check(MAP_REGIONS.length === 16, "map must contain 16 regions");
-  check(firstMap.roads.length >= 15, "map must contain a spanning road network");
+  check(MAP_REGIONS.length === 25, "map must contain 25 regions");
+  check(firstMap.roads.length >= 24, "map must contain a spanning road network");
   check(connectedRegionCount(firstMap) === MAP_REGIONS.length, "all regions must be reachable by road");
   check(JSON.stringify(firstMap) === JSON.stringify(sameMap), "the same seed must reproduce the same map");
   check(JSON.stringify(firstMap) !== JSON.stringify(secondMap), "different seeds must change the map");
@@ -77,6 +78,35 @@ const report = vm.runInContext(`(() => {
     difficulty: state.difficulty
   });
   state.military = createInitialMilitaryState(snapshot(), { difficulty: state.difficulty });
+  alignArmiesWithEntityTerritories();
+  check(entityRegions(PLAYER_ENTITY_ID).length === 5, "the chosen capital must generate five starting territories");
+  check(mapStateRegion("capital").controllerId === PLAYER_ENTITY_ID, "the chosen starting region must belong to the player");
+  const inheritedSnapshot = createTerritoryInheritanceSnapshot();
+  check(
+    inheritedSnapshot.regions.every((region) => !Object.prototype.hasOwnProperty.call(region, "fortification")),
+    "civilization inheritance must preserve borders without military fortifications"
+  );
+  const inheritedMap = createInitialMapState(inheritedSnapshot, {
+    seed: state.seed,
+    realmName: state.realmName,
+    difficulty: state.difficulty,
+    startingRegionId: state.startingRegionId
+  });
+  check(
+    inheritedMap.regions.every((region) => region.controllerId === state.map.regions.find((current) => current.id === region.id)?.controllerId),
+    "civilization restart must preserve every territorial controller"
+  );
+
+  state.mapUiExpanded = false;
+  for (let year = 1; year <= 180; year += 1) {
+    state.turn = year;
+    resolveAbstractStrategicYear((year * 7919) % 10000);
+  }
+  check(
+    politicalEntities().every((entity) => entityRegions(entity.id).length >= 4),
+    "collapsed map simulation must preserve every political entity"
+  );
+
   state.map.regions
     .filter((region) => region.controllerId === NEUTRAL_ENTITY_ID)
     .forEach((region) => setRegionController(region, PLAYER_ENTITY_ID));
@@ -90,19 +120,70 @@ const report = vm.runInContext(`(() => {
   const highTechnologyBonus = militaryTechnologyBonus(primaryPlayerArmy());
   check(highTechnologyBonus > lowTechnologyBonus, "science must increase military technology bonus");
 
+  const decisive = BALANCE_MODEL.resolveDecisiveBattle({
+    attackerForce: 9000,
+    defenderForce: 7000,
+    garrisonForce: 1200,
+    attackRating: 42,
+    defenseRating: 36,
+    terrainAttack: 2,
+    terrainDefense: 2,
+    seed: 1058
+  });
+  check(
+    decisive.attackerSurvivors === 0 || decisive.defenderSurvivors === 0,
+    "a decisive battle must completely destroy one side"
+  );
+  const destroyedRoster = { ...state.military, armies: armies().filter((army) => army.entityId !== PLAYER_ENTITY_ID) };
+  state.military = normalizeMilitaryState(destroyedRoster, state);
+  check(!primaryPlayerArmy(), "loading a save must not resurrect a destroyed player army");
+  state.military = createInitialMilitaryState(snapshot(), { difficulty: state.difficulty });
+  alignArmiesWithEntityTerritories();
+  check(Boolean(primaryPlayerArmy()), "a new civilization must begin with a fresh army");
+  state.governorId = DEFAULT_GOVERNOR_ID;
+  const foggedRegions = visibleMilitaryRegionIds().size;
+  state.governorId = "listener";
+  check(visibleMilitaryRegionIds().size === MAP_REGIONS.length, "the listener must remove the fog of war");
+  check(foggedRegions < MAP_REGIONS.length, "ordinary governors must retain fog of war");
+
+  const disasterRates = {};
+  ["easy", "normal", "hard", "ultimate"].forEach((difficulty) => {
+    state.difficulty = difficulty;
+    let disasters = 0;
+    for (let roll = 0; roll < 10000; roll += 1) {
+      state.turn = roll;
+      if (doomEvent(roll, snapshot())) disasters += 1;
+    }
+    disasterRates[difficulty] = disasters / 10000;
+  });
+  check(disasterRates.easy < disasterRates.normal, "easy difficulty must reduce disaster frequency");
+  check(disasterRates.normal < disasterRates.hard, "hard difficulty must increase disaster frequency");
+  check(disasterRates.hard < disasterRates.ultimate, "ultimate difficulty must have the highest disaster frequency");
+
   const migrated = createInitialMapState({
     seed: 1058,
     regions: [{ id: "capital", owner: MAP_OWNER_PLAYER, fortification: 66 }]
   }, { seed: 1058, realmName: "旧存档", difficulty: "normal" });
-  check(migrated.regions.length === 16, "old saves must expand to the v0.3.2 region set");
-  check(migrated.roads.length >= 15, "old saves must receive a connected seeded road network");
+  check(migrated.regions.length === 25, "old saves must expand to the v0.3.3 region set");
+  check(migrated.roads.length >= 24, "old saves must receive a connected seeded road network");
+
+  const alternateStart = createInitialMapState({}, {
+    seed: 314159,
+    realmName: "选地测试国",
+    difficulty: "normal",
+    startingRegionId: "lastLight"
+  });
+  check(alternateStart.regions.find((region) => region.id === "lastLight")?.controllerId === PLAYER_ENTITY_ID, "the player must be able to choose another capital");
 
   return {
     regions: MAP_REGIONS.length,
     roads: firstMap.roads.length,
     connectedRegions: connectedRegionCount(firstMap),
     eliminatedEntity: eliminated.find((entity) => entity.id === NEUTRAL_ENTITY_ID)?.name,
-    technologyBonus: [lowTechnologyBonus, highTechnologyBonus]
+    technologyBonus: [lowTechnologyBonus, highTechnologyBonus],
+    decisiveBattle: decisive,
+    foggedRegions,
+    disasterRates
   };
 })()`, context, { filename: "engine-regression.js" });
 
