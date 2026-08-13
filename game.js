@@ -16,7 +16,6 @@ const STORE_KEY = "three-sun-chronicle:v1";
 const ENDING_STORE_KEY = "three-sun-chronicle:ending:v1";
 const ENDING_STATS_STORE_KEY = "three-sun-chronicle:ending-stats:v1";
 const ENDING_PAGE = "ending.html";
-const ORIGINAL_CONCEPT_SIGNATURE = "Cradles Of Civilization original concept: Noah Walker / Tech Echo Collective";
 const RNG_MOD = 2147483647;
 const RNG_MUL = 48271;
 const KNOWLEDGE_TREND_MIN = -180;
@@ -203,18 +202,6 @@ const I_LOW_ORDER_CIVILIZATION_STREAK = 16;
 const I_LOW_ORDER_THRESHOLD = 20;
 const J_MEMORY_CIVILIZATION_STREAK = 3;
 const J_MEMORY_LA_THRESHOLD = 18000;
-const SKY_FRAME_INTERVAL_MS = 96;
-const SKY_SAFARI_FRAME_INTERVAL_MS = 160;
-const SKY_MAX_DEVICE_PIXEL_RATIO = 1.25;
-const SKY_SAFARI_MAX_DEVICE_PIXEL_RATIO = 1;
-const SKY_MAX_BACKING_WIDTH = 1500;
-const SKY_MAX_BACKING_HEIGHT = 620;
-const SKY_SAFARI_MAX_BACKING_WIDTH = 1080;
-const SKY_SAFARI_MAX_BACKING_HEIGHT = 460;
-const SKY_MAX_STARS = 68;
-const SKY_SAFARI_MAX_STARS = 46;
-const SKY_MAX_POP_LIGHTS = 74;
-const SKY_SAFARI_MAX_POP_LIGHTS = 52;
 const DIVIDE_AUTO_ACTION = "balance";
 const DIVIDE_AUTO_DELAY_MS = 180;
 const ENDING_THRESHOLDS = {
@@ -587,10 +574,7 @@ const UTILITY_SHORTCUTS = [
 
 const dom = {};
 let state = null;
-let frameHandle = 0;
-let skyResizeHandle = 0;
 let autoRunHandle = 0;
-let lastSkyFrameAt = 0;
 let currentLogFilter = "all";
 
 class Lcg {
@@ -654,8 +638,6 @@ function createNewState(seedValue = Date.now()) {
     lockedPopulation: null,
     eerfLevel: 0,
     restartPopulationSeed: BASE_RESTART_POP,
-    dashboardMode: "cards",
-    focusMetric: null,
     metricTrends: { sc: 0, be: 0, la: 0, pop: 0, eco: 0, stability: 0 },
     metricSamples: [createMetricSample(0, 1, initialSnapshot, { label: "文明苏醒" })],
     map: createInitialMapState(
@@ -1443,11 +1425,6 @@ function armyOwner(army) {
   return politicalEntityById(army?.entityId)?.owner || MAP_OWNER_NEUTRAL;
 }
 
-function regionIsHostileToPlayer(region) {
-  const entity = politicalEntityById(region?.controllerId);
-  return Boolean(entity && entity.owner !== MAP_OWNER_PLAYER && entity.relation === "hostile");
-}
-
 function mapOwnerCounts(mapState = state.map) {
   const regions = Array.isArray(mapState?.regions) ? mapState.regions : [];
   return regions.reduce((counts, region) => {
@@ -1478,25 +1455,6 @@ function createSpecialDecisionState(source = {}) {
     };
   });
   return decisions;
-}
-
-function availableSpecialDecisions(current = snapshot()) {
-  return Object.entries(SPECIAL_DECISIONS)
-    .filter(([decisionId]) => canApplySpecialDecision(decisionId, current))
-    .map(([decisionId, decision]) => ({
-      id: decisionId,
-      label: decision.label,
-      stage: decision.stage,
-      description: decision.description
-    }));
-}
-
-function canApplySpecialDecision(decisionId, current = snapshot()) {
-  const decision = SPECIAL_DECISIONS[decisionId];
-  if (!decision) return false;
-  const record = state.specialDecisionState?.[decisionId] || {};
-  if (finiteOr(record.cooldown, 0) > 0) return false;
-  return Object.entries(decision.requirements || {}).every(([key, value]) => finiteOr(current[key], 0) >= value);
 }
 
 function policyDelta(policyId) {
@@ -1607,22 +1565,6 @@ function maximumSustainableLevy() {
   );
 }
 
-function applySpecialDecision(decisionId) {
-  const decision = SPECIAL_DECISIONS[decisionId];
-  if (!decision || !canApplySpecialDecision(decisionId)) return false;
-
-  const before = snapshot();
-  const delta = applyDelta(decision.effects || {}, { protectPopulationFloor: true });
-  state.specialDecisionState[decisionId] = {
-    cooldown: Math.max(0, Math.round(finiteOr(decision.cooldownYears, 0))),
-    used: Math.max(0, Math.round(finiteOr(state.specialDecisionState?.[decisionId]?.used, 0))) + 1
-  };
-  updateCivilizationStats(snapshot());
-  updateMetricTrends(diff(before, snapshot()));
-  recordMetricSample({ label: decision.label });
-  return { decision, delta };
-}
-
 function tickSpecialDecisionCooldowns() {
   if (!state?.specialDecisionState) return;
   Object.keys(state.specialDecisionState).forEach((decisionId) => {
@@ -1686,7 +1628,6 @@ function init() {
   if (maybeFinishGame({ kind: "load", trigger: "载入存档" })) return;
   updateEnding();
   render();
-  if (state.setupComplete && dom.skyCanvas) drawSky();
   scheduleAutoRunIfNeeded();
 }
 
@@ -1777,20 +1718,8 @@ function cacheDom() {
   dom.specialText = document.querySelector("#specialText");
   dom.specialDelta = document.querySelector("#specialDelta");
   dom.seedInput = document.querySelector("#seedInput");
-  dom.dashboardToggleButton = document.querySelector("#dashboardToggleButton");
   dom.mapExpansionToggle = document.querySelector("#mapExpansionToggle");
   dom.mapExpansionSections = Array.from(document.querySelectorAll("[data-map-expansion]"));
-  dom.dashboardViews = Array.from(document.querySelectorAll("[data-dashboard-view]"));
-  dom.metricFocusButtons = Array.from(document.querySelectorAll("[data-metric-focus]"));
-  dom.clearFocusMetricButton = document.querySelector("#clearFocusMetricButton");
-  dom.focusChartPanel = document.querySelector("#focusChartPanel");
-  dom.focusChartTitle = document.querySelector("#focusChartTitle");
-  dom.knowledgeChart = document.querySelector("#knowledgeChart");
-  dom.economyChart = document.querySelector("#economyChart");
-  dom.populationChart = document.querySelector("#populationChart");
-  dom.focusMetricChart = document.querySelector("#focusMetricChart");
-  dom.chartEerfValue = document.querySelector("#chartEerfValue");
-  dom.chartEerfText = document.querySelector("#chartEerfText");
   dom.worldMap = document.querySelector("#worldMap");
   dom.mapStatus = document.querySelector("#mapStatus");
   dom.mapFeed = document.querySelector("#mapFeed");
@@ -1827,7 +1756,6 @@ function cacheDom() {
   dom.logList = document.querySelector("#logList");
   dom.logFilterButtons = Array.from(document.querySelectorAll("[data-log-filter]"));
   dom.archiveList = document.querySelector("#archiveList");
-  dom.skyCanvas = document.querySelector("#skyCanvas");
   dom.clearLogButton = document.querySelector("#clearLogButton");
   dom.newGameButton = document.querySelector("#newGameButton");
   dom.actionButtons = Array.from(document.querySelectorAll("[data-action]"));
@@ -1922,36 +1850,13 @@ function bindEvents() {
   });
 
   dom.newGameButton?.addEventListener("click", randomizeOrStartNewWorld);
-  dom.dashboardToggleButton?.addEventListener("click", toggleDashboardMode);
-  dom.metricFocusButtons.forEach((button) => {
-    button.addEventListener("click", () => setFocusMetric(button.dataset.metricFocus));
-  });
-  dom.clearFocusMetricButton?.addEventListener("click", () => setFocusMetric(null));
 
   dom.clearLogButton.addEventListener("click", clearChronicle);
   dom.logFilterButtons.forEach((button) => {
     button.addEventListener("click", () => setLogFilter(button.dataset.logFilter || "all"));
   });
 
-  if (dom.skyCanvas) {
-    window.addEventListener("resize", scheduleSkyResize);
-    window.addEventListener("orientationchange", scheduleSkyResize);
-  }
-  if (hasMetricCharts()) {
-    window.addEventListener("resize", renderMetricsChart);
-    window.addEventListener("orientationchange", renderMetricsChart);
-  }
-
   window.addEventListener("keydown", handleShortcut);
-}
-
-function scheduleSkyResize() {
-  if (!dom.skyCanvas) return;
-  if (skyResizeHandle) cancelAnimationFrame(skyResizeHandle);
-  skyResizeHandle = requestAnimationFrame(() => {
-    skyResizeHandle = 0;
-    renderSkyFrame(performance.now());
-  });
 }
 
 function scheduleAutoRunIfNeeded() {
@@ -2195,13 +2100,6 @@ function hasActiveRun() {
   return Boolean(state && !state.finished && (state.turn > 0 || state.history.length || state.awaitingCivilizationRestart || state.endingCandidate?.id));
 }
 
-function toggleDashboardMode() {
-  state.dashboardMode = state.dashboardMode === "chart" ? "cards" : "chart";
-  saveState();
-  renderDashboardMode();
-  renderMetricsChart();
-}
-
 function toggleMapExpansion() {
   if (!state?.setupComplete || state.finished || state.awaitingCivilizationRestart) return;
   state.mapUiExpanded = state.mapUiExpanded === false;
@@ -2223,17 +2121,6 @@ function renderMapExpansionMode() {
     dom.mapExpansionToggle.textContent = expanded ? "战略拓展：展开" : "战略拓展：折叠";
     dom.mapExpansionToggle.title = expanded ? "收起地图、军事与相关决议" : "展开战略地图与军事系统";
   }
-}
-
-function setFocusMetric(metric) {
-  state.focusMetric = metric && metricSeriesByKey(metric) ? metric : null;
-  saveState();
-  renderDashboardMode();
-  renderMetricsChart();
-}
-
-function hasMetricCharts() {
-  return Boolean(dom.knowledgeChart || dom.economyChart || dom.populationChart || dom.focusMetricChart);
 }
 
 function clearChronicle() {
@@ -5748,7 +5635,6 @@ function render() {
   dom.scEra.textContent = scienceEra(state.sc);
   dom.beEra.textContent = beliefEra(state.be);
   renderTrendStatus();
-  renderDashboardMode();
   renderMapExpansionMode();
   dom.stabilityValue.textContent = `秩序 ${state.stability}｜${orderRegime(state.stability)}`;
   dom.ecoStatus.textContent = isEconomicCrisis() ? "经济危机：发展冻结" : "预算、产业与粮仓";
@@ -5764,8 +5650,6 @@ function render() {
   renderLog();
   renderArchive();
   renderSpecialNotice();
-  renderMetricsChart();
-  if (dom.skyCanvas) renderSkyFrame(performance.now());
 }
 
 function renderActionButtons() {
@@ -6082,11 +5966,6 @@ function deploymentDisabledReason(army, target) {
   return "";
 }
 
-function shortEntityLabel(entityId) {
-  const name = politicalEntityById(entityId)?.name || "无主地";
-  return name.length > 6 ? `${name.slice(0, 6)}…` : name;
-}
-
 function renderPoliticalEntityPanel() {
   const selected = selectedPoliticalEntity();
   if (dom.entityCards) {
@@ -6185,91 +6064,6 @@ function metricTrendStageFor(key, value) {
   return labels[0];
 }
 
-function renderDashboardMode() {
-  if (!dom.dashboardViews?.length) return;
-
-  const mode = state.dashboardMode === "chart" ? "chart" : "cards";
-  dom.dashboardViews.forEach((view) => {
-    view.hidden = view.dataset.dashboardView !== mode;
-  });
-  if (dom.dashboardToggleButton) {
-    const nextLabel = mode === "chart" ? "数值卡" : "折线图";
-    dom.dashboardToggleButton.textContent = nextLabel;
-    dom.dashboardToggleButton.setAttribute("aria-pressed", mode === "chart" ? "true" : "false");
-    dom.dashboardToggleButton.title = `切换到${nextLabel}`;
-  }
-  if (dom.chartEerfValue) dom.chartEerfValue.textContent = `${state.eerfLevel || 0}/${EERF_MAX_LEVEL}`;
-  if (dom.chartEerfText) dom.chartEerfText.textContent = compactEerfChartText();
-  dom.metricFocusButtons?.forEach((button) => {
-    const active = button.dataset.metricFocus === state.focusMetric;
-    button.setAttribute("aria-pressed", active ? "true" : "false");
-  });
-  if (dom.focusChartPanel) dom.focusChartPanel.hidden = !state.focusMetric;
-  if (dom.focusChartTitle) {
-    const series = metricSeriesByKey(state.focusMetric);
-    dom.focusChartTitle.textContent = series ? `${series.label} 单项趋势` : "单项趋势";
-  }
-}
-
-function renderMetricsChart() {
-  if (!state || state.dashboardMode !== "chart") return;
-  const samples = normalizedMetricSamples();
-  renderChartCanvas(dom.knowledgeChart, samples, ["sc", "be", "la"]);
-  renderChartCanvas(dom.economyChart, samples, ["eco"]);
-  renderChartCanvas(dom.populationChart, samples, ["pop", "stability"]);
-  if (state.focusMetric) {
-    renderChartCanvas(dom.focusMetricChart, samples, [state.focusMetric]);
-  }
-}
-
-function renderChartCanvas(canvas, samples, keys) {
-  if (!canvas || !Array.isArray(keys) || !keys.length) return;
-  const context = canvas.getContext("2d");
-  if (!context) return;
-
-  const rect = canvas.getBoundingClientRect();
-  const cssWidth = Math.max(240, Math.round(rect.width || canvas.clientWidth || 360));
-  const cssHeight = Math.max(180, Math.round(rect.height || 240));
-  const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
-  const width = Math.round(cssWidth * pixelRatio);
-  const height = Math.round(cssHeight * pixelRatio);
-  if (canvas.width !== width || canvas.height !== height) {
-    canvas.width = width;
-    canvas.height = height;
-  }
-  context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-  context.clearRect(0, 0, cssWidth, cssHeight);
-
-  drawChartBackground(context, cssWidth, cssHeight);
-  if (samples.length < 2) {
-    drawChartEmptyState(context, cssWidth, cssHeight);
-    return;
-  }
-
-  const plot = {
-    left: 42,
-    right: cssWidth - 16,
-    top: 20,
-    bottom: cssHeight - 34
-  };
-  drawChartGrid(context, plot);
-  drawCollapseMarkers(context, samples, plot);
-
-  chartSeries(keys).forEach((series) => {
-    drawMetricSeries(context, samples, plot, series);
-  });
-  drawChartAxisLabels(context, samples, plot);
-}
-
-function compactEerfChartText() {
-  if (state.awaitingCivilizationRestart && state.pendingRestart) {
-    return `火种人口 ${formatNumber(state.pendingRestart.pop)}；SC/BE ${formatNumber(state.pendingRestart.sc)}/${formatNumber(state.pendingRestart.be)}`;
-  }
-  const current = snapshot();
-  const knowledge = computeRestartKnowledge(current);
-  return `保存增幅 ${formatPercent(eerfCultureRatio(current))}；灾后 SC/BE ${formatNumber(knowledge.sc)}/${formatNumber(knowledge.be)}`;
-}
-
 function normalizedMetricSamples() {
   const samples = Array.isArray(state.metricSamples) ? state.metricSamples : [];
   if (!samples.length) {
@@ -6284,140 +6078,6 @@ function normalizeMetricSample(sample = {}) {
     collapse: sample.collapse ? String(sample.collapse) : "",
     label: sample.label ? String(sample.label) : ""
   };
-}
-
-function chartSeries(keys = ["sc", "be", "pop", "eco", "la", "stability"]) {
-  return keys.map(metricSeriesByKey).filter(Boolean);
-}
-
-function metricSeriesByKey(key) {
-  const styles = getComputedStyle(document.documentElement);
-  const series = {
-    sc: { key: "sc", label: "SC", color: styles.getPropertyValue("--science").trim() || "#54d8ff" },
-    be: { key: "be", label: "BE", color: styles.getPropertyValue("--belief").trim() || "#ffd166" },
-    pop: { key: "pop", label: "POP", color: styles.getPropertyValue("--people").trim() || "#74e0a8" },
-    eco: { key: "eco", label: "ECO", color: styles.getPropertyValue("--economy").trim() || "#c5ef7f" },
-    la: { key: "la", label: "LA", color: styles.getPropertyValue("--arts").trim() || "#f4a7d8" },
-    stability: { key: "stability", label: "ORDER", color: "#e2e8f0" }
-  };
-  return series[key] || null;
-}
-
-function normalizeMetricValue(key, value) {
-  const caps = {
-    sc: CAP,
-    be: CAP,
-    la: LA_CAP,
-    pop: 180000,
-    eco: ECO_METER_CAP,
-    stability: 100
-  };
-  return clamp(finiteOr(value, 0) / (caps[key] || 1), 0, 1);
-}
-
-function drawChartBackground(context, width, height) {
-  const gradient = context.createLinearGradient(0, 0, 0, height);
-  gradient.addColorStop(0, "#08111c");
-  gradient.addColorStop(1, "#03070c");
-  context.fillStyle = gradient;
-  context.fillRect(0, 0, width, height);
-}
-
-function drawChartEmptyState(context, width, height) {
-  context.fillStyle = "#8ea2b8";
-  context.font = "700 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
-  context.textAlign = "center";
-  context.fillText("等待趋势样本", width / 2, height / 2);
-}
-
-function drawChartGrid(context, plot) {
-  context.save();
-  context.strokeStyle = "rgba(84, 216, 255, 0.13)";
-  context.lineWidth = 1;
-  for (let index = 0; index <= 4; index += 1) {
-    const y = plot.top + (plot.bottom - plot.top) * (index / 4);
-    context.beginPath();
-    context.moveTo(plot.left, y);
-    context.lineTo(plot.right, y);
-    context.stroke();
-  }
-  context.strokeStyle = "rgba(255, 255, 255, 0.12)";
-  context.strokeRect(plot.left, plot.top, plot.right - plot.left, plot.bottom - plot.top);
-  context.restore();
-}
-
-function drawCollapseMarkers(context, samples, plot) {
-  context.save();
-  context.strokeStyle = "rgba(255, 107, 107, 0.64)";
-  context.fillStyle = "rgba(255, 107, 107, 0.82)";
-  context.font = "800 10px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
-  samples.forEach((sample, index) => {
-    if (!sample.collapse) return;
-    const x = chartX(index, samples.length, plot);
-    context.beginPath();
-    context.moveTo(x, plot.top);
-    context.lineTo(x, plot.bottom);
-    context.stroke();
-    context.save();
-    context.translate(x + 4, plot.top + 8);
-    context.rotate(-Math.PI / 2);
-    context.fillText("COLLAPSE", 0, 0);
-    context.restore();
-  });
-  context.restore();
-}
-
-function drawMetricSeries(context, samples, plot, series) {
-  context.save();
-  context.strokeStyle = series.color;
-  context.lineWidth = 2;
-  context.shadowColor = series.color;
-  context.shadowBlur = 8;
-  context.beginPath();
-  samples.forEach((sample, index) => {
-    const x = chartX(index, samples.length, plot);
-    const y = chartY(normalizeMetricValue(series.key, sample[series.key]), plot);
-    if (index === 0) {
-      context.moveTo(x, y);
-    } else {
-      context.lineTo(x, y);
-    }
-  });
-  context.stroke();
-  context.shadowBlur = 0;
-  context.fillStyle = series.color;
-  samples.forEach((sample, index) => {
-    const x = chartX(index, samples.length, plot);
-    const y = chartY(normalizeMetricValue(series.key, sample[series.key]), plot);
-    context.beginPath();
-    context.arc(x, y, 2.6, 0, Math.PI * 2);
-    context.fill();
-  });
-  context.restore();
-}
-
-function drawChartAxisLabels(context, samples, plot) {
-  context.save();
-  context.fillStyle = "#8ea2b8";
-  context.font = "700 10px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
-  context.textAlign = "left";
-  context.fillText("100%", 6, plot.top + 4);
-  context.fillText("0", 20, plot.bottom + 3);
-  context.textAlign = "center";
-  const first = samples[0];
-  const last = samples[samples.length - 1];
-  context.fillText(`Y${formatNumber(first.turn)}`, plot.left, plot.bottom + 22);
-  context.fillText(`Y${formatNumber(last.turn)}`, plot.right, plot.bottom + 22);
-  context.restore();
-}
-
-function chartX(index, length, plot) {
-  if (length <= 1) return plot.left;
-  return plot.left + (plot.right - plot.left) * (index / (length - 1));
-}
-
-function chartY(value, plot) {
-  return plot.bottom - (plot.bottom - plot.top) * clamp(value, 0, 1);
 }
 
 function renderEndingWatch() {
@@ -6587,13 +6247,6 @@ function maximumRequirement(label, value, maximum, formatter = formatNumber) {
     progress: current <= cap ? 1 : clamp(cap / Math.max(current, 1), 0, 1),
     missing: `${label} 需降至 ${formatter(cap)} 以下`
   };
-}
-
-function currentCivilizationMinOrder() {
-  return Math.min(
-    finiteOr(state.currentCivilization?.minStability, state.stability),
-    finiteOr(state.stability, 0)
-  );
 }
 
 function shortEndingName(endingId) {
@@ -6877,666 +6530,6 @@ function laStatusText() {
   return `EERF 线性保存增幅 ${formatPercent(ratio)}`;
 }
 
-function isSafariBrowser() {
-  const userAgent = typeof navigator === "object" && navigator.userAgent
-    ? navigator.userAgent
-    : "";
-  return /safari/i.test(userAgent) && !/chrome|chromium|crios|fxios|edg|opr|android/i.test(userAgent);
-}
-
-function skyFrameInterval() {
-  return isSafariBrowser() ? SKY_SAFARI_FRAME_INTERVAL_MS : SKY_FRAME_INTERVAL_MS;
-}
-
-function skyCanvasScale(width, height) {
-  const safari = isSafariBrowser();
-  const deviceRatio = Math.min(
-    window.devicePixelRatio || 1,
-    safari ? SKY_SAFARI_MAX_DEVICE_PIXEL_RATIO : SKY_MAX_DEVICE_PIXEL_RATIO
-  );
-  const maxWidth = safari ? SKY_SAFARI_MAX_BACKING_WIDTH : SKY_MAX_BACKING_WIDTH;
-  const maxHeight = safari ? SKY_SAFARI_MAX_BACKING_HEIGHT : SKY_MAX_BACKING_HEIGHT;
-  return Math.max(0.3, Math.min(deviceRatio, maxWidth / Math.max(1, width), maxHeight / Math.max(1, height)));
-}
-
-function skyStarCount() {
-  return isSafariBrowser() ? SKY_SAFARI_MAX_STARS : SKY_MAX_STARS;
-}
-
-function skyPopulationLightCount() {
-  return isSafariBrowser() ? SKY_SAFARI_MAX_POP_LIGHTS : SKY_MAX_POP_LIGHTS;
-}
-
-function drawSky() {
-  const now = performance.now();
-  if (!document.hidden && now - lastSkyFrameAt >= skyFrameInterval()) {
-    lastSkyFrameAt = now;
-    renderSkyFrame(now);
-  }
-  frameHandle = requestAnimationFrame(drawSky);
-}
-
-function renderSkyFrame(time) {
-  const canvas = dom.skyCanvas;
-  if (!canvas) return;
-  const context = canvas.getContext("2d");
-  if (!context) return;
-  const rect = canvas.getBoundingClientRect();
-  const width = Math.max(320, rect.width);
-  const height = Math.max(220, rect.height);
-  const ratio = skyCanvasScale(width, height);
-  const targetWidth = Math.max(1, Math.floor(width * ratio));
-  const targetHeight = Math.max(1, Math.floor(height * ratio));
-
-  if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
-    canvas.width = targetWidth;
-    canvas.height = targetHeight;
-  }
-
-  context.setTransform(ratio, 0, 0, ratio, 0, 0);
-  context.imageSmoothingEnabled = false;
-  paintSky(context, width, height, time);
-}
-
-function paintSky(context, width, height, time) {
-  const tone = state.lastTone || "quiet";
-  const randFactor = ((state.lastRand ?? state.seed) % 10000) / 10000;
-  const gradient = context.createLinearGradient(0, 0, 0, height);
-  gradient.addColorStop(0, tone === "disaster" ? "#351019" : "#071020");
-  gradient.addColorStop(0.36, tone === "special" ? "#172442" : "#12233a");
-  gradient.addColorStop(0.72, tone === "disaster" ? "#59331f" : "#28362d");
-  gradient.addColorStop(1, "#15160f");
-  context.fillStyle = gradient;
-  context.fillRect(0, 0, width, height);
-
-  drawAtmosphere(context, width, height, time, tone, randFactor);
-  drawStars(context, width, height, time, randFactor);
-  drawSuns(context, width, height, time, randFactor, tone);
-  drawHeatHaze(context, width, height, time, tone);
-  drawGround(context, width, height);
-}
-
-function drawAtmosphere(context, width, height, time, tone, randFactor) {
-  context.save();
-  const horizon = height * 0.68;
-  const haze = context.createLinearGradient(0, horizon - height * 0.22, 0, horizon + height * 0.12);
-  haze.addColorStop(0, "rgba(255, 255, 255, 0)");
-  haze.addColorStop(0.56, tone === "disaster" ? "rgba(255, 123, 65, 0.18)" : "rgba(255, 210, 132, 0.16)");
-  haze.addColorStop(1, "rgba(255, 240, 190, 0.05)");
-  context.fillStyle = haze;
-  context.fillRect(0, horizon - height * 0.24, width, height * 0.36);
-
-  for (let layer = 0; layer < 3; layer += 1) {
-    const y = height * (0.2 + layer * 0.11) + Math.sin(time * 0.00022 + layer) * 8;
-    context.beginPath();
-    context.moveTo(0, y);
-    for (let x = 0; x <= width + 40; x += 40) {
-      const offset = Math.sin(x * 0.008 + time * 0.00018 + layer * 1.9 + randFactor) * (12 + layer * 5);
-      context.lineTo(x, y + offset);
-    }
-    context.lineTo(width, y + 32);
-    context.lineTo(0, y + 28);
-    context.closePath();
-    context.fillStyle = layer === 0
-      ? "rgba(255, 255, 255, 0.025)"
-      : "rgba(255, 221, 178, 0.035)";
-    context.fill();
-  }
-  context.restore();
-}
-
-function drawStars(context, width, height, time, randFactor) {
-  context.save();
-  const starCount = Math.min(140, skyStarCount());
-  for (let index = 0; index < starCount; index += 1) {
-    const x = ((index * 131) % 997) / 997 * width;
-    const y = ((index * 197) % 463) / 463 * height * 0.58;
-    const pulse = 0.24 + Math.sin(time * 0.0012 + index + randFactor) * 0.18;
-    const size = index % 13 === 0 ? 1.8 : 1;
-    context.fillStyle = `rgba(224, 235, 255, ${Math.max(0.08, pulse)})`;
-    context.fillRect(x, y, size, size);
-  }
-  context.restore();
-}
-
-function drawSuns(context, width, height, time, randFactor, tone) {
-  const t = time * 0.00028 + state.turn * 0.11;
-  const centerX = width * (0.5 + (randFactor - 0.5) * 0.12);
-  const centerY = height * 0.34;
-  const suns = [
-    {
-      x: centerX + Math.cos(t) * width * 0.23,
-      y: centerY + Math.sin(t * 1.21) * height * 0.17,
-      radius: 34 + randFactor * 14,
-      color: tone === "disaster" ? "#ff5b4a" : "#ffd36b",
-      corona: tone === "disaster" ? "#ff3f36" : "#ffb95c"
-    },
-    {
-      x: centerX + Math.cos(-t * 0.82 + 2.1) * width * 0.18,
-      y: centerY + Math.sin(t * 0.74 + 1.2) * height * 0.2,
-      radius: 26 + (1 - randFactor) * 12,
-      color: "#ff8c42",
-      corona: "#c65f32"
-    },
-    {
-      x: centerX + Math.cos(t * 1.42 + 4.2) * width * 0.27,
-      y: centerY + Math.sin(-t * 0.93 + 2.9) * height * 0.14,
-      radius: 21 + Math.sin(t) * 5,
-      color: tone === "special" ? "#9ad8ff" : "#fff1a6",
-      corona: tone === "special" ? "#7fbfe8" : "#ffe18a"
-    }
-  ];
-
-  suns
-    .sort((left, right) => left.radius - right.radius)
-    .forEach((sun, index) => drawSunDisc(context, sun, time, index));
-}
-
-function drawSunDisc(context, sun, time, index) {
-  context.save();
-  const glow = context.createRadialGradient(sun.x, sun.y, sun.radius * 0.1, sun.x, sun.y, sun.radius * 5.2);
-  glow.addColorStop(0, hexToRgba(sun.color, 0.88));
-  glow.addColorStop(0.22, hexToRgba(sun.corona, 0.36));
-  glow.addColorStop(0.64, hexToRgba(sun.corona, 0.1));
-  glow.addColorStop(1, "rgba(255, 255, 255, 0)");
-  context.fillStyle = glow;
-  context.beginPath();
-  context.arc(sun.x, sun.y, sun.radius * 5.2, 0, Math.PI * 2);
-  context.fill();
-
-  const disc = context.createRadialGradient(
-    sun.x - sun.radius * 0.34,
-    sun.y - sun.radius * 0.38,
-    sun.radius * 0.12,
-    sun.x,
-    sun.y,
-    sun.radius
-  );
-  disc.addColorStop(0, "#fff7c8");
-  disc.addColorStop(0.34, sun.color);
-  disc.addColorStop(0.82, sun.corona);
-  disc.addColorStop(1, "rgba(84, 28, 16, 0.96)");
-  context.fillStyle = disc;
-  context.beginPath();
-  context.arc(sun.x, sun.y, sun.radius, 0, Math.PI * 2);
-  context.fill();
-
-  context.save();
-  context.beginPath();
-  context.arc(sun.x, sun.y, sun.radius * 0.94, 0, Math.PI * 2);
-  context.clip();
-  for (let spot = 0; spot < 9; spot += 1) {
-    const angle = spot * 1.73 + time * 0.00018 * (index + 1);
-    const orbit = sun.radius * (0.18 + ((spot * 23) % 42) / 100);
-    const sx = sun.x + Math.cos(angle) * orbit;
-    const sy = sun.y + Math.sin(angle * 0.72) * orbit * 0.72;
-    context.fillStyle = spot % 3 === 0 ? "rgba(87, 30, 17, 0.36)" : "rgba(255, 244, 180, 0.14)";
-    context.beginPath();
-    context.ellipse(sx, sy, sun.radius * (0.05 + spot * 0.003), sun.radius * 0.024, angle, 0, Math.PI * 2);
-    context.fill();
-  }
-  context.restore();
-  context.restore();
-}
-
-function drawHeatHaze(context, width, height, time, tone) {
-  context.save();
-  const horizon = height * 0.66;
-  context.globalAlpha = tone === "disaster" ? 0.28 : 0.16;
-  for (let band = 0; band < 4; band += 1) {
-    context.beginPath();
-    const y = horizon + band * 12;
-    context.moveTo(0, y);
-    for (let x = 0; x <= width; x += 28) {
-      context.lineTo(x, y + Math.sin(x * 0.018 + time * 0.001 + band) * 5);
-    }
-    context.strokeStyle = band % 2 === 0 ? "rgba(255, 218, 150, 0.22)" : "rgba(156, 207, 255, 0.14)";
-    context.lineWidth = 1;
-    context.stroke();
-  }
-  context.restore();
-}
-
-function drawGround(context, width, height) {
-  const groundY = height * 0.72;
-  drawMountainLayer(context, width, height, groundY, 0.5, "#24323a", "#111a1b", 28);
-  drawMountainLayer(context, width, height, groundY, 0.76, "#314238", "#151a13", 18);
-
-  const terrain = context.createLinearGradient(0, groundY, 0, height);
-  terrain.addColorStop(0, "#2f3525");
-  terrain.addColorStop(0.46, "#1d2117");
-  terrain.addColorStop(1, "#090b08");
-  context.fillStyle = terrain;
-  context.beginPath();
-  context.moveTo(0, groundY);
-  for (let x = 0; x <= width; x += 34) {
-    const y = groundY + Math.sin(x * 0.018 + state.turn * 0.4) * 9 + Math.sin(x * 0.047) * 4;
-    context.lineTo(x, y);
-  }
-  context.lineTo(width, height);
-  context.lineTo(0, height);
-  context.closePath();
-  context.fill();
-
-  drawTerrainTexture(context, width, height, groundY);
-  drawRealisticCity(context, width, height, groundY);
-  drawUndergroundHints(context, width, height, groundY);
-}
-
-function drawMountainLayer(context, width, height, groundY, depth, topColor, baseColor, roughness) {
-  const top = groundY - height * depth * 0.34;
-  const gradient = context.createLinearGradient(0, top, 0, groundY + 20);
-  gradient.addColorStop(0, topColor);
-  gradient.addColorStop(1, baseColor);
-  context.fillStyle = gradient;
-  context.beginPath();
-  context.moveTo(0, groundY);
-  for (let x = -20; x <= width + 20; x += 48) {
-    const peak = top + Math.sin(x * 0.011 + depth * 9) * roughness + ((x * 17) % 39);
-    context.lineTo(x, peak);
-    context.lineTo(x + 24, peak + roughness * 1.5);
-  }
-  context.lineTo(width, groundY);
-  context.closePath();
-  context.fill();
-}
-
-function drawTerrainTexture(context, width, height, groundY) {
-  context.save();
-  context.globalAlpha = 0.28;
-  for (let index = 0; index < 56; index += 1) {
-    const x = ((index * 89) % 997) / 997 * width;
-    const y = groundY + 18 + ((index * 47) % Math.max(1, height - groundY - 26));
-    context.strokeStyle = index % 2 === 0 ? "rgba(124, 112, 77, 0.35)" : "rgba(36, 48, 38, 0.45)";
-    context.lineWidth = 1;
-    context.beginPath();
-    context.moveTo(x, y);
-    context.lineTo(x + 24 + (index % 5) * 12, y + Math.sin(index) * 5);
-    context.stroke();
-  }
-  context.restore();
-}
-
-function drawRealisticCity(context, width, height, groundY) {
-  const cityWidth = Math.min(width * 0.62, 620);
-  const startX = (width - cityWidth) / 2;
-  const scRatio = state.sc / CAP;
-  const beRatio = state.be / CAP;
-  const populationFactor = clamp(Math.sqrt(Math.max(0, state.pop)) / 430, 0.25, 1.35);
-  const buildingCount = Math.round(14 + populationFactor * 8 + scRatio * 7);
-  const laneY = groundY + 12;
-
-  context.save();
-  context.fillStyle = "rgba(6, 8, 9, 0.38)";
-  context.beginPath();
-  context.ellipse(width * 0.5, laneY + 16, cityWidth * 0.58, 24, 0, 0, Math.PI * 2);
-  context.fill();
-
-  for (let index = 0; index < buildingCount; index += 1) {
-    const cell = cityWidth / buildingCount;
-    const bw = Math.max(8, cell - 4);
-    const techLift = scRatio * (52 + (index % 3) * 10);
-    const civicLift = beRatio * (34 + (index % 4) * 7);
-    const bh = 24 + ((index * 17) % 42) + (index % 2 === 0 ? techLift : civicLift);
-    const x = startX + index * (cityWidth / buildingCount);
-    const y = groundY - bh;
-    drawBuilding(context, x, y, bw, bh, index, scRatio, beRatio);
-  }
-
-  drawObservatory(context, startX + cityWidth * 0.18, groundY, scRatio);
-  drawTempleDome(context, startX + cityWidth * 0.72, groundY, beRatio);
-
-  const popLights = Math.min(skyPopulationLightCount(), Math.floor(Math.sqrt(Math.max(0, state.pop)) * 0.42));
-  for (let index = 0; index < popLights; index += 1) {
-    const x = startX + ((index * 53) % Math.max(1, cityWidth));
-    const y = groundY - 16 - ((index * 29) % 96);
-    context.fillStyle = index % 5 === 0 ? "rgba(150, 207, 255, 0.72)" : "rgba(255, 218, 126, 0.72)";
-    context.fillRect(x, y, 1.6, 1.6);
-  }
-  context.restore();
-}
-
-function drawBuilding(context, x, y, width, height, index, scRatio, beRatio) {
-  const shade = 18 + (index % 5) * 7;
-  context.fillStyle = `rgb(${shade}, ${shade + 6}, ${shade + 10})`;
-  context.fillRect(x, y, width, height);
-
-  const side = context.createLinearGradient(x, y, x + width, y);
-  side.addColorStop(0, "rgba(255, 255, 255, 0.08)");
-  side.addColorStop(1, "rgba(0, 0, 0, 0.22)");
-  context.fillStyle = side;
-  context.fillRect(x, y, width, height);
-
-  if (index % 3 === 0 && scRatio > 0.18) {
-    context.strokeStyle = "rgba(151, 206, 255, 0.56)";
-    context.lineWidth = 1;
-    context.beginPath();
-    context.moveTo(x + width * 0.52, y);
-    context.lineTo(x + width * 0.52, y - 14 - scRatio * 30);
-    context.stroke();
-    context.fillStyle = "rgba(151, 206, 255, 0.72)";
-    context.beginPath();
-    context.arc(x + width * 0.52, y - 14 - scRatio * 30, 2.4, 0, Math.PI * 2);
-    context.fill();
-  }
-
-  const rows = Math.max(1, Math.floor(height / 13));
-  const columns = Math.max(1, Math.floor(width / 8));
-  for (let row = 0; row < rows; row += 1) {
-    for (let column = 0; column < columns; column += 1) {
-      if ((row + column + index) % 3 === 0) continue;
-      context.fillStyle = beRatio > scRatio && column % 2 === 0
-        ? "rgba(255, 205, 112, 0.44)"
-        : "rgba(139, 196, 232, 0.38)";
-      context.fillRect(x + 4 + column * 7, y + 6 + row * 12, 2.4, 4);
-    }
-  }
-}
-
-function drawObservatory(context, x, groundY, scRatio) {
-  if (scRatio < 0.08) return;
-
-  const radius = 11 + scRatio * 18;
-  const baseY = groundY - 18 - scRatio * 22;
-  context.fillStyle = "rgba(16, 25, 31, 0.96)";
-  context.fillRect(x - radius * 0.7, baseY, radius * 1.4, groundY - baseY);
-  context.fillStyle = "rgba(98, 142, 168, 0.88)";
-  context.beginPath();
-  context.arc(x, baseY, radius, Math.PI, Math.PI * 2);
-  context.fill();
-  context.strokeStyle = "rgba(186, 226, 255, 0.66)";
-  context.lineWidth = 3;
-  context.beginPath();
-  context.moveTo(x + radius * 0.45, baseY - radius * 0.34);
-  context.lineTo(x + radius * 1.7, baseY - radius * 0.88);
-  context.stroke();
-}
-
-function drawTempleDome(context, x, groundY, beRatio) {
-  if (beRatio < 0.08) return;
-
-  const radius = 14 + beRatio * 20;
-  const baseY = groundY - 12 - beRatio * 26;
-  context.fillStyle = "rgba(31, 26, 18, 0.96)";
-  context.fillRect(x - radius * 0.9, baseY, radius * 1.8, groundY - baseY);
-  const dome = context.createRadialGradient(x - radius * 0.3, baseY - radius * 0.36, 2, x, baseY, radius * 1.1);
-  dome.addColorStop(0, "#ffe3a1");
-  dome.addColorStop(1, "#8b632f");
-  context.fillStyle = dome;
-  context.beginPath();
-  context.arc(x, baseY, radius, Math.PI, Math.PI * 2);
-  context.fill();
-  context.fillStyle = "rgba(255, 232, 158, 0.8)";
-  context.fillRect(x - 1, baseY - radius * 1.26, 2, radius * 0.9);
-  context.fillRect(x - radius * 0.18, baseY - radius * 1.1, radius * 0.36, 2);
-}
-
-function drawUndergroundHints(context, width, height, groundY) {
-  if ((state.eerfLevel || 0) <= 0) return;
-
-  const level = state.eerfLevel || 0;
-  const bunkerWidth = Math.min(220, width * 0.28);
-  const x = width * 0.5 - bunkerWidth / 2;
-  const y = groundY + 32;
-  context.save();
-  context.fillStyle = "rgba(5, 7, 10, 0.72)";
-  context.fillRect(x, y, bunkerWidth, 14 + level * 4);
-  context.strokeStyle = "rgba(199, 210, 254, 0.44)";
-  context.strokeRect(x, y, bunkerWidth, 14 + level * 4);
-  for (let index = 0; index < level + 2; index += 1) {
-    context.fillStyle = index % 2 === 0 ? "rgba(199, 210, 254, 0.82)" : "rgba(123, 216, 143, 0.72)";
-    context.fillRect(x + 14 + index * 24, y + 6, 8, 3);
-  }
-  context.restore();
-}
-
-function paintSky(context, width, height, time) {
-  const pixel = Math.max(3, Math.round(width / 320));
-  const tone = state.lastTone || "quiet";
-  const randFactor = ((state.lastRand ?? state.seed) % 10000) / 10000;
-
-  context.fillStyle = tone === "disaster" ? "#1b0b10" : "#07111f";
-  context.fillRect(0, 0, width, height);
-  drawPixelSky(context, width, height, pixel, tone);
-  drawPixelStars(context, width, height, pixel, time);
-  drawPixelSuns(context, width, height, pixel, time, randFactor, tone);
-  drawPixelHorizon(context, width, height, pixel, time);
-  drawPixelCity(context, width, height, pixel);
-  drawPixelEerf(context, width, height, pixel);
-}
-
-function drawPixelSky(context, width, height, pixel, tone) {
-  const bands = tone === "disaster"
-    ? ["#1b0b10", "#25121a", "#3a1e1c", "#55311d", "#2d2d1c"]
-    : ["#07111f", "#0d1a2d", "#152843", "#2a3a3e", "#283525"];
-  const bandHeight = Math.ceil(height * 0.72 / bands.length / pixel) * pixel;
-  bands.forEach((color, index) => {
-    pixelRect(context, 0, index * bandHeight, width, bandHeight + pixel, color, pixel);
-  });
-
-  for (let index = 0; index < 8; index += 1) {
-    const y = snap(height * (0.2 + index * 0.055), pixel);
-    const color = index % 2 === 0 ? "rgba(255, 222, 160, 0.12)" : "rgba(142, 189, 234, 0.1)";
-    for (let x = -pixel * 8; x < width; x += pixel * 12) {
-      const wave = Math.sin(x * 0.015 + index) * pixel * 2;
-      pixelRect(context, x, y + wave, pixel * 10, pixel, color, pixel);
-    }
-  }
-}
-
-function drawPixelStars(context, width, height, pixel, time) {
-  const starCount = skyStarCount();
-  for (let index = 0; index < starCount; index += 1) {
-    const x = snap(((index * 137) % 991) / 991 * width, pixel);
-    const y = snap(((index * 211) % 457) / 457 * height * 0.58, pixel);
-    const blink = Math.sin(time * 0.001 + index) > 0.2;
-    const size = index % 19 === 0 ? pixel * 2 : pixel;
-    const color = blink ? "rgba(236, 245, 255, 0.78)" : "rgba(236, 245, 255, 0.28)";
-    pixelRect(context, x, y, size, size, color, pixel);
-  }
-}
-
-function drawPixelSuns(context, width, height, pixel, time, randFactor, tone) {
-  const t = time * 0.00024 + state.turn * 0.1;
-  const centerX = width * (0.5 + (randFactor - 0.5) * 0.1);
-  const centerY = height * 0.31;
-  const suns = [
-    {
-      x: centerX + Math.cos(t) * width * 0.23,
-      y: centerY + Math.sin(t * 1.17) * height * 0.15,
-      r: 12 + randFactor * 5,
-      core: tone === "disaster" ? "#ff7354" : "#ffd56d",
-      mid: "#f09b45",
-      glow: "rgba(255, 199, 95, 0.16)"
-    },
-    {
-      x: centerX + Math.cos(-t * 0.81 + 2.1) * width * 0.18,
-      y: centerY + Math.sin(t * 0.76 + 1.2) * height * 0.19,
-      r: 10 + (1 - randFactor) * 4,
-      core: "#ff9a4a",
-      mid: "#c65d34",
-      glow: "rgba(255, 112, 66, 0.14)"
-    },
-    {
-      x: centerX + Math.cos(t * 1.38 + 4.2) * width * 0.27,
-      y: centerY + Math.sin(-t * 0.92 + 2.9) * height * 0.13,
-      r: 8 + Math.sin(t) * 2,
-      core: tone === "special" ? "#b7e6ff" : "#fff1a6",
-      mid: tone === "special" ? "#73bce6" : "#dfb85c",
-      glow: "rgba(255, 236, 166, 0.12)"
-    }
-  ];
-
-  suns.forEach((sun, index) => drawPixelSun(context, sun, pixel, time, index));
-}
-
-function drawPixelSun(context, sun, pixel, time, index) {
-  const x = snap(sun.x, pixel);
-  const y = snap(sun.y, pixel);
-  const radius = Math.max(pixel * 4, snap(sun.r * pixel, pixel));
-  drawPixelGlow(context, x, y, radius * 3, sun.glow, pixel);
-  pixelCircle(context, x, y, radius, sun.mid, pixel);
-  pixelCircle(context, x - pixel * 2, y - pixel * 2, radius * 0.62, sun.core, pixel);
-
-  for (let spot = 0; spot < 5; spot += 1) {
-    const angle = spot * 1.7 + time * 0.0002 * (index + 1);
-    const sx = x + snap(Math.cos(angle) * radius * 0.42, pixel);
-    const sy = y + snap(Math.sin(angle * 0.8) * radius * 0.28, pixel);
-    pixelRect(context, sx, sy, pixel, pixel, "rgba(83, 35, 20, 0.45)", pixel);
-  }
-}
-
-function drawPixelHorizon(context, width, height, pixel, time) {
-  const farY = snap(height * 0.62, pixel);
-  drawPixelMountains(context, width, height, pixel, farY, "#213447", "#132331", 8, time * 0.00005);
-  drawPixelMountains(context, width, height, pixel, farY + pixel * 8, "#2d3f32", "#172417", 6, time * 0.00003);
-
-  const groundY = snap(height * 0.74, pixel);
-  pixelRect(context, 0, groundY, width, height - groundY, "#1b2115", pixel);
-  for (let y = groundY; y < height; y += pixel * 4) {
-    const color = y % (pixel * 8) === 0 ? "#22291a" : "#13180f";
-    pixelRect(context, 0, y, width, pixel * 2, color, pixel);
-  }
-  for (let index = 0; index < 34; index += 1) {
-    const x = snap(((index * 83) % 997) / 997 * width, pixel);
-    const y = snap(groundY + pixel * 5 + ((index * 37) % Math.max(pixel, height - groundY - pixel * 8)), pixel);
-    pixelRect(context, x, y, pixel * (4 + index % 8), pixel, index % 2 ? "#2b3120" : "#3a3b25", pixel);
-  }
-}
-
-function drawPixelMountains(context, width, height, pixel, baseY, topColor, baseColor, roughness, drift) {
-  for (let x = -pixel * 10; x < width + pixel * 10; x += pixel * 9) {
-    const peak = snap(baseY - pixel * (8 + ((x / pixel + roughness * 11) % 17)) - Math.sin(x * 0.01 + drift) * pixel * roughness, pixel);
-    const mid = snap(x + pixel * 5, pixel);
-    context.fillStyle = topColor;
-    context.beginPath();
-    context.moveTo(x, baseY);
-    context.lineTo(mid, peak);
-    context.lineTo(x + pixel * 11, baseY);
-    context.closePath();
-    context.fill();
-    pixelRect(context, mid, peak + pixel * 2, pixel * 2, baseY - peak - pixel * 2, baseColor, pixel);
-  }
-}
-
-function drawPixelCity(context, width, height, pixel) {
-  const groundY = snap(height * 0.74, pixel);
-  const cityWidth = Math.min(width * 0.7, 720);
-  const startX = snap((width - cityWidth) / 2, pixel);
-  const scRatio = state.sc / CAP;
-  const beRatio = state.be / CAP;
-  const popRatio = clamp(Math.sqrt(Math.max(0, state.pop)) / 430, 0.2, 1.35);
-  const eraBoost = eraIndexFor(state.sc, SCIENCE_ERAS) + eraIndexFor(state.be, BELIEF_ERAS);
-  const buildingCount = Math.round(10 + popRatio * 9 + eraBoost * 0.45);
-  const cell = snap(cityWidth / buildingCount, pixel);
-
-  pixelRect(context, startX - pixel * 8, groundY + pixel * 2, cityWidth + pixel * 16, pixel * 5, "rgba(0, 0, 0, 0.35)", pixel);
-
-  for (let index = 0; index < buildingCount; index += 1) {
-    const x = startX + index * cell;
-    const w = Math.max(pixel * 3, cell - pixel);
-    const heightBase = pixel * (6 + ((index * 7) % 10));
-    const techHeight = pixel * Math.round(scRatio * (8 + index % 5));
-    const faithHeight = pixel * Math.round(beRatio * (7 + index % 4));
-    const h = heightBase + (index % 2 === 0 ? techHeight : faithHeight);
-    const y = groundY - h;
-    const palette = index % 2 === 0
-      ? ["#26394a", "#1a2733", "#6ab8e6"]
-      : ["#473b27", "#2a2217", "#f1c46e"];
-    drawPixelBuilding(context, x, y, w, h, pixel, palette, index);
-  }
-
-  if (scRatio > 0.08) drawPixelObservatory(context, startX + cityWidth * 0.18, groundY, pixel, scRatio);
-  if (beRatio > 0.08) drawPixelTemple(context, startX + cityWidth * 0.74, groundY, pixel, beRatio);
-  drawPixelPopulationLights(context, startX, cityWidth, groundY, pixel, popRatio);
-}
-
-function drawPixelBuilding(context, x, y, width, height, pixel, palette, index) {
-  pixelRect(context, x, y, width, height, palette[0], pixel);
-  pixelRect(context, x + width - pixel, y, pixel, height, palette[1], pixel);
-  pixelRect(context, x, y, width, pixel, "rgba(255, 255, 255, 0.12)", pixel);
-
-  const rows = Math.max(1, Math.floor(height / (pixel * 3)));
-  const columns = Math.max(1, Math.floor(width / (pixel * 3)));
-  for (let row = 0; row < rows; row += 1) {
-    for (let column = 0; column < columns; column += 1) {
-      if ((row + column + index) % 3 === 0) continue;
-      pixelRect(context, x + pixel + column * pixel * 3, y + pixel * 2 + row * pixel * 3, pixel, pixel, palette[2], pixel);
-    }
-  }
-}
-
-function drawPixelObservatory(context, x, groundY, pixel, scRatio) {
-  const height = pixel * (8 + Math.round(scRatio * 14));
-  const y = groundY - height;
-  pixelRect(context, x - pixel * 3, y, pixel * 6, height, "#1c2c38", pixel);
-  pixelRect(context, x - pixel * 5, y - pixel * 3, pixel * 10, pixel * 3, "#7297ad", pixel);
-  pixelRect(context, x + pixel * 2, y - pixel * 6, pixel * 8, pixel * 2, "#9dd6f5", pixel);
-  pixelRect(context, x + pixel * 9, y - pixel * 7, pixel * 2, pixel * 4, "#d8f4ff", pixel);
-}
-
-function drawPixelTemple(context, x, groundY, pixel, beRatio) {
-  const height = pixel * (7 + Math.round(beRatio * 12));
-  const y = groundY - height;
-  pixelRect(context, x - pixel * 5, y, pixel * 10, height, "#322819", pixel);
-  pixelRect(context, x - pixel * 7, y - pixel * 2, pixel * 14, pixel * 3, "#9d763b", pixel);
-  pixelRect(context, x - pixel * 4, y - pixel * 5, pixel * 8, pixel * 3, "#f0c56d", pixel);
-  pixelRect(context, x - pixel, y - pixel * 9, pixel * 2, pixel * 4, "#f6dd8a", pixel);
-  pixelRect(context, x - pixel * 2, y - pixel * 8, pixel * 4, pixel, "#f6dd8a", pixel);
-}
-
-function drawPixelPopulationLights(context, startX, cityWidth, groundY, pixel, popRatio) {
-  const lights = Math.min(skyPopulationLightCount(), Math.round(popRatio * 54));
-  for (let index = 0; index < lights; index += 1) {
-    const x = snap(startX + ((index * 41) % Math.max(pixel, cityWidth)), pixel);
-    const y = snap(groundY - pixel * 3 - ((index * 29) % (pixel * 28)), pixel);
-    const color = index % 5 === 0 ? "#8fd4ff" : "#ffd778";
-    pixelRect(context, x, y, pixel, pixel, color, pixel);
-  }
-}
-
-function drawPixelEerf(context, width, height, pixel) {
-  const level = state.eerfLevel || 0;
-  if (level <= 0) return;
-
-  const groundY = snap(height * 0.74, pixel);
-  const bunkerWidth = pixel * (28 + level * 4);
-  const x = snap(width / 2 - bunkerWidth / 2, pixel);
-  const y = groundY + pixel * 8;
-  pixelRect(context, x, y, bunkerWidth, pixel * (4 + level), "#07090d", pixel);
-  pixelRect(context, x, y, bunkerWidth, pixel, "#c7d2fe", pixel);
-  for (let index = 0; index < level + 2; index += 1) {
-    const color = index % 2 ? "#7bd88f" : "#c7d2fe";
-    pixelRect(context, x + pixel * (3 + index * 4), y + pixel * 2, pixel * 2, pixel, color, pixel);
-  }
-}
-
-function drawPixelGlow(context, centerX, centerY, radius, color, pixel) {
-  const snappedRadius = snap(radius, pixel);
-  pixelRect(context, centerX - snappedRadius, centerY - snappedRadius, snappedRadius * 2, snappedRadius * 2, color, pixel);
-  pixelRect(context, centerX - snappedRadius * 0.62, centerY - snappedRadius * 0.62, snappedRadius * 1.24, snappedRadius * 1.24, color, pixel);
-}
-
-function pixelRect(context, x, y, width, height, color, pixel) {
-  context.fillStyle = color;
-  context.fillRect(snap(x, pixel), snap(y, pixel), snap(width, pixel), snap(height, pixel));
-}
-
-function pixelCircle(context, centerX, centerY, radius, color, pixel) {
-  const snappedRadius = snap(radius, pixel);
-  for (let y = -snappedRadius; y <= snappedRadius; y += pixel) {
-    for (let x = -snappedRadius; x <= snappedRadius; x += pixel) {
-      if (x * x + y * y <= snappedRadius * snappedRadius) {
-        pixelRect(context, centerX + x, centerY + y, pixel, pixel, color, pixel);
-      }
-    }
-  }
-}
-
-function snap(value, pixel) {
-  return Math.round(value / pixel) * pixel;
-}
-
 function saveState() {
   try {
     state.saveVersion = SAVE_VERSION;
@@ -7616,8 +6609,6 @@ function loadState() {
       KNOWLEDGE_TREND_MIN,
       KNOWLEDGE_TREND_MAX
     );
-    migrated.dashboardMode = "cards";
-    migrated.focusMetric = null;
     migrated.metricTrends = migrated.metricTrends && typeof migrated.metricTrends === "object"
       ? {
           sc: Math.round(finiteOr(migrated.metricTrends.sc, 0)),
@@ -7826,10 +6817,6 @@ function formatSpec(value) {
   return String(Math.max(1, Math.round(finiteOr(value, 0))));
 }
 
-function isPalindrome(text) {
-  return text === text.split("").reverse().join("");
-}
-
 function finiteOr(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -7839,14 +6826,6 @@ function roundStat(value) {
   return Math.round(finiteOr(value, 0) * 10000) / 10000;
 }
 
-function hexToRgba(hex, alpha) {
-  const clean = hex.replace("#", "");
-  const red = parseInt(clean.slice(0, 2), 16);
-  const green = parseInt(clean.slice(2, 4), 16);
-  const blue = parseInt(clean.slice(4, 6), 16);
-  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
-}
-
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -7854,7 +6833,5 @@ function clamp(value, min, max) {
 document.addEventListener("DOMContentLoaded", init);
 window.addEventListener("beforeunload", () => {
   if (state && !state.finished) saveState();
-  if (frameHandle) cancelAnimationFrame(frameHandle);
-  if (skyResizeHandle) cancelAnimationFrame(skyResizeHandle);
   cancelAutoRun();
 });
