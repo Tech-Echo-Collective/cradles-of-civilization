@@ -21,7 +21,20 @@ public static class SaveStore
     public static GameState? Load(string path)
     {
         if (!File.Exists(path)) return null;
-        return JsonSerializer.Deserialize<GameState>(File.ReadAllText(path), Options);
+        var json = File.ReadAllText(path);
+        var state = JsonSerializer.Deserialize<GameState>(json, Options);
+        if (state is null) return null;
+
+        // Saves created before the setup flow already represent a running
+        // civilization. Keep them playable instead of sending them back to
+        // naming, where confirming would reset their progress.
+        using var document = JsonDocument.Parse(json);
+        if (!document.RootElement.TryGetProperty("setupComplete", out _))
+        {
+            state.SetupComplete = true;
+            state.SetupStage = "complete";
+        }
+        return state;
     }
 
     public static void Delete(string path)

@@ -13,6 +13,8 @@ public sealed class GameState
     public string RealmName { get; set; } = "长生军";
     public string Difficulty { get; set; } = "normal";
     public string GovernorId { get; set; } = "east-asian-man";
+    public bool SetupComplete { get; set; }
+    public string SetupStage { get; set; } = "name";
     public int Turn { get; set; }
     public int Civilization { get; set; } = 1;
     public double Science { get; set; }
@@ -61,6 +63,8 @@ public sealed class GameState
         RngState = Seed;
         Turn = 0;
         Civilization = 1;
+        SetupComplete = false;
+        SetupStage = "name";
         Science = 240;
         Belief = 360;
         LiteratureAndArt = 0;

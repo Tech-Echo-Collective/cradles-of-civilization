@@ -47,6 +47,8 @@ public partial class Main : Control
     private readonly Dictionary<string, Label> _actionReasons = new();
     private readonly Dictionary<string, Button> _chronicleFilterButtons = new();
     private readonly Dictionary<string, ActionDefinition> _actionsById = new();
+    private readonly Dictionary<string, Button> _difficultyButtons = new();
+    private readonly Dictionary<string, Button> _governorButtons = new();
 
     private GameState _state = new();
     private Label _headerRealm = null!;
@@ -65,6 +67,14 @@ public partial class Main : Control
     private Label _civilizationHistory = null!;
     private RichTextLabel _chronicle = null!;
     private ScrollContainer _pageScroll = null!;
+    private ScrollContainer _setupScroll = null!;
+    private Control _setupNameStage = null!;
+    private Control _setupDifficultyStage = null!;
+    private Control _setupGovernorStage = null!;
+    private Label _setupRealmPreview = null!;
+    private Label _setupStatus = null!;
+    private LineEdit _setupRealmInput = null!;
+    private LineEdit _setupSeedInput = null!;
     private LineEdit _seedInput = null!;
     private LineEdit _realmInput = null!;
     private OptionButton _difficultyInput = null!;
@@ -97,10 +107,18 @@ public partial class Main : Control
         }
 
         foreach (var action in _engine.Actions) _actionsById[action.Id] = action;
+        GetWindow().MinSize = new Vector2I(1024, 720);
         BuildInterface();
+        var setupPreviewIndex = Array.IndexOf(userArgs, "--ui-setup-stage");
+        if (setupPreviewIndex >= 0 && setupPreviewIndex + 1 < userArgs.Length &&
+            userArgs[setupPreviewIndex + 1] is "name" or "difficulty" or "governor")
+        {
+            _state.SetupStage = userArgs[setupPreviewIndex + 1];
+            _state.RealmName = "长生军";
+        }
         SyncSetupInputs();
-        RenderState();
         SetChronicleFilter("all");
+        RenderState();
         var previewIndex = Array.IndexOf(userArgs, "--ui-scroll");
         if (previewIndex >= 0 && previewIndex + 1 < userArgs.Length && int.TryParse(userArgs[previewIndex + 1], out var previewScroll))
             _previewScroll = previewScroll;
@@ -108,7 +126,7 @@ public partial class Main : Control
 
     public override void _Process(double delta)
     {
-        if (_previewScroll.HasValue) _pageScroll.ScrollVertical = _previewScroll.Value;
+        if (_previewScroll.HasValue && _pageScroll.Visible) _pageScroll.ScrollVertical = _previewScroll.Value;
     }
 
     private void BuildInterface()
@@ -118,6 +136,10 @@ public partial class Main : Control
         var background = new ColorRect { Color = Background, MouseFilter = MouseFilterEnum.Ignore };
         background.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         AddChild(background);
+
+        _setupScroll = BuildSetupInterface();
+        _setupScroll.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        AddChild(_setupScroll);
 
         _pageScroll = new ScrollContainer
         {
@@ -137,7 +159,7 @@ public partial class Main : Control
 
         var page = new VBoxContainer
         {
-            CustomMinimumSize = new Vector2(1160, 0),
+            CustomMinimumSize = new Vector2(980, 0),
             SizeFlagsHorizontal = SizeFlags.ExpandFill
         };
         page.AddThemeConstantOverride("separation", 18);
@@ -159,6 +181,262 @@ public partial class Main : Control
         _status.AddThemeColorOverride("font_color", Muted);
         page.AddChild(_status);
         page.AddChild(BuildLowerGrid());
+    }
+
+    private ScrollContainer BuildSetupInterface()
+    {
+        var scroll = new ScrollContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
+        };
+        var outer = new MarginContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        outer.AddThemeConstantOverride("margin_left", 24);
+        outer.AddThemeConstantOverride("margin_right", 24);
+        outer.AddThemeConstantOverride("margin_top", 28);
+        outer.AddThemeConstantOverride("margin_bottom", 28);
+        scroll.AddChild(outer);
+
+        var page = new HBoxContainer
+        {
+            CustomMinimumSize = new Vector2(960, 680),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.Fill,
+            Alignment = BoxContainer.AlignmentMode.Center
+        };
+        page.AddThemeConstantOverride("separation", 42);
+        outer.AddChild(page);
+
+        var identity = new VBoxContainer
+        {
+            CustomMinimumSize = new Vector2(340, 0),
+            SizeFlagsHorizontal = SizeFlags.Fill,
+            Alignment = BoxContainer.AlignmentMode.Center
+        };
+        identity.AddThemeConstantOverride("separation", 12);
+        identity.AddChild(TextLabel("CRADLES OF CIVILIZATION", 13, new Color(0.66f, 0.8f, 0.89f)));
+        identity.AddChild(TextLabel("文明摇篮", 56, Ink));
+        identity.AddChild(TextLabel("原创企划 / Original concept: Noah Walker", 12, Muted));
+        var quote = TextLabel("人类从历史中学到的唯一教训，\n就是人类从未从历史中学到任何教训。", 17, new Color(0.82f, 0.86f, 0.91f));
+        quote.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        identity.AddChild(quote);
+        var citation = TextLabel("——格奥尔格·威廉·弗里德里希·黑格尔，1837年", 13, new Color(0.72f, 0.77f, 0.84f));
+        citation.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        identity.AddChild(citation);
+        page.AddChild(identity);
+
+        var setupPanel = CreatePanel(PanelSoft, 28, 26, new Color(Science.R, Science.G, Science.B, 0.28f), 8, Science);
+        setupPanel.CustomMinimumSize = new Vector2(560, 0);
+        setupPanel.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        var setupLayout = new VBoxContainer { SizeFlagsVertical = SizeFlags.Fill };
+        setupLayout.AddThemeConstantOverride("separation", 18);
+        setupPanel.AddChild(setupLayout);
+        setupLayout.AddChild(TextLabel("建立文明 // INITIALIZE", 11, Science));
+        setupLayout.AddChild(HorizontalRule());
+
+        _setupNameStage = BuildNameStage();
+        _setupDifficultyStage = BuildDifficultyStage();
+        _setupGovernorStage = BuildGovernorStage();
+        setupLayout.AddChild(_setupNameStage);
+        setupLayout.AddChild(_setupDifficultyStage);
+        setupLayout.AddChild(_setupGovernorStage);
+        _setupStatus = TextLabel("", 12, Belief);
+        _setupStatus.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _setupStatus.CustomMinimumSize = new Vector2(0, 28);
+        setupLayout.AddChild(_setupStatus);
+        page.AddChild(setupPanel);
+        return scroll;
+    }
+
+    private Control BuildNameStage()
+    {
+        var layout = SetupStage("01 / 国度命名", "你的国度", "一切文明，始于一个被共同记住的名字。");
+        _setupRealmInput = StyledInput("输入国名", 0);
+        _setupRealmInput.MaxLength = 24;
+        _setupRealmInput.TextSubmitted += _ => ConfirmSetupName();
+        layout.AddChild(_setupRealmInput);
+        layout.AddChild(TextLabel("世界种子", 13, Ink));
+        var seedRow = new HBoxContainer();
+        seedRow.AddThemeConstantOverride("separation", 10);
+        _setupSeedInput = StyledInput("输入种子，例如 1058", 0);
+        seedRow.AddChild(_setupSeedInput);
+        var random = CompactButton("随机世界", RandomizeSetupSeed);
+        random.CustomMinimumSize = new Vector2(130, 40);
+        seedRow.AddChild(random);
+        layout.AddChild(seedRow);
+        var note = TextLabel("同一种子会生成相同的地块、道路与随机序列。地图将在后续版本接回；当前种子仍决定全部随机序列。", 11, Muted);
+        note.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        layout.AddChild(note);
+        layout.AddChild(PrimaryButton("确认国名", ConfirmSetupName));
+        return layout;
+    }
+
+    private Control BuildDifficultyStage()
+    {
+        var layout = SetupStage("02 / 难度选择", "选择演化压力", "当前难度只影响灾变强度；地图与军事参数将在对应系统迁回时恢复。");
+        _setupRealmPreview = TextLabel("无名国度", 27, Ink);
+        layout.AddChild(_setupRealmPreview);
+        var grid = new GridContainer { Columns = 2, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        grid.AddThemeConstantOverride("h_separation", 10);
+        grid.AddThemeConstantOverride("v_separation", 10);
+        string[] descriptions =
+        [
+            "灾变较弱，适合熟悉文明循环",
+            "标准灾变压力与文明节奏",
+            "灾变更频繁，容错更低",
+            "灾变全面强化，容错极低"
+        ];
+        for (var i = 0; i < Difficulties.Length; i++)
+        {
+            var index = i;
+            var button = SetupChoiceButton(DifficultyLabels[i], descriptions[i], 92, () => SelectDifficulty(index));
+            _difficultyButtons[Difficulties[i]] = button;
+            grid.AddChild(button);
+        }
+        layout.AddChild(grid);
+        layout.AddChild(SetupNavigation("返回命名", BackToName, "选择执政官", ContinueToGovernor));
+        return layout;
+    }
+
+    private Control BuildGovernorStage()
+    {
+        var layout = SetupStage("03 / 执政官", "选择初始执政官", "人物与数值规则沿用网页版；涉及地图与军事的技能部分暂不生效。");
+        var grid = new GridContainer { Columns = 2, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        grid.AddThemeConstantOverride("h_separation", 10);
+        grid.AddThemeConstantOverride("v_separation", 10);
+        string[] names =
+        [
+            "杨卫平",
+            "克莱尔·英格丽德·麦克劳德",
+            "拉特尔·‘公羊’·塞万提斯三世",
+            "三体监听员"
+        ];
+        string[] captions =
+        [
+            "汉人血统。\n他坚信空谈误国，实干兴邦。\n他也坚信：历来强盗要侵入，最终必送命。",
+            "维京-凯尔特血统。\n当然，她可以是一位优秀的执政官。\n但她更想成为一位女武神。",
+            "拉美-非洲混血。\n他有自己的梦想，比如有一天，殖民者能停止掠夺他的家乡。\n当然，只是个梦想。",
+            "三体世界的监听员。\n你已经是身经百战见得多了。\n你觉得三体世界不好，现在，你来建设它。"
+        ];
+        string[] skills =
+        [
+            "民生防线｜人口正增长 +8%。",
+            "女武神｜神学正增长 +8%。",
+            "公羊之梦｜经济正增长 +10%。",
+            "监听者｜全图情报效果待地图系统迁回。"
+        ];
+        for (var i = 0; i < Governors.Length; i++)
+        {
+            var index = i;
+            var button = GovernorChoiceButton(index, names[i], captions[i], skills[i], () => SelectGovernor(index));
+            _governorButtons[Governors[i]] = button;
+            grid.AddChild(button);
+        }
+        layout.AddChild(grid);
+        layout.AddChild(SetupNavigation("返回难度", BackToDifficulty, "开始演化", CompleteSetup));
+        return layout;
+    }
+
+    private static VBoxContainer SetupStage(string index, string title, string description)
+    {
+        var layout = new VBoxContainer { SizeFlagsVertical = SizeFlags.Fill };
+        layout.AddThemeConstantOverride("separation", 13);
+        layout.AddChild(TextLabel(index, 11, Science));
+        layout.AddChild(TextLabel(title, 24, Ink));
+        var copy = TextLabel(description, 12, Muted);
+        copy.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        layout.AddChild(copy);
+        return layout;
+    }
+
+    private static HSeparator HorizontalRule()
+    {
+        var rule = new HSeparator();
+        rule.AddThemeStyleboxOverride("separator", FlatBox(Line, 0));
+        return rule;
+    }
+
+    private static Button SetupChoiceButton(string title, string description, float height, Action handler)
+    {
+        var button = new Button { Text = "", CustomMinimumSize = new Vector2(0, height), SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        button.AddThemeStyleboxOverride("normal", ButtonBox(Terminal, new Color(Science.R, Science.G, Science.B, 0.22f), 1));
+        button.AddThemeStyleboxOverride("hover", ButtonBox(new Color(0.06f, 0.1f, 0.15f), Science, 3));
+        button.AddThemeStyleboxOverride("pressed", ButtonBox(new Color(0.04f, 0.075f, 0.11f), Science, 4));
+        button.Pressed += handler;
+        var margin = FillMargin(14, 12);
+        button.AddChild(margin);
+        var copy = new VBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
+        copy.AddThemeConstantOverride("separation", 5);
+        copy.AddChild(TextLabel(title, 16, Ink));
+        var detail = TextLabel(description, 11, Muted);
+        detail.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        copy.AddChild(detail);
+        margin.AddChild(copy);
+        IgnoreMouse(margin);
+        return button;
+    }
+
+    private Button GovernorChoiceButton(int index, string name, string caption, string skill, Action handler)
+    {
+        var button = new Button { Text = "", CustomMinimumSize = new Vector2(0, 270), SizeFlagsHorizontal = SizeFlags.ExpandFill, ClipContents = true };
+        button.AddThemeStyleboxOverride("normal", ButtonBox(Terminal, new Color(Science.R, Science.G, Science.B, 0.18f), 1));
+        button.AddThemeStyleboxOverride("hover", ButtonBox(new Color(0.06f, 0.1f, 0.15f), Science, 3));
+        button.AddThemeStyleboxOverride("pressed", ButtonBox(new Color(0.04f, 0.075f, 0.11f), Science, 4));
+        button.Pressed += handler;
+        var margin = FillMargin(12, 10);
+        button.AddChild(margin);
+        var copy = new VBoxContainer();
+        copy.AddThemeConstantOverride("separation", 6);
+        var portrait = new TextureRect
+        {
+            Texture = LoadGovernorTexture(index),
+            CustomMinimumSize = new Vector2(0, 96),
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered
+        };
+        copy.AddChild(portrait);
+        var nameLabel = TextLabel(name, 13, Ink);
+        nameLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        nameLabel.HorizontalAlignment = HorizontalAlignment.Center;
+        copy.AddChild(nameLabel);
+        var captionLabel = TextLabel(caption, 10, Muted);
+        captionLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        captionLabel.HorizontalAlignment = HorizontalAlignment.Center;
+        copy.AddChild(captionLabel);
+        var skillLabel = TextLabel(skill, 10, Belief);
+        skillLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        skillLabel.HorizontalAlignment = HorizontalAlignment.Center;
+        copy.AddChild(skillLabel);
+        margin.AddChild(copy);
+        IgnoreMouse(margin);
+        return button;
+    }
+
+    private static Control SetupNavigation(string backText, Action back, string nextText, Action next)
+    {
+        var row = new HBoxContainer();
+        row.AddThemeConstantOverride("separation", 10);
+        var backButton = CompactButton(backText, back);
+        backButton.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        backButton.CustomMinimumSize = new Vector2(0, 42);
+        var nextButton = PrimaryButton(nextText, next);
+        nextButton.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        row.AddChild(backButton);
+        row.AddChild(nextButton);
+        return row;
+    }
+
+    private static Button PrimaryButton(string text, Action handler)
+    {
+        var button = new Button { Text = text, CustomMinimumSize = new Vector2(0, 44), SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        button.AddThemeFontSizeOverride("font_size", 13);
+        button.AddThemeColorOverride("font_color", Background);
+        button.AddThemeStyleboxOverride("normal", FlatBox(Science, 5, Science, 1, 12, 7));
+        button.AddThemeStyleboxOverride("hover", FlatBox(new Color(0.52f, 0.9f, 1f), 5, Colors.White, 1, 12, 7));
+        button.AddThemeStyleboxOverride("pressed", FlatBox(new Color(0.26f, 0.72f, 0.88f), 5, Science, 1, 12, 7));
+        button.Pressed += handler;
+        return button;
     }
 
     private Control BuildTopbar()
@@ -385,7 +663,7 @@ public partial class Main : Control
         var button = new Button
         {
             Text = "",
-            CustomMinimumSize = new Vector2(0, 104),
+            CustomMinimumSize = new Vector2(0, 132),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             ClipContents = true,
             TooltipText = action.Description
@@ -442,7 +720,7 @@ public partial class Main : Control
     private Control BuildChroniclePanel()
     {
         var panel = CreatePanel(PanelSoft, 16, 16, Line, 6);
-        panel.CustomMinimumSize = new Vector2(760, 620);
+        panel.CustomMinimumSize = new Vector2(620, 620);
         panel.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         var layout = new VBoxContainer();
         layout.AddThemeConstantOverride("separation", 10);
@@ -481,7 +759,7 @@ public partial class Main : Control
     private Control BuildSystemPanel()
     {
         var panel = CreatePanel(PanelSoft, 16, 16, Line, 6);
-        panel.CustomMinimumSize = new Vector2(370, 620);
+        panel.CustomMinimumSize = new Vector2(340, 620);
         var layout = new VBoxContainer();
         layout.AddThemeConstantOverride("separation", 12);
         panel.AddChild(layout);
@@ -531,6 +809,7 @@ public partial class Main : Control
 
     private void Advance(string actionId)
     {
+        if (!_state.SetupComplete) return;
         var result = _engine.Advance(_state, actionId);
         _lastSpecialTitle = result.SpecialEventTitle;
         var special = string.IsNullOrEmpty(result.SpecialEventTitle) ? "" : $" · {result.SpecialEventTitle}";
@@ -551,13 +830,104 @@ public partial class Main : Control
         {
             RealmName = string.IsNullOrWhiteSpace(_realmInput.Text) ? "长生军" : _realmInput.Text.Trim(),
             Difficulty = Difficulties[(int)_difficultyInput.Selected],
-            GovernorId = Governors[(int)_governorInput.Selected]
+            GovernorId = Governors[(int)_governorInput.Selected],
+            SetupComplete = false,
+            SetupStage = "name"
         };
         _lastSpecialTitle = "";
-        _status.Text = $"Seed {_state.Seed} 的第 1 号文明苏醒。";
+        _setupStatus.Text = "新世界已准备，请重新确认建国信息。";
         SyncSetupInputs();
         AutoSave();
         RenderState();
+    }
+
+    private void RandomizeSetupSeed()
+    {
+        var randomized = new GameState(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        _setupSeedInput.Text = randomized.Seed.ToString(CultureInfo.InvariantCulture);
+        _setupStatus.Text = $"已生成世界种子 {randomized.Seed}。";
+    }
+
+    private void ConfirmSetupName()
+    {
+        var realm = _setupRealmInput.Text.Trim();
+        if (string.IsNullOrWhiteSpace(realm))
+        {
+            _setupStatus.Text = "请先输入国名。";
+            _setupRealmInput.GrabFocus();
+            return;
+        }
+        var seed = long.TryParse(_setupSeedInput.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var difficulty = Difficulties.Contains(_state.Difficulty) ? _state.Difficulty : "normal";
+        var governor = Governors.Contains(_state.GovernorId) ? _state.GovernorId : "east-asian-man";
+        _state = new GameState(seed)
+        {
+            RealmName = realm,
+            Difficulty = difficulty,
+            GovernorId = governor,
+            SetupComplete = false,
+            SetupStage = "difficulty"
+        };
+        _setupStatus.Text = $"国度“{realm}”已命名。";
+        SyncSetupInputs();
+        AutoSave();
+        RenderSetup();
+    }
+
+    private void SelectDifficulty(int index)
+    {
+        _state.Difficulty = Difficulties[Math.Clamp(index, 0, Difficulties.Length - 1)];
+        _setupStatus.Text = $"已选择{DifficultyLabels[Math.Clamp(index, 0, DifficultyLabels.Length - 1)]}难度。";
+        AutoSave();
+        RenderSetup();
+    }
+
+    private void BackToName()
+    {
+        _state.SetupStage = "name";
+        _setupStatus.Text = "可以修改国名或世界种子。";
+        AutoSave();
+        RenderSetup();
+    }
+
+    private void ContinueToGovernor()
+    {
+        _state.SetupStage = "governor";
+        _setupStatus.Text = "选择一位初始执政官。";
+        AutoSave();
+        RenderSetup();
+    }
+
+    private void BackToDifficulty()
+    {
+        _state.SetupStage = "difficulty";
+        _setupStatus.Text = "可以重新选择演化压力。";
+        AutoSave();
+        RenderSetup();
+    }
+
+    private void SelectGovernor(int index)
+    {
+        _state.GovernorId = Governors[Math.Clamp(index, 0, Governors.Length - 1)];
+        _setupStatus.Text = $"已选择{GovernorLabels[Math.Clamp(index, 0, GovernorLabels.Length - 1)]}。";
+        AutoSave();
+        RenderSetup();
+    }
+
+    private void CompleteSetup()
+    {
+        _state.SetupComplete = true;
+        _state.SetupStage = "complete";
+        _state.Weather = $"{_state.RealmName}开始文明演化";
+        _state.Chronicle[0].Text = $"{_state.RealmName}在三颗恒星互相矛盾的轨迹下苏醒。";
+        _lastSpecialTitle = "";
+        _status.Text = $"{_state.RealmName}建立完成 · 请选择第一年的决策。";
+        SyncSetupInputs();
+        AutoSave();
+        RenderState();
+        _pageScroll.ScrollVertical = 0;
     }
 
     private void SaveGame()
@@ -579,7 +949,10 @@ public partial class Main : Control
         _state = loaded;
         _lastSpecialTitle = "";
         SyncSetupInputs();
-        _status.Text = $"已读取第 {_state.Civilization} 号文明，第 {_state.Turn} 年。";
+        if (_state.SetupComplete)
+            _status.Text = $"已读取第 {_state.Civilization} 号文明，第 {_state.Turn} 年。";
+        else
+            _setupStatus.Text = "已读取尚未完成的建国流程。";
         RenderState();
     }
 
@@ -595,12 +968,21 @@ public partial class Main : Control
     {
         _realmInput.Text = _state.RealmName;
         _seedInput.Text = _state.Seed.ToString(CultureInfo.InvariantCulture);
+        _setupRealmInput.Text = _state.RealmName;
+        _setupSeedInput.Text = _state.Seed.ToString(CultureInfo.InvariantCulture);
         _difficultyInput.Selected = Math.Max(0, Array.IndexOf(Difficulties, _state.Difficulty));
         _governorInput.Selected = Math.Max(0, Array.IndexOf(Governors, _state.GovernorId));
     }
 
     private void RenderState()
     {
+        _setupScroll.Visible = !_state.SetupComplete;
+        _pageScroll.Visible = _state.SetupComplete;
+        if (!_state.SetupComplete)
+        {
+            RenderSetup();
+            return;
+        }
         var difficultyIndex = Math.Max(0, Array.IndexOf(Difficulties, _state.Difficulty));
         var governorIndex = Math.Max(0, Array.IndexOf(Governors, _state.GovernorId));
         _headerRealm.Text = $"{_state.RealmName}｜{DifficultyLabels[difficultyIndex]}｜无地图版";
@@ -651,6 +1033,20 @@ public partial class Main : Control
         RenderChronicle();
     }
 
+    private void RenderSetup()
+    {
+        var stage = _state.SetupStage is "difficulty" or "governor" ? _state.SetupStage : "name";
+        _setupNameStage.Visible = stage == "name";
+        _setupDifficultyStage.Visible = stage == "difficulty";
+        _setupGovernorStage.Visible = stage == "governor";
+        _setupRealmPreview.Text = _state.RealmName;
+        foreach (var (id, button) in _difficultyButtons)
+            button.Modulate = id == _state.Difficulty ? Colors.White : new Color(0.58f, 0.62f, 0.68f);
+        foreach (var (id, button) in _governorButtons)
+            button.Modulate = id == _state.GovernorId ? Colors.White : new Color(0.58f, 0.62f, 0.68f);
+        _setupScroll.ScrollVertical = 0;
+    }
+
     private void SetMetric(string key, string value, string detail, int trend, double meter, string? stage = null)
     {
         _metricValues[key].Text = value;
@@ -695,11 +1091,15 @@ public partial class Main : Control
 
     private void LoadGovernorPortrait(int index)
     {
+        _governorPortrait.Texture = LoadGovernorTexture(index);
+    }
+
+    private static Texture2D? LoadGovernorTexture(int index)
+    {
         var path = ProjectSettings.GlobalizePath($"res://../assets/{GovernorPortraits[index]}");
-        if (!System.IO.File.Exists(path)) return;
+        if (!System.IO.File.Exists(path)) return null;
         var image = Image.LoadFromFile(path);
-        if (image.IsEmpty()) return;
-        _governorPortrait.Texture = ImageTexture.CreateFromImage(image);
+        return image.IsEmpty() ? null : ImageTexture.CreateFromImage(image);
     }
 
     private static long EstimateRestartPopulation(GameState state)
@@ -742,19 +1142,19 @@ public partial class Main : Control
 
     private static ActionPresentation Presentation(string actionId) => actionId switch
     {
-        "science" => new("SC", "S", "我们必须知道；我们必将知道。——希尔伯特，1930年", Science),
+        "science" => new("SC", "S", "我们必须知道；我们必将知道。\n ——大卫·希尔伯特，1930年", Science),
         "belief" => new("BE", "B", "万物非主，唯有真主。", Belief),
-        "population" => new("POP", "P", "居者有其屋，耕者有其田。", People),
-        "economy" => new("EC", "E", "牛奶会有的，面包也会有的。一切都会有的！", Economy),
-        "arts" => new("LA", "L", "真正的艺术，是不显得像艺术。", Arts),
+        "population" => new("POP", "P", "居者有其屋，耕者有其田。\n安得广厦千万间，大庇天下寒士俱欢颜？", People),
+        "economy" => new("EC", "E", "牛奶会有的，面包也会有的。一切都会有的！\n ——弗拉基米尔·伊里奇·列宁，1917年", Economy),
+        "arts" => new("LA", "L", "真正的艺术，是不显得像艺术。\n——巴尔达萨雷·卡斯蒂廖内，1528年", Arts),
         "hibernate" => new("HY", "H", "脱水！脱水！！！", Eerf),
-        "balance" => new("EQ", "⇧B", "政治是妥协的艺术。百花齐放，百家争鸣。", Science),
-        "suppressBelief" => new("-BE", "1", "陛下，我不需要上帝这个假设。", Danger),
-        "order" => new("OR", "Z", "先让街灯亮起来，再争论谁拥有星空。", People),
-        "suppressScience" => new("-SC", "2", "不管怎么说，它依然在转动！", Danger),
-        "buildEerf" => new("EF", "F", "极端环境抵抗设施在地下开工。", Eerf),
-        "upgradeEerf" => new("UP", "U", "更深的门、更厚的隔热层、更长的冬眠协议。", Eerf),
-        "recovery" => new("ECO", "O", "我想花几分钟，向人民谈谈银行的情况。", Economy),
+        "balance" => new("EQ", "⇧B", "政治是妥协的艺术。由此，百花齐放，百家争鸣；\n我看没什么，起码挺热闹。", Science),
+        "suppressBelief" => new("-BE", "1", "陛下，我不需要上帝这个假设。\n——皮埃尔·西蒙·拉普拉斯，1802年", Danger),
+        "order" => new("OR", "Z", "您自由了。\n——《悲惨世界》，1862年", People),
+        "suppressScience" => new("-SC", "2", "不管怎么说，它依然在转动！\n——伽利略·伽利莱，1632年", Danger),
+        "buildEerf" => new("EF", "F", "E.E.R.F.极端环境抵抗设施在地下开工。\n子子孙孙无穷匮也，而山不加增，何苦而不平？", Eerf),
+        "upgradeEerf" => new("UP", "U", "风雨不动安如山。\n呜呼！何时眼前突兀见此屋，吾庐独破受冻死亦足！", Eerf),
+        "recovery" => new("ECO", "O", "我想花几分钟时间，向我们的人民谈谈银行的情况。\n ——富兰克林·罗斯福，1933年", Economy),
         _ => new("—", "", "", Ink)
     };
 

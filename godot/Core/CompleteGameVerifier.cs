@@ -13,11 +13,12 @@ public static class CompleteGameVerifier
         var engine = new GameEngine();
 
         VerifyActionSurface(engine, errors);
+        VerifySetupStateAndSave(errors);
         VerifyCollapseRestartAndSave(engine, errors);
         VerifyCandidateAndAutomaticEndings(engine, errors);
         VerifyHiddenStagnationEnding(engine, errors);
 
-        return new ParityReport(4, errors);
+        return new ParityReport(5, errors);
     }
 
     private static void VerifyActionSurface(GameEngine engine, List<string> errors)
@@ -31,6 +32,43 @@ public static class CompleteGameVerifier
         ];
         if (!ids.SequenceEqual(expected)) errors.Add($"actions: expected {string.Join(',', expected)}, got {string.Join(',', ids)}");
         if (ids.Any(id => id.Contains("military", StringComparison.OrdinalIgnoreCase))) errors.Add("actions: military action leaked into the non-military build");
+    }
+
+    private static void VerifySetupStateAndSave(List<string> errors)
+    {
+        var state = new GameState(1_058)
+        {
+            RealmName = "测试国度",
+            Difficulty = "hard",
+            GovernorId = "black-man",
+            SetupComplete = false,
+            SetupStage = "governor"
+        };
+        if (new GameState().SetupComplete || new GameState().SetupStage != "name")
+            errors.Add("setup: a new world did not begin at the naming stage");
+
+        var path = Path.Combine(Path.GetTempPath(), $"cradles-setup-{Guid.NewGuid():N}.json");
+        try
+        {
+            SaveStore.Save(state, path);
+            var loaded = SaveStore.Load(path);
+            if (loaded is null || loaded.SetupComplete || loaded.SetupStage != "governor" ||
+                loaded.RealmName != "测试国度" || loaded.Difficulty != "hard" || loaded.GovernorId != "black-man")
+                errors.Add("setup: an unfinished setup did not survive save/load");
+
+            File.WriteAllText(path, "{\"seed\":1058,\"realmName\":\"旧存档\"}");
+            var legacy = SaveStore.Load(path);
+            if (legacy is null || !legacy.SetupComplete || legacy.SetupStage != "complete")
+                errors.Add("setup: a legacy running save was sent back to naming");
+        }
+        catch (Exception exception)
+        {
+            errors.Add($"setup save: {exception.GetType().Name}: {exception.Message}");
+        }
+        finally
+        {
+            SaveStore.Delete(path);
+        }
     }
 
     private static void VerifyCollapseRestartAndSave(GameEngine engine, List<string> errors)
