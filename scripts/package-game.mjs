@@ -14,9 +14,7 @@ const files = [
   "endings.js",
   "balance-model.js",
   "game.js",
-  "desktop.js",
-  "styles.css",
-  "README.md"
+  "styles.css"
 ];
 
 rmSync(packageDir, { force: true, recursive: true });
@@ -41,17 +39,8 @@ writeFileSync(
     "",
     "存档说明：",
     "浏览器会把存档保存在本机本浏览器内。把 zip 发给朋友不会带走你的本地存档。",
-    ""
-  ].join("\n")
-);
-
-writeFileSync(
-  join(packageDir, "ORIGINAL_WORK.txt"),
-  [
-    "Cradles Of Civilization / 文明摇篮",
-    "Original concept: Noah Walker",
-    "This package is a static share build generated from the local project.",
-    "If this game is shared further, keep this attribution file with the HTML/CSS/JS files.",
+    "",
+    "由 Tech Echo Collective 制作。",
     ""
   ].join("\n")
 );
