@@ -2,7 +2,14 @@ using System.Collections.Generic;
 
 namespace CradlesOfCivilization.Core;
 
-public sealed record EventDefinition(string Title, StatDelta Delta);
+public sealed record EventDefinition(
+    string Title,
+    StatDelta Delta,
+    string Text = "",
+    bool Destroy = false,
+    bool PiercesPopulationProtection = false,
+    string Effect = "",
+    double EffectValue = 0);
 
 internal static class EventCatalog
 {

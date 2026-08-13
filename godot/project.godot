@@ -5,16 +5,16 @@ config_version=5
 
 [application]
 
-config/name="Cradles of Civilization — Port Prototype"
+config/name="Cradles of Civilization"
 run/main_scene="res://Main.tscn"
 config/features=PackedStringArray("4.7", "C#")
 
 [display]
 
-window/size/viewport_width=960
-window/size/viewport_height=640
-window/size/window_width_override=960
-window/size/window_height_override=640
+window/size/viewport_width=1200
+window/size/viewport_height=820
+window/size/window_width_override=1200
+window/size/window_height_override=820
 window/stretch/mode="canvas_items"
 
 [dotnet]
