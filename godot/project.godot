@@ -6,6 +6,8 @@ config_version=5
 [application]
 
 config/name="Cradles of Civilization"
+config/description="A civilization-cycle strategy game by Tech Echo Collective."
+config/version="0.4.0-alpha.1"
 run/main_scene="res://Main.tscn"
 config/features=PackedStringArray("4.7", "C#")
 
@@ -26,4 +28,5 @@ project/assembly_name="CradlesOfCivilization"
 
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
 environment/defaults/default_clear_color=Color(0.027, 0.039, 0.059, 1)

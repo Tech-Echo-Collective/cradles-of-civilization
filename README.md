@@ -4,15 +4,26 @@
 
 原创企划 / Original concept: Noah Walker.
 
-当前版本：`v0.3.5`（HTML）
+当前原生试玩版：`v0.4.0-alpha.1`（Godot C#，暂不含地图与军事）
+
+网页版规则基准：`v0.3.6-web`
 
 ## 运行
 
-直接用浏览器打开 `index.html`。
+原生版使用 Godot `4.7.1 .NET`，项目位于 `godot/`：
+
+```sh
+dotnet build godot/CradlesOfCivilization.csproj
+/Applications/Godot_mono.app/Contents/MacOS/Godot --path godot
+```
+
+网页版仍可直接用浏览器打开 `index.html`。
 
 ## 打包分享
 
-运行 `npm run package` 会生成 `dist/cradles-of-civilization/` 和 `dist/cradles-of-civilization.zip`。把 zip 发给朋友即可；对方解压后双击 `index.html` 就能玩。存档保存在各自浏览器本机，不会跟着 zip 传播。
+原生版已经配置 `macOS Universal` 与 `Windows x86_64` 两个 Godot 导出预设，生成的 ZIP 位于 `dist/`。详细命令见 `godot/README.md`。
+
+`npm run package` 只保留用于生成旧网页版 ZIP；网页版存档保存在各自浏览器本机，不会跟着 ZIP 传播。
 
 ## 基础规则
 
