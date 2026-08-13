@@ -76,9 +76,6 @@ public sealed class GameEngine
         if (state.Economy <= 0) return "经济危机锁死普通行动";
         if (state.ControlLocked) return "文明已经分崩离析，不再响应控制";
 
-        var delta = RawActionDelta(state, actionId);
-        if (delta.Economy < 0 && state.Economy + delta.Economy < 0) return $"需要 {Math.Abs(delta.Economy):N0} ECO";
-        if (delta.Population < 0 && state.Population + delta.Population < MinimumSustainablePopulation(state)) return "会跌破最低可持续人口";
         if (actionId == "buildEerf" && state.EerfLevel > 0) return "EERF 已经存在";
         if (actionId == "upgradeEerf" && state.EerfLevel <= 0) return "尚未建造 EERF";
         if (actionId == "upgradeEerf" && state.EerfLevel >= 5) return "EERF 已满级";
@@ -88,6 +85,10 @@ public sealed class GameEngine
             var nextLevel = Math.Min(5, state.EerfLevel + 1);
             if (state.Science < requirements[nextLevel]) return $"需要 {requirements[nextLevel]:N0} SC";
         }
+
+        var delta = RawActionDelta(state, actionId);
+        if (delta.Economy < 0 && state.Economy + delta.Economy < 0) return $"需要 {Math.Abs(delta.Economy):N0} ECO";
+        if (delta.Population < 0 && state.Population + delta.Population < MinimumSustainablePopulation(state)) return "会跌破最低可持续人口";
 
         return null;
     }
