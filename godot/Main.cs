@@ -114,6 +114,7 @@ public partial class Main : Control
     private void BuildInterface()
     {
         RenderingServer.SetDefaultClearColor(Background);
+        Theme = BuildTypographyTheme();
         var background = new ColorRect { Color = Background, MouseFilter = MouseFilterEnum.Ignore };
         background.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         AddChild(background);
@@ -756,6 +757,22 @@ public partial class Main : Control
         "recovery" => new("ECO", "O", "我想花几分钟，向人民谈谈银行的情况。", Economy),
         _ => new("—", "", "", Ink)
     };
+
+    private static Theme BuildTypographyTheme()
+    {
+        // A single composite font keeps Latin and CJK glyphs on the same
+        // nominal size and baseline. Times handles Latin; the Kai families
+        // provide macOS and Windows Chinese fallbacks.
+        var font = new SystemFont
+        {
+            FontNames = ["Times New Roman", "Kaiti SC", "STKaiti", "KaiTi", "楷体"]
+        };
+        return new Theme
+        {
+            DefaultFont = font,
+            DefaultFontSize = 14
+        };
+    }
 
     private static PanelContainer CreatePanel(Color color, float horizontalMargin, float verticalMargin, Color border, int radius, Color? leftAccent = null, int topBorder = 1)
     {
