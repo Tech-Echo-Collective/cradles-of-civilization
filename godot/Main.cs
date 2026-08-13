@@ -56,7 +56,7 @@ public partial class Main : Control
 
         var subtitle = new Label
         {
-            Text = "Godot C# 移植验证 · 只包含确定性种子、基础漂移与四个核心行动",
+            Text = "Godot C# 移植验证 · 确定性种子、普通事件、系统压力与四个核心行动",
             HorizontalAlignment = HorizontalAlignment.Center
         };
         subtitle.AddThemeFontSizeOverride("font_size", 16);
@@ -65,15 +65,16 @@ public partial class Main : Control
 
         var metricsPanel = CreatePanel(new Color(0.065f, 0.09f, 0.13f));
         page.AddChild(metricsPanel);
-        var metricGrid = new GridContainer { Columns = 6 };
+        var metricGrid = new GridContainer { Columns = 7 };
         metricGrid.AddThemeConstantOverride("h_separation", 22);
         metricGrid.AddThemeConstantOverride("v_separation", 8);
         metricsPanel.AddChild(metricGrid);
         AddMetric(metricGrid, "SC", "science");
         AddMetric(metricGrid, "BE", "belief");
+        AddMetric(metricGrid, "LA", "literature");
         AddMetric(metricGrid, "POP", "population");
         AddMetric(metricGrid, "ECO", "economy");
-        AddMetric(metricGrid, "稳定", "stability");
+        AddMetric(metricGrid, "ORD", "stability");
         AddMetric(metricGrid, "年份", "turn");
 
         var actionGrid = new GridContainer { Columns = 2 };
@@ -164,7 +165,8 @@ public partial class Main : Control
     private void Advance(string actionId)
     {
         var result = _engine.Advance(_state, actionId);
-        _status.Text = $"第 {result.Turn} 年 · {result.ActionLabel} · Rand {result.Rand:0000} · Spec {result.Spec}";
+        var locked = result.ActionLocked ? " · 行动受阻" : "";
+        _status.Text = $"第 {result.Turn} 年 · {result.EventTitle} · {result.ActionLabel}{locked} · Rand {result.Rand:0000}";
         RenderState();
     }
 
@@ -183,6 +185,7 @@ public partial class Main : Control
     {
         _metricValues["science"].Text = FormatNumber(_state.Science);
         _metricValues["belief"].Text = FormatNumber(_state.Belief);
+        _metricValues["literature"].Text = FormatNumber(_state.LiteratureAndArt);
         _metricValues["population"].Text = _state.Population.ToString("N0", CultureInfo.InvariantCulture);
         _metricValues["economy"].Text = _state.Economy.ToString("N0", CultureInfo.InvariantCulture);
         _metricValues["stability"].Text = _state.Stability.ToString(CultureInfo.InvariantCulture);
@@ -200,24 +203,14 @@ public partial class Main : Control
 
     private void RunVerification()
     {
-        var verificationState = new GameState(GameState.DefaultSeed);
-        var result = _engine.Advance(verificationState, "science");
-        var passed = result.Turn == 1 &&
-                     result.Rand == 237 &&
-                     result.Spec == 4_822 &&
-                     result.RngState == 2_070_885_469 &&
-                     verificationState.Science == 485 &&
-                     verificationState.Belief == 358 &&
-                     verificationState.Population == 6_342 &&
-                     verificationState.Economy == 44_158 &&
-                     verificationState.Stability == 46;
+        var fixturePath = ProjectSettings.GlobalizePath("res://Tests/turn-fixtures.json");
+        var report = ParityVerifier.Verify(fixturePath);
+        foreach (var error in report.Errors)
+        {
+            GD.PushError($"PARITY {error}");
+        }
 
-        GD.Print(
-            $"PROTOTYPE_PARITY seed={verificationState.Seed} turn={verificationState.Turn} " +
-            $"rand={result.Rand} spec={result.Spec} rng={result.RngState} " +
-            $"sc={verificationState.Science} be={verificationState.Belief} " +
-            $"pop={verificationState.Population} eco={verificationState.Economy} " +
-            $"stability={verificationState.Stability} status={(passed ? "PASS" : "FAIL")}");
-        GetTree().Quit(passed ? 0 : 1);
+        GD.Print($"PROTOTYPE_PARITY cases={report.CaseCount} status={(report.Passed ? "PASS" : "FAIL")}");
+        GetTree().Quit(report.Passed ? 0 : 1);
     }
 }

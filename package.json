@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "test": "node scripts/test-engine.mjs",
+    "test:godot-fixtures": "node scripts/godot-parity-fixtures.mjs --verify godot/Tests/turn-fixtures.json",
     "package": "node scripts/package-game.mjs",
     "balance": "node scripts/simulate-balance.mjs",
     "model": "node scripts/simulate-core-model.mjs"

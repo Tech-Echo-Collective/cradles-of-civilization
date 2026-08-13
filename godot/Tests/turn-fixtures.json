@@ -1,0 +1,114 @@
+{
+  "version": 1,
+  "scope": "drift + ordinary event + core action + system pressure",
+  "fixtures": [
+    {
+      "id": "initial-science",
+      "seed": 1058,
+      "action": "science",
+      "overrides": {},
+      "expected": {
+        "turn": 1, "rand": 237, "spec": 4822, "rngState": 2070885469,
+        "eventTitle": "神权辩论", "actionLocked": false,
+        "pressure": { "science": 12, "belief": 10, "population": 81, "economy": 7007, "stability": 0 },
+        "state": { "science": 467, "belief": 418, "literatureAndArt": 4, "population": 6963, "economy": 46165, "stability": 50 }
+      }
+    },
+    {
+      "id": "initial-belief",
+      "seed": 314159,
+      "action": "belief",
+      "overrides": {},
+      "expected": {
+        "turn": 1, "rand": 616, "spec": 3546, "rngState": 1522974935,
+        "eventTitle": "矿井歌声", "actionLocked": false,
+        "pressure": { "science": 3, "belief": 0, "population": 91.80000000000001, "economy": 5761, "stability": -1 },
+        "state": { "science": 275, "belief": 568, "literatureAndArt": 4, "population": 7914, "economy": 72319, "stability": 53 }
+      }
+    },
+    {
+      "id": "initial-population",
+      "seed": 271828,
+      "action": "population",
+      "overrides": {},
+      "expected": {
+        "turn": 1, "rand": 1101, "spec": 1003, "rngState": 430754674,
+        "eventTitle": "星象安静", "actionLocked": false,
+        "pressure": { "science": 4, "belief": 3, "population": 117.72000000000001, "economy": 8465, "stability": 0 },
+        "state": { "science": 272, "belief": 435, "literatureAndArt": 4, "population": 11638, "economy": 55923, "stability": 47 }
+      }
+    },
+    {
+      "id": "science-context",
+      "seed": 424242,
+      "action": "balance",
+      "overrides": { "sc": 6500, "be": 2000, "pop": 20000, "eco": 90000, "stability": 55 },
+      "expected": {
+        "turn": 1, "rand": 5360, "spec": 1682, "rngState": 722176270,
+        "eventTitle": "轨道学校", "actionLocked": false,
+        "pressure": { "science": 7, "belief": -26, "population": 241.92000000000002, "economy": 17314, "stability": -3 },
+        "state": { "science": 6666, "belief": 2069, "literatureAndArt": 8, "population": 21405, "economy": 107794, "stability": 63 }
+      }
+    },
+    {
+      "id": "belief-context",
+      "seed": 777777,
+      "action": "science",
+      "overrides": { "sc": 2000, "be": 6500, "pop": 18000, "eco": 85000, "stability": 58 },
+      "expected": {
+        "turn": 1, "rand": 4828, "spec": 1416, "rngState": 608161946,
+        "eventTitle": "誓约法庭", "actionLocked": false,
+        "pressure": { "science": -7, "belief": -1, "population": 201.96, "economy": 7534, "stability": -1 },
+        "state": { "science": 2218, "belief": 6547, "literatureAndArt": 10, "population": 17912, "economy": 84185, "stability": 64 }
+      }
+    },
+    {
+      "id": "harmony-context",
+      "seed": 888888,
+      "action": "balance",
+      "overrides": { "sc": 7000, "be": 7000, "pop": 26000, "eco": 110000, "stability": 64 },
+      "expected": {
+        "turn": 1, "rand": 9803, "spec": 1619, "rngState": 695042224,
+        "eventTitle": "巡礼季", "actionLocked": false,
+        "pressure": { "science": 19, "belief": 6, "population": 376.92, "economy": 30210, "stability": 0 },
+        "state": { "science": 7104, "belief": 7175, "literatureAndArt": 19, "population": 30359, "economy": 155966, "stability": 73 }
+      }
+    },
+    {
+      "id": "stressed-context",
+      "seed": 999999,
+      "action": "belief",
+      "overrides": { "sc": 1000, "be": 1500, "pop": 65000, "eco": 30000, "stability": 25 },
+      "expected": {
+        "turn": 1, "rand": 4779, "spec": 1821, "rngState": 781922502,
+        "eventTitle": "城邦互疑", "actionLocked": false,
+        "pressure": { "science": 0, "belief": 0, "population": -1021, "economy": 16160, "stability": 2 },
+        "state": { "science": 968, "belief": 1690, "literatureAndArt": 24, "population": 61643, "economy": 21577, "stability": 25 }
+      }
+    },
+    {
+      "id": "advanced-context",
+      "seed": 123456,
+      "action": "population",
+      "overrides": { "sc": 13000, "be": 12500, "la": 3200, "pop": 30000, "eco": 160000, "stability": 72 },
+      "expected": {
+        "turn": 1, "rand": 7750, "spec": 3831, "rngState": 1645061505,
+        "eventTitle": "钟楼合唱", "actionLocked": false,
+        "pressure": { "science": 16, "belief": -6, "population": 528.12, "economy": 43724, "stability": 0 },
+        "state": { "science": 12980, "belief": 12578, "literatureAndArt": 3220, "population": 36824, "economy": 192510, "stability": 81 }
+      }
+    },
+    {
+      "id": "economic-crisis",
+      "seed": 654321,
+      "action": "science",
+      "overrides": { "sc": 1800, "be": 1600, "pop": 8000, "eco": 0, "stability": 40 },
+      "expected": {
+        "turn": 1, "rand": 7077, "spec": 2586, "rngState": 1110584088,
+        "eventTitle": "粮仓审计", "actionLocked": true,
+        "pressure": { "science": 0, "belief": 0, "population": 103.68, "economy": 9111, "stability": 1 },
+        "state": { "science": 1800, "belief": 1590, "literatureAndArt": 0, "population": 9562, "economy": 26407, "stability": 48 }
+      }
+    }
+  ]
+}

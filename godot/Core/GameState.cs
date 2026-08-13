@@ -17,7 +17,10 @@ public sealed class GameState
     public int BeliefTrend { get; set; }
     public int LastRand { get; set; }
     public int LastSpec { get; set; }
+    public int EerfLevel { get; set; }
+    public int TerritoryCount { get; set; }
     public string LastAction { get; set; } = "文明苏醒";
+    public string LastEvent { get; set; } = "等待观测";
 
     public GameState(long seed = DefaultSeed)
     {
@@ -39,6 +42,9 @@ public sealed class GameState
         BeliefTrend = 16;
         LastRand = 0;
         LastSpec = 0;
+        EerfLevel = 0;
+        TerritoryCount = 5;
         LastAction = "文明苏醒";
+        LastEvent = "等待观测";
     }
 }

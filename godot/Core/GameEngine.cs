@@ -18,14 +18,18 @@ public readonly record struct TurnResult(
     int Rand,
     int Spec,
     long RngState,
+    string EventTitle,
     string ActionLabel,
-    StatDelta Drift);
+    bool ActionLocked,
+    StatDelta Drift,
+    StatDelta EventDelta,
+    StatDelta Pressure);
 
 public sealed class GameEngine
 {
-    public const double KnowledgeCap = 20_000;
-    public const int KnowledgeTrendMinimum = -180;
-    public const int KnowledgeTrendMaximum = 240;
+    public const double KnowledgeCap = CoreRules.KnowledgeCap;
+    public const int KnowledgeTrendMinimum = CoreRules.KnowledgeTrendMinimum;
+    public const int KnowledgeTrendMaximum = CoreRules.KnowledgeTrendMaximum;
 
     private static readonly ActionDefinition[] CoreActions =
     [
@@ -49,18 +53,45 @@ public sealed class GameEngine
         var rng = new Lcg(state.RngState);
         var rand = rng.NextInt(10_000);
         var spec = rng.NextInt(5_000) + 1;
+        var crisisAtRoundStart = state.Economy <= 0;
         var drift = ComputeDrift(state, rand);
+        var normalEvent = EventCatalog.SelectNormalEvent(rand, state);
 
-        ApplyDelta(state, drift, protectPopulationFloor: true);
-        ApplyDelta(state, action.Delta);
+        ApplyDelta(state, drift, protectPopulationFloor: true, freezeKnowledge: crisisAtRoundStart);
+        var eventDelta = ApplyDelta(
+            state,
+            normalEvent.Delta,
+            protectPopulationFloor: true,
+            freezeKnowledge: crisisAtRoundStart);
+        var actionLocked = crisisAtRoundStart ||
+                           state.Economy <= 0 ||
+                           action.Delta.Economy < 0 && state.Economy + action.Delta.Economy < 0 ||
+                           action.Delta.Population < 0 && state.Population + action.Delta.Population < MinimumSustainablePopulation(state);
+        if (!actionLocked)
+        {
+            ApplyDelta(state, action.Delta, freezeKnowledge: crisisAtRoundStart);
+        }
+
+        var pressure = ApplyDelta(state, SystemPressure.Calculate(state), freezeKnowledge: crisisAtRoundStart);
 
         state.RngState = rng.State;
         state.Turn += 1;
         state.LastRand = rand;
         state.LastSpec = spec;
         state.LastAction = action.Label;
+        state.LastEvent = normalEvent.Title;
 
-        return new TurnResult(state.Turn, rand, spec, state.RngState, action.Label, drift);
+        return new TurnResult(
+            state.Turn,
+            rand,
+            spec,
+            state.RngState,
+            normalEvent.Title,
+            action.Label,
+            actionLocked,
+            drift,
+            eventDelta,
+            pressure);
     }
 
     private static Dictionary<string, ActionDefinition> BuildActionIndex()
@@ -78,8 +109,8 @@ public sealed class GameEngine
     {
         var scienceJitter = ((rand % 9) - 4) * 2;
         var beliefJitter = (((rand / 10) % 9) - 4) * 2;
-        var science = Clamp(state.ScienceTrend + scienceJitter, KnowledgeTrendMinimum, KnowledgeTrendMaximum);
-        var belief = Clamp(state.BeliefTrend + beliefJitter, KnowledgeTrendMinimum, KnowledgeTrendMaximum);
+        var science = CoreRules.Clamp(state.ScienceTrend + scienceJitter, KnowledgeTrendMinimum, KnowledgeTrendMaximum);
+        var belief = CoreRules.Clamp(state.BeliefTrend + beliefJitter, KnowledgeTrendMinimum, KnowledgeTrendMaximum);
         var populationNoise = (rand / 100 % 41) - 19;
         var orderNoise = (rand / 1_000 % 9) - 4;
         var lowOrderPenalty = state.Stability < 30 ? 900 : 0;
@@ -87,28 +118,47 @@ public sealed class GameEngine
         var lowEconomyBuffer = state.Economy is > 0 and < 42_000
             ? (42_000 - state.Economy) * 0.05
             : 0;
+        var literatureAndArt = CoreRules.JsRound(
+            (state.Population > 12_000 ? Math.Sqrt(state.Population - 12_000) * 0.09 : 0) +
+            CoreRules.KnowledgeHarmony(state.Science, state.Belief) * 5 +
+            (state.Stability >= 58 ? 3 : 0) -
+            (state.Economy <= 0 ? 18 : 0));
 
-        var population = JsRound(
+        var population = CoreRules.JsRound(
             state.Population * (0.004 + state.Stability / 18_000.0) +
             populationNoise * 70 -
             lowOrderPenalty +
             highOrderBonus);
-        var economy = JsRound(
+        var economy = CoreRules.JsRound(
             Math.Sqrt(Math.Max(0, state.Economy)) * 7 +
             state.Stability * 8 -
             state.Population * 0.003 +
+            -state.EerfLevel * 620 +
             lowEconomyBuffer);
 
         return new StatDelta(
             Science: science,
             Belief: belief,
+            LiteratureAndArt: literatureAndArt,
             Population: population,
             Economy: economy,
             Stability: orderNoise);
     }
 
-    private static void ApplyDelta(GameState state, StatDelta delta, bool protectPopulationFloor = false)
+    private static StatDelta ApplyDelta(
+        GameState state,
+        StatDelta delta,
+        bool protectPopulationFloor = false,
+        bool freezeKnowledge = false)
     {
+        var scienceDelta = delta.Science;
+        var beliefDelta = delta.Belief;
+        if (freezeKnowledge || state.Economy <= 0)
+        {
+            if (scienceDelta > 0) scienceDelta = 0;
+            if (beliefDelta > 0) beliefDelta = 0;
+        }
+
         var populationDelta = delta.Population;
         if (populationDelta > 0)
         {
@@ -123,27 +173,26 @@ public sealed class GameEngine
                 : Math.Max(populationDelta, floor - state.Population);
         }
 
-        state.Science = Clamp(JsRound4(state.Science + delta.Science), 0, KnowledgeCap);
-        state.Belief = Clamp(JsRound4(state.Belief + delta.Belief), 0, KnowledgeCap);
-        state.LiteratureAndArt = Clamp(Math.Floor(state.LiteratureAndArt + delta.LiteratureAndArt), 0, KnowledgeCap);
-        state.Population = Math.Max(0, (long)JsRound(state.Population + populationDelta));
-        state.Economy = Math.Max(0, (long)JsRound(state.Economy + delta.Economy));
-        state.Stability = (int)Clamp(state.Stability + JsRound(delta.Stability), 0, 100);
+        state.Science = CoreRules.Clamp(CoreRules.JsRound4(state.Science + scienceDelta), 0, KnowledgeCap);
+        state.Belief = CoreRules.Clamp(CoreRules.JsRound4(state.Belief + beliefDelta), 0, KnowledgeCap);
+        state.LiteratureAndArt = CoreRules.Clamp(Math.Floor(state.LiteratureAndArt + delta.LiteratureAndArt), 0, KnowledgeCap);
+        state.Population = Math.Max(0, (long)CoreRules.JsRound(state.Population + populationDelta));
+        state.Economy = Math.Max(0, (long)CoreRules.JsRound(state.Economy + delta.Economy));
+        state.Stability = (int)CoreRules.Clamp(state.Stability + CoreRules.JsRound(delta.Stability), 0, 100);
+
+        return delta with
+        {
+            Science = scienceDelta,
+            Belief = beliefDelta,
+            Population = populationDelta
+        };
     }
 
     private static long MinimumSustainablePopulation(GameState state)
     {
-        var knowledgeBuffer = Clamp((state.Science + state.Belief) / (KnowledgeCap * 2), 0, 1) * 260;
-        var economyBuffer = Clamp(Math.Log10(Math.Max(1, state.Economy) + 10) / 6, 0, 1) * 220;
+        var knowledgeBuffer = CoreRules.Clamp((state.Science + state.Belief) / (KnowledgeCap * 2), 0, 1) * 260;
+        var economyBuffer = CoreRules.Clamp(Math.Log10(Math.Max(1, state.Economy) + 10) / 6, 0, 1) * 220;
         var orderBuffer = state.Stability >= 70 ? 180 : state.Stability >= 40 ? 90 : 0;
-        return (long)JsRound(1_200 + knowledgeBuffer + economyBuffer + orderBuffer);
+        return (long)CoreRules.JsRound(1_200 + knowledgeBuffer + economyBuffer + orderBuffer);
     }
-
-    private static double JsRound(double value) => Math.Floor(value + 0.5);
-
-    private static double JsRound4(double value) => JsRound(value * 10_000) / 10_000;
-
-    private static int Clamp(int value, int minimum, int maximum) => Math.Min(maximum, Math.Max(minimum, value));
-
-    private static double Clamp(double value, double minimum, double maximum) => Math.Min(maximum, Math.Max(minimum, value));
 }
