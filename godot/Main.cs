@@ -52,6 +52,7 @@ public partial class Main : Control
     private readonly Dictionary<string, ActionDefinition> _actionsById = new();
     private readonly Dictionary<string, Button> _difficultyButtons = new();
     private readonly Dictionary<string, Button> _governorButtons = new();
+    private readonly Dictionary<string, Label> _endingRecapValues = new();
 
     private GameState _state = new();
     private EndingStats _endingStats = new();
@@ -75,11 +76,15 @@ public partial class Main : Control
     private ScrollContainer _pageScroll = null!;
     private ScrollContainer _setupScroll = null!;
     private Control _endingOverlay = null!;
-    private Label _endingOverlayKicker = null!;
+    private ColorRect _endingOverlayHaze = null!;
     private Label _endingOverlayTitle = null!;
     private RichTextLabel _endingOverlayBody = null!;
     private Label _endingOverlayQuote = null!;
+    private Label _endingOverlayQuoteAttribution = null!;
     private Label _endingOverlayRecap = null!;
+    private PanelContainer _endingOverlayRecapPanel = null!;
+    private Button _endingCopyButton = null!;
+    private LineEdit _endingSeedInput = null!;
     private Control _setupNameStage = null!;
     private Control _setupDifficultyStage = null!;
     private Control _setupGovernorStage = null!;
@@ -207,7 +212,8 @@ public partial class Main : Control
         }
         if (keyEvent.ShiftPressed && key == 'n')
         {
-            ResetWorld();
+            if (_state.Finished) StartEndingNewWorld();
+            else ResetWorld();
             GetViewport().SetInputAsHandled();
             return;
         }
@@ -298,46 +304,137 @@ public partial class Main : Control
     private Control BuildEndingOverlay()
     {
         var overlay = new Control { Visible = false, MouseFilter = MouseFilterEnum.Stop };
-        var shade = new ColorRect { Color = new Color(0.008f, 0.014f, 0.024f, 0.97f), MouseFilter = MouseFilterEnum.Ignore };
+        var shade = new ColorRect { Color = new Color(0.021f, 0.031f, 0.047f), MouseFilter = MouseFilterEnum.Ignore };
         shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         overlay.AddChild(shade);
 
-        var center = new CenterContainer();
-        center.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        overlay.AddChild(center);
-        var panel = CreatePanel(Panel, 34, 30, new Color(Science.R, Science.G, Science.B, 0.45f), 8, Science, 2);
-        panel.CustomMinimumSize = new Vector2(820, 650);
-        center.AddChild(panel);
-        var layout = new VBoxContainer();
-        layout.AddThemeConstantOverride("separation", 16);
-        panel.AddChild(layout);
-        _endingOverlayKicker = TextLabel("ENDING A", 13, Science);
-        layout.AddChild(_endingOverlayKicker);
-        _endingOverlayTitle = TextLabel("—", 42, Ink);
+        _endingOverlayHaze = new ColorRect
+        {
+            Color = new Color(Science.R, Science.G, Science.B, 0.055f),
+            MouseFilter = MouseFilterEnum.Ignore
+        };
+        _endingOverlayHaze.SetAnchorsPreset(LayoutPreset.FullRect);
+        _endingOverlayHaze.AnchorLeft = 0.58f;
+        overlay.AddChild(_endingOverlayHaze);
+
+        var scroll = new ScrollContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
+        };
+        scroll.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        overlay.AddChild(scroll);
+
+        var outer = new MarginContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        outer.AddThemeConstantOverride("margin_left", 18);
+        outer.AddThemeConstantOverride("margin_right", 18);
+        outer.AddThemeConstantOverride("margin_top", 48);
+        outer.AddThemeConstantOverride("margin_bottom", 48);
+        scroll.AddChild(outer);
+
+        var center = new CenterContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        outer.AddChild(center);
+        var layout = new VBoxContainer
+        {
+            CustomMinimumSize = new Vector2(900, 0),
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        layout.AddThemeConstantOverride("separation", 24);
+        center.AddChild(layout);
+
+        _endingOverlayTitle = TextLabel("—", 64, Ink);
+        _endingOverlayTitle.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         layout.AddChild(_endingOverlayTitle);
         _endingOverlayBody = new RichTextLabel
         {
-            BbcodeEnabled = true,
-            FitContent = false,
-            CustomMinimumSize = new Vector2(0, 250),
-            SizeFlagsVertical = SizeFlags.ExpandFill
+            BbcodeEnabled = false,
+            FitContent = true,
+            ScrollActive = false,
+            CustomMinimumSize = new Vector2(0, 120)
         };
-        _endingOverlayBody.AddThemeFontSizeOverride("normal_font_size", 18);
-        _endingOverlayBody.AddThemeColorOverride("default_color", new Color(0.84f, 0.88f, 0.92f));
+        _endingOverlayBody.AddThemeFontSizeOverride("normal_font_size", 22);
+        _endingOverlayBody.AddThemeColorOverride("default_color", new Color(0.929f, 0.949f, 0.969f));
+        _endingOverlayBody.AddThemeConstantOverride("line_separation", 9);
         layout.AddChild(_endingOverlayBody);
-        _endingOverlayQuote = TextLabel("", 16, Belief);
+
+        var quote = new VBoxContainer();
+        quote.AddThemeConstantOverride("separation", 6);
+        _endingOverlayQuote = TextLabel("", 18, Belief);
         _endingOverlayQuote.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        _endingOverlayQuote.AddThemeStyleboxOverride("normal", FlatBox(new Color(0.09f, 0.07f, 0.04f), 5, new Color(Belief.R, Belief.G, Belief.B, 0.35f), 1, 16, 12));
-        layout.AddChild(_endingOverlayQuote);
+        quote.AddChild(_endingOverlayQuote);
+        _endingOverlayQuoteAttribution = TextLabel("", 15, Belief);
+        _endingOverlayQuoteAttribution.HorizontalAlignment = HorizontalAlignment.Right;
+        _endingOverlayQuoteAttribution.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        quote.AddChild(_endingOverlayQuoteAttribution);
+        layout.AddChild(quote);
+
+        _endingOverlayRecapPanel = CreatePanel(new Color(0.031f, 0.047f, 0.071f, 0.72f), 14, 14, new Color(1, 1, 1, 0.09f), 8);
+        _endingOverlayRecapPanel.CustomMinimumSize = new Vector2(760, 0);
+        _endingOverlayRecapPanel.SizeFlagsHorizontal = SizeFlags.ShrinkBegin;
+        var recapLayout = new VBoxContainer();
+        recapLayout.AddThemeConstantOverride("separation", 12);
+        _endingOverlayRecapPanel.AddChild(recapLayout);
+        recapLayout.AddChild(TextLabel(T("本局复盘", "RUN RECAP"), 15, Ink));
+        var recapGrid = new GridContainer { Columns = 2, CustomMinimumSize = new Vector2(720, 0) };
+        recapGrid.AddThemeConstantOverride("h_separation", 14);
+        recapGrid.AddThemeConstantOverride("v_separation", 9);
+        AddEndingRecapRow(recapGrid, "seed", T("种子", "Seed"));
+        AddEndingRecapRow(recapGrid, "governor", T("执政官", "Governor"));
+        AddEndingRecapRow(recapGrid, "battle", T("战局", "Campaign"));
+        AddEndingRecapRow(recapGrid, "civilization", T("文明", "Civilization"));
+        AddEndingRecapRow(recapGrid, "year", T("年份", "Year"));
+        AddEndingRecapRow(recapGrid, "trigger", T("触发", "Trigger"));
+        AddEndingRecapRow(recapGrid, "statistics", T("终局统计", "Ending statistics"));
+        AddEndingRecapRow(recapGrid, "final", T("终值", "Final values"));
+        AddEndingRecapRow(recapGrid, "peak", T("峰值", "Peak values"));
+        recapLayout.AddChild(recapGrid);
+        _endingCopyButton = CompactButton(T("复制挑战链接", "Copy Challenge Link"), CopyEndingSeed);
+        _endingCopyButton.SizeFlagsHorizontal = SizeFlags.ShrinkBegin;
+        recapLayout.AddChild(_endingCopyButton);
         _endingOverlayRecap = TextLabel("", 13, Muted);
         _endingOverlayRecap.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        layout.AddChild(_endingOverlayRecap);
-        var buttons = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.End };
-        buttons.AddThemeConstantOverride("separation", 10);
-        buttons.AddChild(CompactButton(T("复制种子", "Copy Seed"), CopyEndingSeed));
-        buttons.AddChild(CompactButton(T("新世界", "New World"), ResetWorld));
-        layout.AddChild(buttons);
+        recapLayout.AddChild(_endingOverlayRecap);
+        layout.AddChild(_endingOverlayRecapPanel);
+
+        var newWorld = new Button
+        {
+            Text = T("新世界　Shift+N", "New World  Shift+N"),
+            CustomMinimumSize = new Vector2(150, 42),
+            SizeFlagsHorizontal = SizeFlags.ShrinkBegin
+        };
+        newWorld.AddThemeColorOverride("font_color", Background);
+        newWorld.AddThemeStyleboxOverride("normal", FlatBox(Ink, 8, new Color(1, 1, 1, 0.28f), 1, 16, 0));
+        newWorld.AddThemeStyleboxOverride("hover", FlatBox(new Color(0.957f, 0.816f, 0.471f), 8, Colors.White, 1, 16, 0));
+        newWorld.Pressed += StartEndingNewWorld;
+        layout.AddChild(newWorld);
+
+        var seedForm = new VBoxContainer { CustomMinimumSize = new Vector2(420, 0), SizeFlagsHorizontal = SizeFlags.ShrinkBegin };
+        seedForm.AddThemeConstantOverride("separation", 8);
+        seedForm.AddChild(TextLabel(T("指定种子", "Specified Seed"), 13, Muted));
+        var seedRow = new HBoxContainer();
+        seedRow.AddThemeConstantOverride("separation", 10);
+        _endingSeedInput = StyledInput(T("例如 1058", "e.g. 1058"), 280);
+        _endingSeedInput.TextSubmitted += _ => StartEndingSeedWorld();
+        seedRow.AddChild(_endingSeedInput);
+        var seedStart = CompactButton(T("开始　Enter", "Start  Enter"), StartEndingSeedWorld);
+        seedStart.CustomMinimumSize = new Vector2(120, 34);
+        seedRow.AddChild(seedStart);
+        seedForm.AddChild(seedRow);
+        layout.AddChild(seedForm);
         return overlay;
+    }
+
+    private void AddEndingRecapRow(GridContainer grid, string key, string label)
+    {
+        var term = TextLabel(label, 13, new Color(0.624f, 0.69f, 0.773f));
+        term.CustomMinimumSize = new Vector2(112, 0);
+        grid.AddChild(term);
+        var value = TextLabel("—", 14, new Color(0.859f, 0.89f, 0.925f));
+        value.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        value.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        grid.AddChild(value);
+        _endingRecapValues[key] = value;
     }
 
     private ScrollContainer BuildSetupInterface()
@@ -1083,7 +1180,25 @@ public partial class Main : Control
     private void CopyEndingSeed()
     {
         DisplayServer.ClipboardSet(_state.Seed.ToString(CultureInfo.InvariantCulture));
-        _endingOverlayRecap.Text = T($"世界种子 {_state.Seed} 已复制。", $"World seed {_state.Seed} copied.");
+        _endingCopyButton.Text = T("已复制", "Copied");
+        _endingOverlayRecap.Text = T($"挑战种子 {_state.Seed} 已复制；在“指定种子”中输入即可开始同一世界。", $"Challenge seed {_state.Seed} copied. Enter it under Specified Seed to start the same world.");
+        GetTree().CreateTimer(1.6).Timeout += () =>
+        {
+            if (IsInstanceValid(_endingCopyButton)) _endingCopyButton.Text = T("复制挑战链接", "Copy Challenge Link");
+        };
+    }
+
+    private void StartEndingNewWorld()
+    {
+        PrepareNewWorld(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+    }
+
+    private void StartEndingSeedWorld()
+    {
+        var seed = long.TryParse(_endingSeedInput.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        PrepareNewWorld(seed);
     }
 
     private void ResetWorld()
@@ -1091,6 +1206,11 @@ public partial class Main : Control
         var seed = long.TryParse(_seedInput.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
             ? parsed
             : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        PrepareNewWorld(seed);
+    }
+
+    private void PrepareNewWorld(long seed)
+    {
         _state = new GameState(seed)
         {
             RealmName = string.IsNullOrWhiteSpace(_realmInput.Text) ? T("长生军", "Longevity Army") : _realmInput.Text.Trim(),
@@ -1371,15 +1491,64 @@ public partial class Main : Control
         if (!_endingOverlay.Visible || _state.FinalEnding is null) return;
         var ending = _state.FinalEnding;
         var copy = EndingCatalog.Get(ending.Id);
-        _endingOverlayKicker.Text = $"ENDING {ending.Id}";
         _endingOverlayTitle.Text = IsEnglish ? copy.NameEn : copy.NameZh;
         var paragraphs = IsEnglish ? copy.ParagraphsEn : copy.ParagraphsZh;
         _endingOverlayBody.Text = string.Join("\n\n", paragraphs);
-        _endingOverlayQuote.Text = IsEnglish ? copy.QuoteEn : copy.QuoteZh;
-        _endingOverlayRecap.Text = IsEnglish
-            ? $"{_state.RealmName} · Civilization {ending.Civilization} · Year {ending.Turn} · Rand {ending.Rand:0000} · Seed {_state.Seed}"
-            : $"{_state.RealmName}｜第 {ending.Civilization} 号文明｜第 {ending.Turn} 年｜Rand {ending.Rand:0000}｜种子 {_state.Seed}";
+        var (quoteLine, quoteAttribution) = SplitEndingQuote(IsEnglish ? copy.QuoteEn : copy.QuoteZh, IsEnglish);
+        _endingOverlayQuote.Text = quoteLine;
+        _endingOverlayQuoteAttribution.Text = quoteAttribution;
+        _endingOverlayRecap.Text = "";
+
+        var (accent, secondary) = EndingPalette(ending.Id);
+        _endingOverlayHaze.Color = new Color(accent.R, accent.G, accent.B, 0.055f);
+        _endingOverlayQuote.AddThemeColorOverride("font_color", secondary);
+        _endingOverlayQuoteAttribution.AddThemeColorOverride("font_color", secondary);
+        _endingOverlayRecapPanel.AddThemeStyleboxOverride("panel", FlatBox(new Color(0.031f, 0.047f, 0.071f, 0.72f), 8, new Color(accent.R, accent.G, accent.B, 0.18f), 1, 14, 14));
+
+        var difficultyIndex = Math.Max(0, Array.IndexOf(Difficulties, _state.Difficulty));
+        var governorIndex = Math.Max(0, Array.IndexOf(Governors, _state.GovernorId));
+        var achieved = _endingStats.Counts.Count(pair => pair.Value > 0 && pair.Key is "A" or "B" or "C" or "D" or "E" or "F" or "G" or "H" or "I" or "J");
+        _endingRecapValues["seed"].Text = _state.Seed.ToString(CultureInfo.InvariantCulture);
+        _endingRecapValues["governor"].Text = GovernorLabel(governorIndex);
+        _endingRecapValues["battle"].Text = T($"{DifficultyLabel(difficultyIndex)} / 无地图版", $"{DifficultyLabel(difficultyIndex)} / Mapless build");
+        _endingRecapValues["civilization"].Text = IsEnglish ? $"Civilization {ending.Civilization:N0}" : $"第 {ending.Civilization:N0} 号";
+        _endingRecapValues["year"].Text = IsEnglish ? $"Year {ending.Turn:N0}" : $"{ending.Turn:N0} 年";
+        _endingRecapValues["trigger"].Text = LocalizeCoreText(ending.Trigger);
+        _endingRecapValues["statistics"].Text = IsEnglish
+            ? $"Reached {achieved} types / {_endingStats.Total:N0} total"
+            : $"已达成 {achieved} 种 / 总计 {_endingStats.Total:N0} 次";
+        _endingRecapValues["final"].Text = EndingMetricLine(ending.Snapshot);
+        _endingRecapValues["peak"].Text = EndingPeakMetricLine(_state.CurrentCivilization);
     }
+
+    private static (string Line, string Attribution) SplitEndingQuote(string quote, bool english)
+    {
+        var separator = english ? " —" : "——";
+        var index = quote.LastIndexOf(separator, StringComparison.Ordinal);
+        if (index < 0) return (quote, "");
+        return (quote[..index], quote[index..].TrimStart());
+    }
+
+    private static (Color Accent, Color Secondary) EndingPalette(string id) => id switch
+    {
+        "A" => (new Color(0.388f, 0.902f, 0.745f), Belief),
+        "B" => (Danger, Belief),
+        "C" => (new Color(0.839f, 0.765f, 0.541f), Muted),
+        "D" => (new Color(0.49f, 0.827f, 0.988f), new Color(0.965f, 0.827f, 0.396f)),
+        "E" => (Belief, new Color(0.965f, 0.827f, 0.396f)),
+        "F" => (Eerf, People),
+        "G" => (People, Muted),
+        "H" => (new Color(0.58f, 0.639f, 0.722f), new Color(0.22f, 0.741f, 0.973f)),
+        "I" => (new Color(0.965f, 0.827f, 0.396f), new Color(0.725f, 0.11f, 0.11f)),
+        "J" => (new Color(0.655f, 0.953f, 0.816f), new Color(0.714f, 0.941f, 1f)),
+        _ => (Science, Belief)
+    };
+
+    private static string EndingMetricLine(MetricSnapshot snapshot) =>
+        $"SC {FormatNumber(snapshot.Science)} / BE {FormatNumber(snapshot.Belief)} / LA {FormatNumber(snapshot.LiteratureAndArt)} / POP {snapshot.Population:N0} / ECO {snapshot.Economy:N0} / ORDER {snapshot.Stability:N0}";
+
+    private static string EndingPeakMetricLine(CivilizationRecord record) =>
+        $"SC {FormatNumber(record.PeakScience)} / BE {FormatNumber(record.PeakBelief)} / LA {FormatNumber(record.PeakLiteratureAndArt)} / POP {record.PeakPopulation:N0} / ECO {record.PeakEconomy:N0} / EERF {record.PeakEerf:N0}";
 
     private void RenderSetup()
     {

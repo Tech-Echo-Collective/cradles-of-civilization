@@ -72,6 +72,12 @@ if (!mainSource.includes("button.Pressed += () => Advance(actionId)")) errors.pu
 if (!mainSource.includes("CustomMinimumSize = new Vector2(ActionCardSize, ActionCardSize)")) errors.push("action cards are not constrained to a square slot");
 if (!mainSource.includes('CreateTerminalButton("settleEnding"')) errors.push("the Settle Ending / 脱离苦海 terminal is missing");
 if (mainSource.indexOf("_engine.DisabledReason(_state, actionId)") > mainSource.indexOf("_engine.Advance(_state, actionId)")) errors.push("disabled actions can reach the engine before the UI guard");
+for (const copy of ["本局复盘", "复制挑战链接", "新世界　Shift+N", "指定种子", "开始　Enter", "终局统计", "终值", "峰值"]) {
+  if (!mainSource.includes(copy)) errors.push(`ending page is missing web copy: ${copy}`);
+}
+for (const behavior of ["StartEndingNewWorld", "StartEndingSeedWorld", "SplitEndingQuote", "EndingMetricLine", "EndingPeakMetricLine"]) {
+  if (!mainSource.includes(behavior)) errors.push(`ending page behavior is missing: ${behavior}`);
+}
 
 const openingCopy = "三颗恒星在天幕上留下互相矛盾的轨迹。执政官看着围在篝火旁的各人，那时科学、神学、人口与经济都脆弱不堪：这是一个文明的新生。";
 if (!gameState.includes(openingCopy)) errors.push("the v0.2 opening chronicle prose is missing");

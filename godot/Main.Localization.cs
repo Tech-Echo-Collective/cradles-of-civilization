@@ -56,6 +56,7 @@ public partial class Main
         _chronicleFilterButtons.Clear();
         _difficultyButtons.Clear();
         _governorButtons.Clear();
+        _endingRecapValues.Clear();
         BuildInterface();
         SyncSetupInputs();
         SetChronicleFilter(_chronicleFilter);
