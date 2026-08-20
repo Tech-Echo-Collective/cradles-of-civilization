@@ -28,7 +28,9 @@ public static class FullParityVerifier
             var expected = scenario.GetProperty("expected");
 
             Check(errors, id, "eventTitle", result.EventTitle, Text(expected, "eventTitle"));
+            Check(errors, id, "eventText", result.EventText, Text(expected, "eventText"));
             Check(errors, id, "specialEventTitle", result.SpecialEventTitle, Text(expected, "specialEventTitle"));
+            Check(errors, id, "specialEventText", result.SpecialEventText, Text(expected, "specialEventText"));
             Check(errors, id, "actionLocked", result.ActionLocked, expected.GetProperty("actionLocked").GetBoolean());
             if (expected.TryGetProperty("civilizationCollapsed", out var civilizationCollapsed))
                 Check(errors, id, "civilizationCollapsed", result.CivilizationCollapsed, civilizationCollapsed.GetBoolean());

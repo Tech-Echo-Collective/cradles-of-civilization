@@ -64,6 +64,8 @@ internal static class EndingRules
     public static void Finish(GameState state, string endingId, string trigger, MetricSnapshot snapshot)
     {
         state.Finished = true;
+        state.AutoRunUntilCollapse = false;
+        state.EndingRecorded = false;
         state.EndingCandidate = null;
         state.FinalEnding = new FinalEnding
         {
@@ -82,7 +84,7 @@ internal static class EndingRules
             Turn = state.Turn,
             Type = "ending",
             Title = $"{Name(endingId)}｜终局达成",
-            Text = trigger
+            Text = $"第 {state.Civilization} 号文明在 {trigger} 后抵达终局。游戏结束。终局统计已更新。"
         });
     }
 

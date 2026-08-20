@@ -13,6 +13,7 @@ public sealed class GameState
     public string RealmName { get; set; } = "长生军";
     public string Difficulty { get; set; } = "normal";
     public string GovernorId { get; set; } = "east-asian-man";
+    public string UiLanguage { get; set; } = "zh";
     public bool SetupComplete { get; set; }
     public string SetupStage { get; set; } = "name";
     public int Turn { get; set; }
@@ -29,6 +30,7 @@ public sealed class GameState
     public double KnowledgeGrowthMultiplier { get; set; } = 1;
     public double ControlEfficiencyMultiplier { get; set; } = 1;
     public bool ControlLocked { get; set; }
+    public bool AutoRunUntilCollapse { get; set; }
     public int PopulationLockTurns { get; set; }
     public int DoomCountdown { get; set; }
     public long? LockedPopulation { get; set; }
@@ -38,6 +40,10 @@ public sealed class GameState
     public int LastSpec { get; set; }
     public string LastAction { get; set; } = "文明苏醒";
     public string LastEvent { get; set; } = "等待观测";
+    public string LastSpecialTitle { get; set; } = "";
+    public string LastSpecialText { get; set; } = "";
+    public string LastSpecialTextEn { get; set; } = "";
+    public StatDelta LastSpecialDelta { get; set; }
     public string Weather { get; set; } = "等待观测";
     public string EndingStatus { get; set; } = "文明的旅程尚未停息。";
     public bool AwaitingCivilizationRestart { get; set; }
@@ -45,6 +51,7 @@ public sealed class GameState
     public EndingCandidate? EndingCandidate { get; set; }
     public bool Finished { get; set; }
     public FinalEnding? FinalEnding { get; set; }
+    public bool EndingRecorded { get; set; }
     public int StagnantCivilizationStreak { get; set; }
     public int LowOrderCivilizationStreak { get; set; }
     public int LaMemoryCivilizationStreak { get; set; }
@@ -77,6 +84,7 @@ public sealed class GameState
         KnowledgeGrowthMultiplier = 1;
         ControlEfficiencyMultiplier = 1;
         ControlLocked = false;
+        AutoRunUntilCollapse = false;
         PopulationLockTurns = 0;
         DoomCountdown = 0;
         LockedPopulation = null;
@@ -86,6 +94,10 @@ public sealed class GameState
         LastSpec = 0;
         LastAction = "文明苏醒";
         LastEvent = "等待观测";
+        LastSpecialTitle = "";
+        LastSpecialText = "";
+        LastSpecialTextEn = "";
+        LastSpecialDelta = new StatDelta();
         Weather = "等待观测";
         EndingStatus = "文明的旅程尚未停息。";
         AwaitingCivilizationRestart = false;
@@ -93,6 +105,7 @@ public sealed class GameState
         EndingCandidate = null;
         Finished = false;
         FinalEnding = null;
+        EndingRecorded = false;
         StagnantCivilizationStreak = 0;
         LowOrderCivilizationStreak = 0;
         LaMemoryCivilizationStreak = 0;
@@ -105,7 +118,8 @@ public sealed class GameState
                 Turn = 0,
                 Type = "progress",
                 Title = "第 1 号文明苏醒",
-                Text = "三颗恒星在天幕上留下互相矛盾的轨迹。"
+                Text = "三颗恒星在天幕上留下互相矛盾的轨迹。执政官看着围在篝火旁的各人，那时科学、神学、人口与经济都脆弱不堪：这是一个文明的新生。",
+                Delta = new StatDelta(240, 360, 0, 7_600, 50_000, 52)
             }
         ];
     }
@@ -220,4 +234,5 @@ public sealed class ChronicleEntry
     public string Type { get; set; } = "progress";
     public string Title { get; set; } = "";
     public string Text { get; set; } = "";
+    public StatDelta Delta { get; set; }
 }

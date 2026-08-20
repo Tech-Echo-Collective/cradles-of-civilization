@@ -11,10 +11,13 @@ public partial class Main : Control
 {
     private sealed record ActionPresentation(string Mark, string Shortcut, string Description, Color Accent);
 
+    private const int ActionGridColumns = 4;
+    private const float ActionCardSize = 220f;
+    private const float ActionGridGap = 10f;
+    private const float ActionGridWidth = ActionGridColumns * ActionCardSize + (ActionGridColumns - 1) * ActionGridGap;
+
     private static readonly string[] Difficulties = ["easy", "normal", "hard", "ultimate"];
-    private static readonly string[] DifficultyLabels = ["简单", "普通", "困难", "终极困难"];
     private static readonly string[] Governors = ["east-asian-man", "white-woman", "black-man", "listener"];
-    private static readonly string[] GovernorLabels = ["杨卫平", "麦克劳德", "塞万提斯", "监听员"];
     private static readonly string[] GovernorPortraits =
     [
         "governor-east-asian-man.png",
@@ -51,6 +54,7 @@ public partial class Main : Control
     private readonly Dictionary<string, Button> _governorButtons = new();
 
     private GameState _state = new();
+    private EndingStats _endingStats = new();
     private Label _headerRealm = null!;
     private Label _governorName = null!;
     private TextureRect _governorPortrait = null!;
@@ -61,13 +65,21 @@ public partial class Main : Control
     private Label _endingTerminalLabel = null!;
     private Label _specialTitle = null!;
     private Label _specialText = null!;
+    private Label _specialDelta = null!;
     private Label _status = null!;
     private Label _systemEnding = null!;
     private Label _eerfSummary = null!;
     private Label _civilizationHistory = null!;
+    private Label _endingStatsSummary = null!;
     private RichTextLabel _chronicle = null!;
     private ScrollContainer _pageScroll = null!;
     private ScrollContainer _setupScroll = null!;
+    private Control _endingOverlay = null!;
+    private Label _endingOverlayKicker = null!;
+    private Label _endingOverlayTitle = null!;
+    private RichTextLabel _endingOverlayBody = null!;
+    private Label _endingOverlayQuote = null!;
+    private Label _endingOverlayRecap = null!;
     private Control _setupNameStage = null!;
     private Control _setupDifficultyStage = null!;
     private Control _setupGovernorStage = null!;
@@ -82,11 +94,20 @@ public partial class Main : Control
     private string _lastSpecialTitle = "";
     private string _chronicleFilter = "all";
     private int? _previewScroll;
+    private string? _screenshotPath;
+    private int _screenshotFrames;
+    private double _autoRunElapsed;
     private string SavePath => ProjectSettings.GlobalizePath("user://civilization-save.json");
+    private string EndingStatsPath => ProjectSettings.GlobalizePath("user://ending-stats.json");
 
     public override void _Ready()
     {
         var userArgs = OS.GetCmdlineUserArgs();
+        var languageIndex = Array.IndexOf(userArgs, "--ui-language");
+        if (languageIndex >= 0 && languageIndex + 1 < userArgs.Length && userArgs[languageIndex + 1] is "zh" or "en")
+            _state.UiLanguage = userArgs[languageIndex + 1];
+        if (_state.UiLanguage == "en" && !_state.SetupComplete && _state.RealmName == "长生军")
+            _state.RealmName = "Longevity Army";
         if (userArgs.Contains("--verify-complete"))
         {
             RunCompleteVerification();
@@ -107,6 +128,7 @@ public partial class Main : Control
         }
 
         foreach (var action in _engine.Actions) _actionsById[action.Id] = action;
+        _endingStats = EndingStatsStore.Load(EndingStatsPath);
         GetWindow().MinSize = new Vector2I(1024, 720);
         BuildInterface();
         var setupPreviewIndex = Array.IndexOf(userArgs, "--ui-setup-stage");
@@ -114,19 +136,105 @@ public partial class Main : Control
             userArgs[setupPreviewIndex + 1] is "name" or "difficulty" or "governor")
         {
             _state.SetupStage = userArgs[setupPreviewIndex + 1];
-            _state.RealmName = "长生军";
+            _state.RealmName = T("长生军", "Longevity Army");
+        }
+        if (userArgs.Contains("--ui-preview-game"))
+        {
+            _state.SetupComplete = true;
+            _state.SetupStage = "complete";
+            _state.RealmName = T("长生军", "Longevity Army");
+        }
+        var endingPreviewIndex = Array.IndexOf(userArgs, "--ui-preview-ending");
+        if (endingPreviewIndex >= 0 && endingPreviewIndex + 1 < userArgs.Length &&
+            userArgs[endingPreviewIndex + 1] is "A" or "B" or "C" or "D" or "E" or "F" or "G" or "H" or "I" or "J")
+        {
+            _state.SetupComplete = true;
+            _state.SetupStage = "complete";
+            _state.RealmName = T("长生军", "Longevity Army");
+            EndingRules.Finish(_state, userArgs[endingPreviewIndex + 1], "UI preview", _state.Snapshot());
         }
         SyncSetupInputs();
         SetChronicleFilter("all");
         RenderState();
+        if (userArgs.Contains("--verify-localization"))
+        {
+            RunUiLocalizationVerification();
+            return;
+        }
         var previewIndex = Array.IndexOf(userArgs, "--ui-scroll");
         if (previewIndex >= 0 && previewIndex + 1 < userArgs.Length && int.TryParse(userArgs[previewIndex + 1], out var previewScroll))
             _previewScroll = previewScroll;
+        var screenshotIndex = Array.IndexOf(userArgs, "--ui-screenshot");
+        if (screenshotIndex >= 0 && screenshotIndex + 1 < userArgs.Length)
+            _screenshotPath = userArgs[screenshotIndex + 1];
     }
 
     public override void _Process(double delta)
     {
+        if (_state.AutoRunUntilCollapse && !_state.Finished && !_state.AwaitingCivilizationRestart)
+        {
+            _autoRunElapsed += delta;
+            if (_autoRunElapsed >= 0.18)
+            {
+                _autoRunElapsed = 0;
+                Advance("balance");
+            }
+        }
+        else
+        {
+            _autoRunElapsed = 0;
+        }
         if (_previewScroll.HasValue && _pageScroll.Visible) _pageScroll.ScrollVertical = _previewScroll.Value;
+        if (_screenshotPath is null || ++_screenshotFrames < 3) return;
+        var path = _screenshotPath;
+        _screenshotPath = null;
+        var error = GetViewport().GetTexture().GetImage().SavePng(path);
+        GD.Print($"UI_SCREENSHOT path={path} status={(error == Error.Ok ? "PASS" : error.ToString())}");
+        GetTree().Quit(error == Error.Ok ? 0 : 1);
+    }
+
+    public override void _UnhandledKeyInput(InputEvent @event)
+    {
+        if (@event is not InputEventKey { Pressed: true, Echo: false } keyEvent) return;
+        if (GetViewport().GuiGetFocusOwner() is LineEdit) return;
+        var key = char.ToLowerInvariant((char)keyEvent.Unicode);
+
+        if (keyEvent.ShiftPressed && key == 'l')
+        {
+            ClearChronicle();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+        if (keyEvent.ShiftPressed && key == 'n')
+        {
+            ResetWorld();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+        if (!_state.SetupComplete) return;
+
+        var actionId = (key, keyEvent.ShiftPressed) switch
+        {
+            ('b', true) => "balance",
+            ('s', false) => "science",
+            ('b', false) => "belief",
+            ('p', false) => "population",
+            ('z', false) => "order",
+            ('1', false) => "suppressBelief",
+            ('2', false) => "suppressScience",
+            ('h', false) => "hibernate",
+            ('l', false) => "arts",
+            ('e', false) => "economy",
+            ('f', false) => "buildEerf",
+            ('u', false) => "upgradeEerf",
+            ('o', false) => "recovery",
+            ('r', false) => "restartCivilization",
+            ('t', false) => "settleEnding",
+            _ => null
+        };
+        if (actionId is null) return;
+        Advance(actionId);
+        GetViewport().SetInputAsHandled();
     }
 
     private void BuildInterface()
@@ -181,6 +289,55 @@ public partial class Main : Control
         _status.AddThemeColorOverride("font_color", Muted);
         page.AddChild(_status);
         page.AddChild(BuildLowerGrid());
+
+        _endingOverlay = BuildEndingOverlay();
+        _endingOverlay.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        AddChild(_endingOverlay);
+    }
+
+    private Control BuildEndingOverlay()
+    {
+        var overlay = new Control { Visible = false, MouseFilter = MouseFilterEnum.Stop };
+        var shade = new ColorRect { Color = new Color(0.008f, 0.014f, 0.024f, 0.97f), MouseFilter = MouseFilterEnum.Ignore };
+        shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        overlay.AddChild(shade);
+
+        var center = new CenterContainer();
+        center.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        overlay.AddChild(center);
+        var panel = CreatePanel(Panel, 34, 30, new Color(Science.R, Science.G, Science.B, 0.45f), 8, Science, 2);
+        panel.CustomMinimumSize = new Vector2(820, 650);
+        center.AddChild(panel);
+        var layout = new VBoxContainer();
+        layout.AddThemeConstantOverride("separation", 16);
+        panel.AddChild(layout);
+        _endingOverlayKicker = TextLabel("ENDING A", 13, Science);
+        layout.AddChild(_endingOverlayKicker);
+        _endingOverlayTitle = TextLabel("—", 42, Ink);
+        layout.AddChild(_endingOverlayTitle);
+        _endingOverlayBody = new RichTextLabel
+        {
+            BbcodeEnabled = true,
+            FitContent = false,
+            CustomMinimumSize = new Vector2(0, 250),
+            SizeFlagsVertical = SizeFlags.ExpandFill
+        };
+        _endingOverlayBody.AddThemeFontSizeOverride("normal_font_size", 18);
+        _endingOverlayBody.AddThemeColorOverride("default_color", new Color(0.84f, 0.88f, 0.92f));
+        layout.AddChild(_endingOverlayBody);
+        _endingOverlayQuote = TextLabel("", 16, Belief);
+        _endingOverlayQuote.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _endingOverlayQuote.AddThemeStyleboxOverride("normal", FlatBox(new Color(0.09f, 0.07f, 0.04f), 5, new Color(Belief.R, Belief.G, Belief.B, 0.35f), 1, 16, 12));
+        layout.AddChild(_endingOverlayQuote);
+        _endingOverlayRecap = TextLabel("", 13, Muted);
+        _endingOverlayRecap.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        layout.AddChild(_endingOverlayRecap);
+        var buttons = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.End };
+        buttons.AddThemeConstantOverride("separation", 10);
+        buttons.AddChild(CompactButton(T("复制种子", "Copy Seed"), CopyEndingSeed));
+        buttons.AddChild(CompactButton(T("新世界", "New World"), ResetWorld));
+        layout.AddChild(buttons);
+        return overlay;
     }
 
     private ScrollContainer BuildSetupInterface()
@@ -215,13 +372,20 @@ public partial class Main : Control
             Alignment = BoxContainer.AlignmentMode.Center
         };
         identity.AddThemeConstantOverride("separation", 12);
-        identity.AddChild(TextLabel("CRADLES OF CIVILIZATION", 13, new Color(0.66f, 0.8f, 0.89f)));
-        identity.AddChild(TextLabel("文明摇篮", 56, Ink));
-        identity.AddChild(TextLabel("原创企划 / Original concept: Noah Walker", 12, Muted));
-        var quote = TextLabel("人类从历史中学到的唯一教训，\n就是人类从未从历史中学到任何教训。", 17, new Color(0.82f, 0.86f, 0.91f));
+        var identityHead = new HBoxContainer();
+        var identityKicker = TextLabel("CRADLES OF CIVILIZATION", 13, new Color(0.66f, 0.8f, 0.89f));
+        identityKicker.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        identityHead.AddChild(identityKicker);
+        var language = CompactButton(IsEnglish ? "中文" : "EN", ToggleLanguage);
+        language.CustomMinimumSize = new Vector2(70, 34);
+        identityHead.AddChild(language);
+        identity.AddChild(identityHead);
+        identity.AddChild(TextLabel(T("文明摇篮", "CRADLES OF CIVILIZATION"), 56, Ink));
+        identity.AddChild(TextLabel(T("原创企划 / Original concept: Noah Walker", "Original concept: Noah Walker"), 12, Muted));
+        var quote = TextLabel(T("人类从历史中学到的唯一教训，\n就是人类从未从历史中学到任何教训。", "The only thing we learn from history is\nthat we learn nothing from history."), 17, new Color(0.82f, 0.86f, 0.91f));
         quote.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         identity.AddChild(quote);
-        var citation = TextLabel("——格奥尔格·威廉·弗里德里希·黑格尔，1837年", 13, new Color(0.72f, 0.77f, 0.84f));
+        var citation = TextLabel(T("——格奥尔格·威廉·弗里德里希·黑格尔，1837年", "—Georg Wilhelm Friedrich Hegel, 1837"), 13, new Color(0.72f, 0.77f, 0.84f));
         citation.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         identity.AddChild(citation);
         page.AddChild(identity);
@@ -232,7 +396,7 @@ public partial class Main : Control
         var setupLayout = new VBoxContainer { SizeFlagsVertical = SizeFlags.Fill };
         setupLayout.AddThemeConstantOverride("separation", 18);
         setupPanel.AddChild(setupLayout);
-        setupLayout.AddChild(TextLabel("建立文明 // INITIALIZE", 11, Science));
+        setupLayout.AddChild(TextLabel(T("建立文明 // INITIALIZE", "INITIALIZE CIVILIZATION"), 11, Science));
         setupLayout.AddChild(HorizontalRule());
 
         _setupNameStage = BuildNameStage();
@@ -251,36 +415,44 @@ public partial class Main : Control
 
     private Control BuildNameStage()
     {
-        var layout = SetupStage("01 / 国度命名", "你的国度", "一切文明，始于一个被共同记住的名字。");
-        _setupRealmInput = StyledInput("输入国名", 0);
+        var layout = SetupStage(T("01 / 国度命名", "01 / NAME THE REALM"), T("你的国度", "Your Realm"), T("一切文明，始于一个被共同记住的名字。", "Every civilization begins with a name remembered in common."));
+        _setupRealmInput = StyledInput(T("输入国名", "Enter realm name"), 0);
         _setupRealmInput.MaxLength = 24;
         _setupRealmInput.TextSubmitted += _ => ConfirmSetupName();
         layout.AddChild(_setupRealmInput);
-        layout.AddChild(TextLabel("世界种子", 13, Ink));
+        layout.AddChild(TextLabel(T("世界种子", "World Seed"), 13, Ink));
         var seedRow = new HBoxContainer();
         seedRow.AddThemeConstantOverride("separation", 10);
-        _setupSeedInput = StyledInput("输入种子，例如 1058", 0);
+        _setupSeedInput = StyledInput(T("输入种子，例如 1058", "Enter a seed, e.g. 1058"), 0);
         seedRow.AddChild(_setupSeedInput);
-        var random = CompactButton("随机世界", RandomizeSetupSeed);
+        var random = CompactButton(T("随机世界", "Random World"), RandomizeSetupSeed);
         random.CustomMinimumSize = new Vector2(130, 40);
         seedRow.AddChild(random);
         layout.AddChild(seedRow);
-        var note = TextLabel("同一种子会生成相同的地块、道路与随机序列。地图将在后续版本接回；当前种子仍决定全部随机序列。", 11, Muted);
+        var note = TextLabel(T("同一种子会生成相同的地块、道路与随机序列。地图将在后续版本接回；当前种子仍决定全部随机序列。", "The same seed produces the same terrain, roads, and random sequence. The map returns in a later version; for now, the seed still controls every random roll."), 11, Muted);
         note.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         layout.AddChild(note);
-        layout.AddChild(PrimaryButton("确认国名", ConfirmSetupName));
+        layout.AddChild(PrimaryButton(T("确认国名", "Confirm Realm Name"), ConfirmSetupName));
         return layout;
     }
 
     private Control BuildDifficultyStage()
     {
-        var layout = SetupStage("02 / 难度选择", "选择演化压力", "当前难度只影响灾变强度；地图与军事参数将在对应系统迁回时恢复。");
-        _setupRealmPreview = TextLabel("无名国度", 27, Ink);
+        var layout = SetupStage(T("02 / 难度选择", "02 / SELECT DIFFICULTY"), T("选择演化压力", "Choose Evolutionary Pressure"), T("当前难度只影响灾变强度；地图与军事参数将在对应系统迁回时恢复。", "Difficulty currently affects disaster intensity only. Map and military parameters return with those systems."));
+        _setupRealmPreview = TextLabel(T("无名国度", "Unnamed Realm"), 27, Ink);
         layout.AddChild(_setupRealmPreview);
         var grid = new GridContainer { Columns = 2, SizeFlagsHorizontal = SizeFlags.ExpandFill };
         grid.AddThemeConstantOverride("h_separation", 10);
         grid.AddThemeConstantOverride("v_separation", 10);
-        string[] descriptions =
+        string[] descriptions = IsEnglish
+            ?
+            [
+                "Weaker disasters; suitable for learning the civilization cycle",
+                "Standard disaster pressure and civilization pace",
+                "More frequent disasters with less room for error",
+                "Fully intensified disasters with minimal tolerance"
+            ]
+            :
         [
             "灾变较弱，适合熟悉文明循环",
             "标准灾变压力与文明节奏",
@@ -290,36 +462,54 @@ public partial class Main : Control
         for (var i = 0; i < Difficulties.Length; i++)
         {
             var index = i;
-            var button = SetupChoiceButton(DifficultyLabels[i], descriptions[i], 92, () => SelectDifficulty(index));
+            var button = SetupChoiceButton(DifficultyLabel(i), descriptions[i], 92, () => SelectDifficulty(index));
             _difficultyButtons[Difficulties[i]] = button;
             grid.AddChild(button);
         }
         layout.AddChild(grid);
-        layout.AddChild(SetupNavigation("返回命名", BackToName, "选择执政官", ContinueToGovernor));
+        layout.AddChild(SetupNavigation(T("返回命名", "Back to Name"), BackToName, T("选择执政官", "Choose Governor"), ContinueToGovernor));
         return layout;
     }
 
     private Control BuildGovernorStage()
     {
-        var layout = SetupStage("03 / 执政官", "选择初始执政官", "人物与数值规则沿用网页版；涉及地图与军事的技能部分暂不生效。");
+        var layout = SetupStage(T("03 / 执政官", "03 / GOVERNOR"), T("选择初始执政官", "Choose the First Governor"), T("人物与数值规则沿用网页版；涉及地图与军事的技能部分暂不生效。", "Characters and numerical rules match the web version. Skills tied to map and military systems are temporarily inactive."));
         var grid = new GridContainer { Columns = 2, SizeFlagsHorizontal = SizeFlags.ExpandFill };
         grid.AddThemeConstantOverride("h_separation", 10);
         grid.AddThemeConstantOverride("v_separation", 10);
-        string[] names =
+        string[] names = IsEnglish
+            ? ["Yang Weiping", "Claire Ingrid MacLeod", "Lattel ‘Ram’ Cervantes III", "Trisolaran Listener"]
+            :
         [
             "杨卫平",
             "克莱尔·英格丽德·麦克劳德",
             "拉特尔·‘公羊’·塞万提斯三世",
             "三体监听员"
         ];
-        string[] captions =
+        string[] captions = IsEnglish
+            ?
+            [
+                "Of Han Chinese heritage.\nHe believes empty talk ruins a nation and practical work makes it prosper.\nHe also believes every invader ultimately meets defeat.",
+                "Of Norse-Celtic heritage.\nCertainly, she could be an excellent governor.\nBut she would rather become a Valkyrie.",
+                "Of Latin American–African heritage.\nHe has dreams of his own—for example, that colonizers might one day stop plundering his homeland.\nOf course, it is only a dream.",
+                "A listener from Trisolaris.\nYou have seen more than enough battles.\nYou think Trisolaris was poorly run; now it is yours to build."
+            ]
+            :
         [
             "汉人血统。\n他坚信空谈误国，实干兴邦。\n他也坚信：历来强盗要侵入，最终必送命。",
             "维京-凯尔特血统。\n当然，她可以是一位优秀的执政官。\n但她更想成为一位女武神。",
             "拉美-非洲混血。\n他有自己的梦想，比如有一天，殖民者能停止掠夺他的家乡。\n当然，只是个梦想。",
             "三体世界的监听员。\n你已经是身经百战见得多了。\n你觉得三体世界不好，现在，你来建设它。"
         ];
-        string[] skills =
+        string[] skills = IsEnglish
+            ?
+            [
+                "People's Lifeline | Positive population growth +8%.",
+                "Valkyrie | Positive theology growth +8%.",
+                "The Ram's Dream | Positive economic growth +10%.",
+                "Listener | Global intelligence effect awaits the map system."
+            ]
+            :
         [
             "民生防线｜人口正增长 +8%。",
             "女武神｜神学正增长 +8%。",
@@ -334,7 +524,7 @@ public partial class Main : Control
             grid.AddChild(button);
         }
         layout.AddChild(grid);
-        layout.AddChild(SetupNavigation("返回难度", BackToDifficulty, "开始演化", CompleteSetup));
+        layout.AddChild(SetupNavigation(T("返回难度", "Back to Difficulty"), BackToDifficulty, T("开始演化", "Begin Evolution"), CompleteSetup));
         return layout;
     }
 
@@ -449,12 +639,19 @@ public partial class Main : Control
 
         var brand = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = 1.1f };
         brand.AddThemeConstantOverride("separation", 3);
-        brand.AddChild(TextLabel("CRADLES OF CIVILIZATION", 12, new Color(0.66f, 0.8f, 0.89f)));
-        var title = TextLabel("文明摇篮", 46, Ink);
+        var brandHead = new HBoxContainer();
+        var brandKicker = TextLabel("CRADLES OF CIVILIZATION", 12, new Color(0.66f, 0.8f, 0.89f));
+        brandKicker.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        brandHead.AddChild(brandKicker);
+        var language = CompactButton(IsEnglish ? "中文" : "EN", ToggleLanguage);
+        language.CustomMinimumSize = new Vector2(70, 30);
+        brandHead.AddChild(language);
+        brand.AddChild(brandHead);
+        var title = TextLabel(T("文明摇篮", "CRADLES OF CIVILIZATION"), 46, Ink);
         title.AddThemeConstantOverride("outline_size", 2);
         title.AddThemeColorOverride("font_outline_color", new Color(0, 0, 0, 0.7f));
         brand.AddChild(title);
-        _headerRealm = TextLabel("长生军｜普通｜无地图版", 12, new Color(0.72f, 0.84f, 0.91f));
+        _headerRealm = TextLabel(T("长生军｜普通｜无地图版", "Longevity Army | Normal | Mapless Build"), 12, new Color(0.72f, 0.84f, 0.91f));
         brand.AddChild(_headerRealm);
         row.AddChild(brand);
 
@@ -472,16 +669,16 @@ public partial class Main : Control
         };
         governor.AddChild(_governorPortrait);
         var governorCopy = new VBoxContainer { Alignment = BoxContainer.AlignmentMode.Center };
-        governorCopy.AddChild(TextLabel("执政官", 11, Muted));
-        _governorName = TextLabel("杨卫平", 16, Ink);
+        governorCopy.AddChild(TextLabel(T("执政官", "GOVERNOR"), 11, Muted));
+        _governorName = TextLabel(GovernorLabel(0), 16, Ink);
         governorCopy.AddChild(_governorName);
         governor.AddChild(governorCopy);
         row.AddChild(governor);
 
         var turnBoard = new GridContainer { Columns = 3, CustomMinimumSize = new Vector2(390, 0) };
         turnBoard.AddThemeConstantOverride("h_separation", 10);
-        _headerCivilization = AddTurnCell(turnBoard, "文明");
-        _headerTurn = AddTurnCell(turnBoard, "年份");
+        _headerCivilization = AddTurnCell(turnBoard, T("文明", "CIVILIZATION"));
+        _headerTurn = AddTurnCell(turnBoard, T("年份", "YEAR"));
         _headerRand = AddTurnCell(turnBoard, "Rand");
         row.AddChild(turnBoard);
         return panel;
@@ -496,8 +693,8 @@ public partial class Main : Control
 
         var grid = new GridContainer { Columns = 2, SizeFlagsHorizontal = SizeFlags.ExpandFill };
         grid.AddThemeConstantOverride("h_separation", 12);
-        var restart = CreateTerminalButton("restartCivilization", "GOVERNANCE FEED", "三恒星危机管制台 / 重启文明", Science, out _weatherLabel);
-        var ending = CreateTerminalButton("settleEnding", "ENDING VECTOR", "终局判定 / 脱离苦海", Belief, out _endingTerminalLabel);
+        var restart = CreateTerminalButton("restartCivilization", "GOVERNANCE FEED", T("三恒星危机管制台 / 重启文明", "TRISOLAR CRISIS CONTROL / RESTART"), Science, out _weatherLabel);
+        var ending = CreateTerminalButton("settleEnding", "ENDING VECTOR", T("终局判定 / 脱离苦海", "ENDING CHECK / SETTLE"), Belief, out _endingTerminalLabel);
         grid.AddChild(restart);
         grid.AddChild(ending);
         layout.AddChild(grid);
@@ -544,12 +741,21 @@ public partial class Main : Control
         var headingLabel = TextLabel(heading, 13, Ink);
         headingLabel.HorizontalAlignment = HorizontalAlignment.Right;
         head.AddChild(headingLabel);
+        var shortcutLabel = TextLabel(actionId == "settleEnding" ? "T" : "R", 10, Muted);
+        shortcutLabel.CustomMinimumSize = new Vector2(28, 0);
+        shortcutLabel.HorizontalAlignment = HorizontalAlignment.Right;
+        head.AddChild(shortcutLabel);
         copy.AddChild(head);
-        readout = TextLabel("等待第一年观测", 21, accent);
+        readout = TextLabel(T("等待第一年观测", "Awaiting the first year's observation"), 21, accent);
         readout.SizeFlagsVertical = SizeFlags.ExpandFill;
         readout.VerticalAlignment = VerticalAlignment.Bottom;
         readout.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         copy.AddChild(readout);
+        var reason = TextLabel("", 10, Belief);
+        reason.Visible = false;
+        reason.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        copy.AddChild(reason);
+        _actionReasons[actionId] = reason;
         IgnoreMouse(copy);
         return button;
     }
@@ -562,16 +768,22 @@ public partial class Main : Control
         row.AddThemeConstantOverride("separation", 18);
         panel.AddChild(row);
         var heading = new VBoxContainer { CustomMinimumSize = new Vector2(255, 0) };
-        heading.AddChild(TextLabel("特殊事件", 11, Belief));
-        _specialTitle = TextLabel("SPEC ----｜无特殊事件", 16, new Color(1f, 0.97f, 0.87f));
+        heading.AddChild(TextLabel(T("特殊事件", "SPECIAL EVENT"), 11, Belief));
+        _specialTitle = TextLabel(T("SPEC ----｜无特殊事件", "SPEC ---- | NO SPECIAL EVENT"), 16, new Color(1f, 0.97f, 0.87f));
         _specialTitle.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         heading.AddChild(_specialTitle);
         row.AddChild(heading);
-        _specialText = TextLabel("日光之下，并无新事。", 14, new Color(0.94f, 0.91f, 0.78f));
+        var notice = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        notice.AddThemeConstantOverride("separation", 6);
+        _specialText = TextLabel(T("日光之下，并无新事。", "There is nothing new under the sun."), 14, new Color(0.94f, 0.91f, 0.78f));
         _specialText.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _specialText.VerticalAlignment = VerticalAlignment.Center;
         _specialText.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        row.AddChild(_specialText);
+        notice.AddChild(_specialText);
+        _specialDelta = TextLabel("", 11, Ink);
+        _specialDelta.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        notice.AddChild(_specialDelta);
+        row.AddChild(notice);
         return panel;
     }
 
@@ -581,17 +793,17 @@ public partial class Main : Control
         var layout = new VBoxContainer();
         layout.AddThemeConstantOverride("separation", 12);
         panel.AddChild(layout);
-        layout.AddChild(SectionTitle("状态仪表"));
+        layout.AddChild(SectionTitle(T("状态仪表", "STATUS METERS")));
 
         var grid = new GridContainer { Columns = 3, SizeFlagsHorizontal = SizeFlags.ExpandFill };
         grid.AddThemeConstantOverride("h_separation", 14);
         grid.AddThemeConstantOverride("v_separation", 14);
-        grid.AddChild(CreateMetricCard("science", "SC 科学", Science));
-        grid.AddChild(CreateMetricCard("belief", "BE 神学", Belief));
-        grid.AddChild(CreateMetricCard("population", "POP 人口", People));
-        grid.AddChild(CreateMetricCard("economy", "ECO 经济", Economy));
-        grid.AddChild(CreateMetricCard("eerf", "EERF 极端环境抵抗设施", Eerf));
-        grid.AddChild(CreateMetricCard("literature", "LA 文学艺术", Arts));
+        grid.AddChild(CreateMetricCard("science", T("SC 科学", "SC SCIENCE"), Science));
+        grid.AddChild(CreateMetricCard("belief", T("BE 神学", "BE THEOLOGY"), Belief));
+        grid.AddChild(CreateMetricCard("population", T("POP 人口", "POP POPULATION"), People));
+        grid.AddChild(CreateMetricCard("economy", T("ECO 经济", "ECO ECONOMY"), Economy));
+        grid.AddChild(CreateMetricCard("eerf", T("EERF 极端环境抵抗设施", "EERF EXTREME ENVIRONMENT RESISTANCE FACILITY"), Eerf));
+        grid.AddChild(CreateMetricCard("literature", T("LA 文学艺术", "LA ARTS & LETTERS"), Arts));
         layout.AddChild(grid);
         return panel;
     }
@@ -626,7 +838,7 @@ public partial class Main : Control
         _metricDetails[key] = detail;
         layout.AddChild(detail);
 
-        var trend = TextLabel("0/年                                      平稳", 11, Ink);
+        var trend = TextLabel(T("0/年                                      平稳", "0/year                                      Stable"), 11, Ink);
         trend.AddThemeStyleboxOverride("normal", FlatBox(new Color(0.02f, 0.033f, 0.05f), 3, new Color(1, 1, 1, 0.05f), 1, 8, 5));
         _metricTrends[key] = trend;
         layout.AddChild(trend);
@@ -637,37 +849,60 @@ public partial class Main : Control
     {
         var layout = new VBoxContainer();
         layout.AddThemeConstantOverride("separation", 18);
-        layout.AddChild(BuildActionGroup("基础操作", ["science", "belief", "population", "economy", "arts", "hibernate"], 3));
-        layout.AddChild(BuildActionGroup("战略干预", ["balance", "suppressBelief", "order", "suppressScience"], 4));
-        layout.AddChild(BuildActionGroup("特殊设施建设", ["buildEerf", "upgradeEerf", "recovery"], 3));
+        layout.AddChild(BuildActionGroup(T("基础操作", "BASIC ACTIONS"), ["science", "belief", "population", "economy", "arts", "hibernate"]));
+        layout.AddChild(BuildActionGroup(T("战略干预", "STRATEGIC INTERVENTION"), ["balance", "suppressBelief", "order", "suppressScience"]));
+        layout.AddChild(BuildActionGroup(T("特殊设施建设", "SPECIAL FACILITIES"), ["buildEerf", "upgradeEerf", "recovery"]));
         return layout;
     }
 
-    private Control BuildActionGroup(string title, string[] actionIds, int columns)
+    private Control BuildActionGroup(string title, string[] actionIds)
     {
         var layout = new VBoxContainer();
         layout.AddThemeConstantOverride("separation", 10);
         layout.AddChild(SectionTitle(title));
-        var grid = new GridContainer { Columns = columns, SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        grid.AddThemeConstantOverride("h_separation", 10);
-        grid.AddThemeConstantOverride("v_separation", 10);
+        var grid = new GridContainer
+        {
+            Columns = ActionGridColumns,
+            CustomMinimumSize = new Vector2(ActionGridWidth, 0),
+            SizeFlagsHorizontal = SizeFlags.ShrinkCenter
+        };
+        grid.AddThemeConstantOverride("h_separation", (int)ActionGridGap);
+        grid.AddThemeConstantOverride("v_separation", (int)ActionGridGap);
         foreach (var actionId in actionIds) grid.AddChild(CreateActionCard(actionId));
+        var fillerCount = (ActionGridColumns - actionIds.Length % ActionGridColumns) % ActionGridColumns;
+        for (var i = 0; i < fillerCount; i++)
+        {
+            grid.AddChild(new Control
+            {
+                CustomMinimumSize = new Vector2(ActionCardSize, 0),
+                MouseFilter = MouseFilterEnum.Ignore
+            });
+        }
         layout.AddChild(grid);
         return layout;
     }
 
-    private Button CreateActionCard(string actionId)
+    private Control CreateActionCard(string actionId)
     {
         var action = _actionsById[actionId];
         var presentation = Presentation(actionId);
+        // A plain clipped slot prevents the GridContainer from stretching a card
+        // to the wrapped copy's minimum height. The player-facing action surface
+        // therefore remains a true square at every supported window size.
+        var slot = new Control
+        {
+            CustomMinimumSize = new Vector2(ActionCardSize, ActionCardSize),
+            ClipContents = true,
+            MouseFilter = MouseFilterEnum.Ignore
+        };
         var button = new Button
         {
             Text = "",
-            CustomMinimumSize = new Vector2(0, 132),
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
             ClipContents = true,
-            TooltipText = action.Description
+            TooltipText = ActionTooltip(actionId)
         };
+        button.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        slot.AddChild(button);
         button.AddThemeStyleboxOverride("normal", ButtonBox(PanelSoft, new Color(presentation.Accent.R, presentation.Accent.G, presentation.Accent.B, 0.36f), 1));
         button.AddThemeStyleboxOverride("hover", ButtonBox(new Color(0.09f, 0.14f, 0.19f), new Color(presentation.Accent.R, presentation.Accent.G, presentation.Accent.B, 0.75f), 1));
         button.AddThemeStyleboxOverride("pressed", ButtonBox(new Color(0.055f, 0.085f, 0.12f), presentation.Accent, 1));
@@ -675,22 +910,28 @@ public partial class Main : Control
         button.Pressed += () => Advance(actionId);
         _actionButtons[actionId] = button;
 
-        var margin = FillMargin(12, 11);
+        var margin = FillMargin(14, 13);
         button.AddChild(margin);
-        var row = new HBoxContainer();
-        row.AddThemeConstantOverride("separation", 10);
-        margin.AddChild(row);
+        var copy = new VBoxContainer();
+        copy.AddThemeConstantOverride("separation", 8);
+        margin.AddChild(copy);
+
+        var cardHead = new HBoxContainer();
+        cardHead.AddThemeConstantOverride("separation", 10);
         var markPanel = CreatePanel(presentation.Accent, 0, 0, presentation.Accent, 4);
         markPanel.CustomMinimumSize = new Vector2(42, 38);
         var mark = TextLabel(presentation.Mark, 11, Background);
         mark.HorizontalAlignment = HorizontalAlignment.Center;
         mark.VerticalAlignment = VerticalAlignment.Center;
         markPanel.AddChild(mark);
-        row.AddChild(markPanel);
+        cardHead.AddChild(markPanel);
+        cardHead.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
+        var shortcut = TextLabel(presentation.Shortcut, 10, Muted);
+        shortcut.VerticalAlignment = VerticalAlignment.Top;
+        cardHead.AddChild(shortcut);
+        copy.AddChild(cardHead);
 
-        var copy = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        copy.AddThemeConstantOverride("separation", 3);
-        copy.AddChild(TextLabel(action.Label, 15, Ink));
+        copy.AddChild(TextLabel(ActionLabel(actionId), 15, Ink));
         var description = TextLabel(presentation.Description, 11, new Color(0.71f, 0.76f, 0.81f));
         description.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         description.SizeFlagsVertical = SizeFlags.ExpandFill;
@@ -700,12 +941,8 @@ public partial class Main : Control
         reason.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         copy.AddChild(reason);
         _actionReasons[actionId] = reason;
-        row.AddChild(copy);
-        var shortcut = TextLabel(presentation.Shortcut, 10, Muted);
-        shortcut.VerticalAlignment = VerticalAlignment.Top;
-        row.AddChild(shortcut);
         IgnoreMouse(margin);
-        return button;
+        return slot;
     }
 
     private Control BuildLowerGrid()
@@ -726,14 +963,16 @@ public partial class Main : Control
         layout.AddThemeConstantOverride("separation", 10);
         panel.AddChild(layout);
         var head = new HBoxContainer();
-        var title = SectionTitle("编年史");
+        var title = SectionTitle(T("编年史", "CHRONICLE"));
         title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         head.AddChild(title);
-        head.AddChild(CompactButton("清空", ClearChronicle));
+        head.AddChild(CompactButton(T("清空", "Clear"), ClearChronicle));
         layout.AddChild(head);
         var filters = new GridContainer { Columns = 4 };
         filters.AddThemeConstantOverride("h_separation", 6);
-        foreach (var (id, label) in new[] { ("all", "全部"), ("disaster", "灾变"), ("special", "特殊"), ("progress", "发展") })
+        foreach (var (id, label) in IsEnglish
+                     ? new[] { ("all", "All"), ("disaster", "Disasters"), ("special", "Special"), ("progress", "Progress") }
+                     : new[] { ("all", "全部"), ("disaster", "灾变"), ("special", "特殊"), ("progress", "发展") })
         {
             var filterId = id;
             var filter = CompactButton(label, () => SetChronicleFilter(filterId));
@@ -763,21 +1002,24 @@ public partial class Main : Control
         var layout = new VBoxContainer();
         layout.AddThemeConstantOverride("separation", 12);
         panel.AddChild(layout);
-        layout.AddChild(SectionTitle("文明系统"));
-        layout.AddChild(TextLabel("终局观测", 13, Ink));
-        _systemEnding = InfoBox("文明的旅程尚未停息。", Science);
+        layout.AddChild(SectionTitle(T("文明系统", "CIVILIZATION SYSTEM")));
+        layout.AddChild(TextLabel(T("终局观测", "ENDING WATCH"), 13, Ink));
+        _systemEnding = InfoBox(T("文明的旅程尚未停息。", "Civilization's journey continues."), Science);
         layout.AddChild(_systemEnding);
-        layout.AddChild(TextLabel("EERF 火种预估", 13, Ink));
-        _eerfSummary = InfoBox("当前等级 0/5\n毁灭后人口 2,600\n下一代 EERF 0/5", Eerf);
+        layout.AddChild(TextLabel(T("EERF 火种预估", "EERF SEEDBANK ESTIMATE"), 13, Ink));
+        _eerfSummary = InfoBox(T("当前等级 0/5\n毁灭后人口 2,600\n下一代 EERF 0/5", "Current level 0/5\nPost-collapse population 2,600\nNext-generation EERF 0/5"), Eerf);
         layout.AddChild(_eerfSummary);
-        layout.AddChild(TextLabel("文明档案", 13, Ink));
-        _civilizationHistory = InfoBox("尚无毁灭记录。\n第一份档案会在文明归零时生成。", Muted);
+        layout.AddChild(TextLabel(T("文明档案", "CIVILIZATION ARCHIVE"), 13, Ink));
+        _civilizationHistory = InfoBox(T("尚无毁灭记录。\n第一份档案会在文明归零时生成。", "No collapse has been recorded.\nThe first archive entry is created when a civilization falls."), Muted);
         layout.AddChild(_civilizationHistory);
-        layout.AddChild(TextLabel("世界存档", 13, Ink));
+        layout.AddChild(TextLabel(T("终局统计", "ENDING STATISTICS"), 13, Ink));
+        _endingStatsSummary = InfoBox(T("已达成 0/10 种｜总计 0 次｜最近 尚无", "Reached 0/10 endings | Total 0 | Latest none"), Muted);
+        layout.AddChild(_endingStatsSummary);
+        layout.AddChild(TextLabel(T("世界存档", "WORLD SAVE"), 13, Ink));
 
         var realmRow = new HBoxContainer();
         realmRow.AddThemeConstantOverride("separation", 6);
-        _realmInput = StyledInput("国名", 150);
+        _realmInput = StyledInput(T("国名", "Realm name"), 150);
         _seedInput = StyledInput("Seed", 140);
         realmRow.AddChild(_realmInput);
         realmRow.AddChild(_seedInput);
@@ -786,18 +1028,18 @@ public partial class Main : Control
         var optionRow = new HBoxContainer();
         optionRow.AddThemeConstantOverride("separation", 6);
         _difficultyInput = StyledOption();
-        foreach (var label in DifficultyLabels) _difficultyInput.AddItem(label);
+        for (var i = 0; i < Difficulties.Length; i++) _difficultyInput.AddItem(DifficultyLabel(i));
         _governorInput = StyledOption();
-        foreach (var label in GovernorLabels) _governorInput.AddItem(label);
+        for (var i = 0; i < Governors.Length; i++) _governorInput.AddItem(GovernorLabel(i));
         optionRow.AddChild(_difficultyInput);
         optionRow.AddChild(_governorInput);
         layout.AddChild(optionRow);
 
         var buttons = new GridContainer { Columns = 3 };
         buttons.AddThemeConstantOverride("h_separation", 6);
-        var newWorld = CompactButton("新世界", ResetWorld);
-        var save = CompactButton("保存", SaveGame);
-        var load = CompactButton("读取", LoadGame);
+        var newWorld = CompactButton(T("新世界", "New World"), ResetWorld);
+        var save = CompactButton(T("保存", "Save"), SaveGame);
+        var load = CompactButton(T("读取", "Load"), LoadGame);
         foreach (var button in new[] { newWorld, save, load })
         {
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
@@ -810,15 +1052,38 @@ public partial class Main : Control
     private void Advance(string actionId)
     {
         if (!_state.SetupComplete) return;
+        var disabledReason = _engine.DisabledReason(_state, actionId);
+        if (disabledReason is not null)
+        {
+            _status.Text = LocalizeCoreText(disabledReason);
+            RenderState();
+            return;
+        }
         var result = _engine.Advance(_state, actionId);
+        RecordEndingIfNeeded();
         _lastSpecialTitle = result.SpecialEventTitle;
-        var special = string.IsNullOrEmpty(result.SpecialEventTitle) ? "" : $" · {result.SpecialEventTitle}";
-        var collapse = result.CivilizationCollapsed ? " · 文明毁灭" : "";
+        var special = string.IsNullOrEmpty(result.SpecialEventTitle) ? "" : $" · {LocalizeEvent(result.SpecialEventTitle)}";
+        var collapse = result.CivilizationCollapsed ? T(" · 文明毁灭", " · CIVILIZATION COLLAPSED") : "";
         _status.Text = result.Turn == 0
-            ? result.Message
-            : $"第 {result.Turn} 年 · {result.EventTitle}{special} · {result.ActionLabel}{collapse} · Rand {result.Rand:0000} · {result.Message}";
+            ? LocalizeCoreText(result.Message)
+            : IsEnglish
+                ? $"Year {result.Turn} · {LocalizeEvent(result.EventTitle)}{special} · {LocalizeCoreText(result.ActionLabel)}{collapse} · Rand {result.Rand:0000} · {LocalizeCoreText(result.Message)}"
+                : $"第 {result.Turn} 年 · {result.EventTitle}{special} · {result.ActionLabel}{collapse} · Rand {result.Rand:0000} · {result.Message}";
         AutoSave();
         RenderState();
+    }
+
+    private void RecordEndingIfNeeded()
+    {
+        if (!_state.Finished || _state.FinalEnding is null || _state.EndingRecorded) return;
+        EndingStatsStore.Record(_endingStats, _state.FinalEnding.Id, EndingStatsPath);
+        _state.EndingRecorded = true;
+    }
+
+    private void CopyEndingSeed()
+    {
+        DisplayServer.ClipboardSet(_state.Seed.ToString(CultureInfo.InvariantCulture));
+        _endingOverlayRecap.Text = T($"世界种子 {_state.Seed} 已复制。", $"World seed {_state.Seed} copied.");
     }
 
     private void ResetWorld()
@@ -828,14 +1093,15 @@ public partial class Main : Control
             : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         _state = new GameState(seed)
         {
-            RealmName = string.IsNullOrWhiteSpace(_realmInput.Text) ? "长生军" : _realmInput.Text.Trim(),
+            RealmName = string.IsNullOrWhiteSpace(_realmInput.Text) ? T("长生军", "Longevity Army") : _realmInput.Text.Trim(),
             Difficulty = Difficulties[(int)_difficultyInput.Selected],
             GovernorId = Governors[(int)_governorInput.Selected],
+            UiLanguage = _state.UiLanguage,
             SetupComplete = false,
             SetupStage = "name"
         };
         _lastSpecialTitle = "";
-        _setupStatus.Text = "新世界已准备，请重新确认建国信息。";
+        _setupStatus.Text = T("新世界已准备，请重新确认建国信息。", "The new world is ready. Please confirm the founding details again.");
         SyncSetupInputs();
         AutoSave();
         RenderState();
@@ -845,7 +1111,7 @@ public partial class Main : Control
     {
         var randomized = new GameState(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         _setupSeedInput.Text = randomized.Seed.ToString(CultureInfo.InvariantCulture);
-        _setupStatus.Text = $"已生成世界种子 {randomized.Seed}。";
+        _setupStatus.Text = T($"已生成世界种子 {randomized.Seed}。", $"Generated world seed {randomized.Seed}.");
     }
 
     private void ConfirmSetupName()
@@ -853,7 +1119,7 @@ public partial class Main : Control
         var realm = _setupRealmInput.Text.Trim();
         if (string.IsNullOrWhiteSpace(realm))
         {
-            _setupStatus.Text = "请先输入国名。";
+            _setupStatus.Text = T("请先输入国名。", "Enter a realm name first.");
             _setupRealmInput.GrabFocus();
             return;
         }
@@ -867,10 +1133,11 @@ public partial class Main : Control
             RealmName = realm,
             Difficulty = difficulty,
             GovernorId = governor,
+            UiLanguage = _state.UiLanguage,
             SetupComplete = false,
             SetupStage = "difficulty"
         };
-        _setupStatus.Text = $"国度“{realm}”已命名。";
+        _setupStatus.Text = T($"国度“{realm}”已命名。", $"The realm has been named “{realm}”.");
         SyncSetupInputs();
         AutoSave();
         RenderSetup();
@@ -879,7 +1146,7 @@ public partial class Main : Control
     private void SelectDifficulty(int index)
     {
         _state.Difficulty = Difficulties[Math.Clamp(index, 0, Difficulties.Length - 1)];
-        _setupStatus.Text = $"已选择{DifficultyLabels[Math.Clamp(index, 0, DifficultyLabels.Length - 1)]}难度。";
+        _setupStatus.Text = T($"已选择{DifficultyLabel(index)}难度。", $"{DifficultyLabel(index)} difficulty selected.");
         AutoSave();
         RenderSetup();
     }
@@ -887,7 +1154,7 @@ public partial class Main : Control
     private void BackToName()
     {
         _state.SetupStage = "name";
-        _setupStatus.Text = "可以修改国名或世界种子。";
+        _setupStatus.Text = T("可以修改国名或世界种子。", "You may change the realm name or world seed.");
         AutoSave();
         RenderSetup();
     }
@@ -895,7 +1162,7 @@ public partial class Main : Control
     private void ContinueToGovernor()
     {
         _state.SetupStage = "governor";
-        _setupStatus.Text = "选择一位初始执政官。";
+        _setupStatus.Text = T("选择一位初始执政官。", "Choose the first governor.");
         AutoSave();
         RenderSetup();
     }
@@ -903,7 +1170,7 @@ public partial class Main : Control
     private void BackToDifficulty()
     {
         _state.SetupStage = "difficulty";
-        _setupStatus.Text = "可以重新选择演化压力。";
+        _setupStatus.Text = T("可以重新选择演化压力。", "You may choose a different evolutionary pressure.");
         AutoSave();
         RenderSetup();
     }
@@ -911,7 +1178,7 @@ public partial class Main : Control
     private void SelectGovernor(int index)
     {
         _state.GovernorId = Governors[Math.Clamp(index, 0, Governors.Length - 1)];
-        _setupStatus.Text = $"已选择{GovernorLabels[Math.Clamp(index, 0, GovernorLabels.Length - 1)]}。";
+        _setupStatus.Text = T($"已选择{GovernorLabel(index)}。", $"{GovernorLabel(index)} selected.");
         AutoSave();
         RenderSetup();
     }
@@ -921,9 +1188,8 @@ public partial class Main : Control
         _state.SetupComplete = true;
         _state.SetupStage = "complete";
         _state.Weather = $"{_state.RealmName}开始文明演化";
-        _state.Chronicle[0].Text = $"{_state.RealmName}在三颗恒星互相矛盾的轨迹下苏醒。";
         _lastSpecialTitle = "";
-        _status.Text = $"{_state.RealmName}建立完成 · 请选择第一年的决策。";
+        _status.Text = T($"{_state.RealmName}建立完成 · 请选择第一年的决策。", $"{_state.RealmName} has been founded · Choose the first year's decision.");
         SyncSetupInputs();
         AutoSave();
         RenderState();
@@ -933,7 +1199,7 @@ public partial class Main : Control
     private void SaveGame()
     {
         SaveStore.Save(_state, SavePath);
-        _status.Text = "游戏已保存。";
+        _status.Text = T("游戏已保存。", "Game saved.");
     }
 
     private void AutoSave() => SaveStore.Save(_state, SavePath);
@@ -943,23 +1209,25 @@ public partial class Main : Control
         var loaded = SaveStore.Load(SavePath);
         if (loaded is null)
         {
-            _status.Text = "没有找到存档。";
+            _status.Text = T("没有找到存档。", "No save file was found.");
             return;
         }
+        var selectedLanguage = _state.UiLanguage;
         _state = loaded;
+        _state.UiLanguage = selectedLanguage;
         _lastSpecialTitle = "";
-        SyncSetupInputs();
+        RebuildInterface();
         if (_state.SetupComplete)
-            _status.Text = $"已读取第 {_state.Civilization} 号文明，第 {_state.Turn} 年。";
+            _status.Text = T($"已读取第 {_state.Civilization} 号文明，第 {_state.Turn} 年。", $"Loaded Civilization {_state.Civilization}, Year {_state.Turn}.");
         else
-            _setupStatus.Text = "已读取尚未完成的建国流程。";
+            _setupStatus.Text = T("已读取尚未完成的建国流程。", "Loaded an unfinished founding sequence.");
         RenderState();
     }
 
     private void ClearChronicle()
     {
         _state.Chronicle.Clear();
-        _status.Text = "本地纪事显示已清空。";
+        _status.Text = T("本地纪事显示已清空。", "The local chronicle display has been cleared.");
         AutoSave();
         RenderChronicle();
     }
@@ -978,6 +1246,7 @@ public partial class Main : Control
     {
         _setupScroll.Visible = !_state.SetupComplete;
         _pageScroll.Visible = _state.SetupComplete;
+        _endingOverlay.Visible = _state.SetupComplete && _state.Finished && _state.FinalEnding is not null;
         if (!_state.SetupComplete)
         {
             RenderSetup();
@@ -985,52 +1254,131 @@ public partial class Main : Control
         }
         var difficultyIndex = Math.Max(0, Array.IndexOf(Difficulties, _state.Difficulty));
         var governorIndex = Math.Max(0, Array.IndexOf(Governors, _state.GovernorId));
-        _headerRealm.Text = $"{_state.RealmName}｜{DifficultyLabels[difficultyIndex]}｜无地图版";
-        _governorName.Text = GovernorLabels[governorIndex];
+        _headerRealm.Text = T($"{_state.RealmName}｜{DifficultyLabel(difficultyIndex)}｜无地图版", $"{_state.RealmName} | {DifficultyLabel(difficultyIndex)} | Mapless Build");
+        _governorName.Text = GovernorLabel(governorIndex);
         LoadGovernorPortrait(governorIndex);
         _headerCivilization.Text = _state.Civilization.ToString(CultureInfo.InvariantCulture);
         _headerTurn.Text = _state.Turn.ToString(CultureInfo.InvariantCulture);
         _headerRand.Text = _state.Turn == 0 ? "0000" : _state.LastRand.ToString("0000", CultureInfo.InvariantCulture);
-        _weatherLabel.Text = _state.Turn == 0 ? "等待第一年观测" : $"{_state.LastEvent} / {_state.LastAction}";
-        _endingTerminalLabel.Text = _state.EndingStatus;
+        _weatherLabel.Text = _state.Turn == 0 ? T("等待第一年观测", "Awaiting the first year's observation") : $"{LocalizeEvent(_state.LastEvent)} / {LocalizeCoreText(_state.LastAction)}";
+        _endingTerminalLabel.Text = LocalizeCoreText(_state.EndingStatus);
 
-        _specialTitle.Text = string.IsNullOrEmpty(_lastSpecialTitle)
-            ? $"SPEC {(_state.LastSpec == 0 ? "----" : _state.LastSpec.ToString("0000", CultureInfo.InvariantCulture))}｜无特殊事件"
-            : $"SPEC {_state.LastSpec:0000}｜{_lastSpecialTitle}";
-        _specialText.Text = string.IsNullOrEmpty(_lastSpecialTitle)
-            ? "日光之下，并无新事。"
-            : "异常信号已写入文明纪事，其影响已经计入本年度结算。";
+        _specialTitle.Text = string.IsNullOrEmpty(_state.LastSpecialTitle)
+            ? T($"SPEC {(_state.LastSpec == 0 ? "----" : _state.LastSpec.ToString("0000", CultureInfo.InvariantCulture))}｜无特殊事件", $"SPEC {(_state.LastSpec == 0 ? "----" : _state.LastSpec.ToString("0000", CultureInfo.InvariantCulture))} | NO SPECIAL EVENT")
+            : T($"{_state.LastSpecialTitle}｜SPEC {_state.LastSpec:0000}", $"{LocalizeEvent(_state.LastSpecialTitle)} | SPEC {_state.LastSpec:0000}");
+        _specialText.Text = string.IsNullOrEmpty(_state.LastSpecialTitle)
+            ? T("日光之下，并无新事。", "There is nothing new under the sun.")
+            : IsEnglish ? _state.LastSpecialTextEn : _state.LastSpecialText;
+        _specialDelta.Text = string.IsNullOrEmpty(_state.LastSpecialTitle) ? "" : FormatDelta(_state.LastSpecialDelta);
 
         SetMetric("science", FormatNumber(_state.Science), ScienceEra(_state.Science), _state.ScienceTrend, _state.Science / 200);
         SetMetric("belief", FormatNumber(_state.Belief), BeliefEra(_state.Belief), _state.BeliefTrend, _state.Belief / 200);
-        SetMetric("population", _state.Population.ToString("N0", CultureInfo.InvariantCulture), $"秩序 {_state.Stability}｜{OrderName(_state.Stability)}", 0, Math.Min(100, _state.Population / 1_000.0), "平稳");
-        SetMetric("economy", _state.Economy.ToString("N0", CultureInfo.InvariantCulture), _state.Economy <= 0 ? "经济危机｜正向知识冻结" : "预算、产业与粮仓", 0, Math.Min(100, _state.Economy / 1_000.0), "平稳");
+        SetMetric("population", _state.Population.ToString("N0", CultureInfo.InvariantCulture), T($"秩序 {_state.Stability}｜{OrderName(_state.Stability)}", $"Order {_state.Stability} | {OrderName(_state.Stability)}"), 0, Math.Min(100, _state.Population / 1_000.0), T("平稳", "Stable"));
+        SetMetric("economy", _state.Economy.ToString("N0", CultureInfo.InvariantCulture), _state.Economy <= 0 ? T("经济危机｜正向知识冻结", "Economic crisis | Positive knowledge frozen") : T("预算、产业与粮仓", "Budget, industry, and granaries"), 0, Math.Min(100, _state.Economy / 1_000.0), T("平稳", "Stable"));
         var restartPopulation = EstimateRestartPopulation(_state);
-        SetMetric("eerf", $"{_state.EerfLevel}/5", _state.EerfLevel == 0 ? $"尚未修建EERF；下一代初始人口 {restartPopulation:N0}" : $"火种运转中；下一代人口约 {restartPopulation:N0}", 0, _state.EerfLevel * 20, "平稳");
+        SetMetric("eerf", $"{_state.EerfLevel}/5", _state.EerfLevel == 0 ? T($"尚未修建EERF；下一代初始人口 {restartPopulation:N0}", $"EERF not built; next generation starts with {restartPopulation:N0} people") : T($"火种运转中；下一代人口约 {restartPopulation:N0}", $"Seedbank active; next generation population ≈ {restartPopulation:N0}"), 0, _state.EerfLevel * 20, T("平稳", "Stable"));
         var cultureRate = Math.Clamp(_state.LiteratureAndArt / 20_000.0 * 50, 0, 50);
-        SetMetric("literature", FormatNumber(_state.LiteratureAndArt), $"EERF 线性保存增幅 {cultureRate:0.#}%", 0, _state.LiteratureAndArt / 200, "平稳");
+        SetMetric("literature", FormatNumber(_state.LiteratureAndArt), T($"EERF 线性保存增幅 {cultureRate:0.#}%", $"EERF linear retention bonus {cultureRate:0.#}%"), 0, _state.LiteratureAndArt / 200, T("平稳", "Stable"));
 
         foreach (var (actionId, button) in _actionButtons)
         {
             var reason = _engine.DisabledReason(_state, actionId);
             button.Disabled = reason is not null;
-            button.TooltipText = reason ?? _actionsById[actionId].Description;
+            button.TooltipText = reason is null ? ActionTooltip(actionId) : LocalizeCoreText(reason);
             if (_actionReasons.TryGetValue(actionId, out var reasonLabel))
             {
                 reasonLabel.Visible = reason is not null;
-                reasonLabel.Text = reason ?? "";
+                reasonLabel.Text = reason is null ? "" : LocalizeCoreText(reason);
             }
         }
 
-        _systemEnding.Text = _state.EndingCandidate is null
-            ? _state.EndingStatus
-            : $"{_state.EndingCandidate.Id}｜{_state.EndingCandidate.Name}\n可继续发展，或点击“脱离苦海”。";
-        _eerfSummary.Text = $"当前等级　{_state.EerfLevel}/5\n毁灭后人口　{restartPopulation:N0}\n当前趋势　SC {_state.ScienceTrend:+0;-0;0}/年 · BE {_state.BeliefTrend:+0;-0;0}/年\n下一代 EERF　{Math.Max(0, _state.EerfLevel - 1)}/5";
+        _systemEnding.Text = BuildEndingWatchText();
+        _eerfSummary.Text = T($"当前等级　{_state.EerfLevel}/5\n毁灭后人口　{restartPopulation:N0}\n当前趋势　SC {_state.ScienceTrend:+0;-0;0}/年 · BE {_state.BeliefTrend:+0;-0;0}/年\n下一代 EERF　{Math.Max(0, _state.EerfLevel - 1)}/5", $"Current level  {_state.EerfLevel}/5\nPost-collapse population  {restartPopulation:N0}\nCurrent trends  SC {_state.ScienceTrend:+0;-0;0}/year · BE {_state.BeliefTrend:+0;-0;0}/year\nNext-generation EERF  {Math.Max(0, _state.EerfLevel - 1)}/5");
         _civilizationHistory.Text = _state.History.Count == 0
-            ? "尚无毁灭记录。\n第一份档案会在文明归零时生成。"
-            : string.Join("\n", _state.History.Take(3).Select(record => $"第 {record.Civilization} 号文明｜{record.Turns} 年｜{record.CollapseCause}"));
-        if (string.IsNullOrEmpty(_status.Text)) _status.Text = $"{_state.RealmName} · 请选择年度决策。";
+            ? T("尚无毁灭记录。\n第一份档案会在文明归零时生成。", "No collapse has been recorded.\nThe first archive entry is created when a civilization falls.")
+            : string.Join("\n", _state.History.Take(3).Select(record => IsEnglish ? $"Civilization {record.Civilization} | {record.Turns} years | {LocalizeEvent(record.CollapseCause)}" : $"第 {record.Civilization} 号文明｜{record.Turns} 年｜{record.CollapseCause}"));
+        RenderEndingStats();
+        if (string.IsNullOrEmpty(_status.Text)) _status.Text = T($"{_state.RealmName} · 请选择年度决策。", $"{_state.RealmName} · Choose this year's decision.");
         RenderChronicle();
+        RenderEndingOverlay();
+    }
+
+    private void RenderEndingStats()
+    {
+        var validIds = new HashSet<string>(["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]);
+        var achieved = _endingStats.Counts.Count(pair => pair.Value > 0 && validIds.Contains(pair.Key));
+        var recent = string.IsNullOrEmpty(_endingStats.Recent)
+            ? T("尚无", "none")
+            : IsEnglish ? EndingCatalog.Get(_endingStats.Recent).NameEn : EndingCatalog.Get(_endingStats.Recent).NameZh;
+        var reached = string.Join(" · ", _endingStats.Counts
+            .Where(pair => pair.Value > 0 && validIds.Contains(pair.Key))
+            .OrderBy(pair => pair.Key)
+            .Select(pair => $"{pair.Key} ×{pair.Value}"));
+        _endingStatsSummary.Text = IsEnglish
+            ? $"Reached {achieved}/10 endings | Total {_endingStats.Total} | Latest {recent}{(string.IsNullOrEmpty(reached) ? "" : $"\n{reached}")}"
+            : $"已达成 {achieved}/10 种｜总计 {_endingStats.Total} 次｜最近 {recent}{(string.IsNullOrEmpty(reached) ? "" : $"\n{reached}")}";
+    }
+
+    private sealed record EndingWatchItem(string Id, double Progress, List<string> Missing);
+
+    private string BuildEndingWatchText()
+    {
+        var harmony = CoreRules.KnowledgeHarmony(_state.Science, _state.Belief);
+        var collapseCount = _state.History.Count + (_state.AwaitingCivilizationRestart ? 1 : 0);
+        (bool Met, double Progress, string Missing) Min(string label, double value, double target)
+            => (value >= target, Math.Clamp(value / Math.Max(target, 0.0001), 0, 1), T($"{label} 还差 {Math.Max(0, target - value):N0}", $"{label} needs {Math.Max(0, target - value):N0} more"));
+        (bool Met, double Progress, string Missing) Max(string label, double value, double target)
+            => (value <= target, value <= target ? 1 : Math.Clamp(target / Math.Max(value, 1), 0, 1), T($"{label} 需降至 {target:N0} 以下", $"{label} must fall to {target:N0} or below"));
+        (bool Met, double Progress, string Missing) Single(string primary, double value, string companion, double companionValue)
+            => (value >= CoreRules.KnowledgeCap && companionValue < CoreRules.KnowledgeCap,
+                companionValue >= CoreRules.KnowledgeCap ? 0.96 : Math.Clamp(value / CoreRules.KnowledgeCap, 0, 1),
+                companionValue >= CoreRules.KnowledgeCap ? T($"{companion} 已同步封顶，转入双相判断", $"{companion} is also capped; dual-phase judgment applies") : T($"{primary} 还差 {Math.Max(0, CoreRules.KnowledgeCap - value):N0}", $"{primary} needs {Math.Max(0, CoreRules.KnowledgeCap - value):N0} more"));
+
+        EndingWatchItem Item(string id, params (bool Met, double Progress, string Missing)[] requirements)
+            => new(id, requirements.Average(requirement => requirement.Progress), requirements.Where(requirement => !requirement.Met).Select(requirement => requirement.Missing).ToList());
+
+        var items = new List<EndingWatchItem>
+        {
+            Item("A", Single("SC", _state.Science, "BE", _state.Belief)),
+            Item("B", Single("BE", _state.Belief, "SC", _state.Science)),
+            Item("D", Min("SC", _state.Science, 16_000), Max("BE", _state.Belief, 8_999), Min("POP", _state.Population, 10_000), Min("ECO", _state.Economy, 95_000)),
+            Item("E", Min("BE", _state.Belief, 16_000), Max("SC", _state.Science, 8_999), Min("POP", _state.Population, 10_000), Min(T("秩序", "ORDER"), _state.Stability, 58)),
+            Item("F", Min("SC", _state.Science, 14_500), Min("BE", _state.Belief, 14_500), Min(T("均衡度", "HARMONY"), harmony, 0.84)),
+            Item("G", Min(T("毁灭次数", "COLLAPSES"), collapseCount, 7)),
+            Item("H", Min("SC", _state.Science, 12_500), Max("SC", _state.Science, 15_999), Max("BE", _state.Belief, 7_000), Min(T("秩序", "ORDER"), _state.Stability, 80), Min("POP", _state.Population, 10_000)),
+            Item("I", Max(T("当前秩序", "CURRENT ORDER"), _state.Stability, 19), Min(T("低秩序文明连败", "LOW-ORDER STREAK"), _state.LowOrderCivilizationStreak + (_state.Stability < 20 ? 1 : 0), 16)),
+            Item("J", Min(T("本代 LA", "CURRENT LA"), _state.LiteratureAndArt, 18_000), Min(T("记忆文明连胜", "MEMORY STREAK"), _state.LaMemoryCivilizationStreak + (_state.CurrentCivilization.HadLaCap || _state.LiteratureAndArt >= 18_000 ? 1 : 0), 3))
+        };
+        items = items
+            .OrderByDescending(item => _state.EndingCandidate?.Id == item.Id)
+            .ThenByDescending(item => item.Progress)
+            .Take(3)
+            .ToList();
+
+        return string.Join("\n\n", items.Select(item =>
+        {
+            var unlocked = _endingStats.Counts.GetValueOrDefault(item.Id) > 0;
+            var name = unlocked ? (IsEnglish ? EndingCatalog.Get(item.Id).NameEn : EndingCatalog.Get(item.Id).NameZh) : "???";
+            var detail = item.Missing.Count == 0
+                ? T("条件已满足，可结算。", "Conditions met; ready to settle.")
+                : T($"还差：{string.Join("；", item.Missing)}", $"Missing: {string.Join("; ", item.Missing)}");
+            return $"{item.Id}｜{name}｜{item.Progress:P0}\n{detail}";
+        }));
+    }
+
+    private void RenderEndingOverlay()
+    {
+        if (!_endingOverlay.Visible || _state.FinalEnding is null) return;
+        var ending = _state.FinalEnding;
+        var copy = EndingCatalog.Get(ending.Id);
+        _endingOverlayKicker.Text = $"ENDING {ending.Id}";
+        _endingOverlayTitle.Text = IsEnglish ? copy.NameEn : copy.NameZh;
+        var paragraphs = IsEnglish ? copy.ParagraphsEn : copy.ParagraphsZh;
+        _endingOverlayBody.Text = string.Join("\n\n", paragraphs);
+        _endingOverlayQuote.Text = IsEnglish ? copy.QuoteEn : copy.QuoteZh;
+        _endingOverlayRecap.Text = IsEnglish
+            ? $"{_state.RealmName} · Civilization {ending.Civilization} · Year {ending.Turn} · Rand {ending.Rand:0000} · Seed {_state.Seed}"
+            : $"{_state.RealmName}｜第 {ending.Civilization} 号文明｜第 {ending.Turn} 年｜Rand {ending.Rand:0000}｜种子 {_state.Seed}";
     }
 
     private void RenderSetup()
@@ -1052,14 +1400,16 @@ public partial class Main : Control
         _metricValues[key].Text = value;
         _metricDetails[key].Text = detail;
         _metricMeters[key].Value = Math.Clamp(meter, 0, 100);
-        _metricTrends[key].Text = $"{trend:+0;-0;0}/年                                      {stage ?? TrendStage(trend)}";
+        _metricTrends[key].Text = IsEnglish
+            ? $"{trend:+0;-0;0}/year                                      {stage ?? TrendStage(trend)}"
+            : $"{trend:+0;-0;0}/年                                      {stage ?? TrendStage(trend)}";
     }
 
     private void RenderChronicle()
     {
         if (_state.Chronicle.Count == 0)
         {
-            _chronicle.Text = "[color=#7f8b99]纪事已经清空。下一年将重新开始记录。[/color]";
+            _chronicle.Text = T("[color=#7f8b99][b]编年史空白[/b]\n下一年行动会写入新的记录。[/color]", "[color=#7f8b99][b]The chronicle is blank[/b]\nThe next action will write a new record.[/color]");
             return;
         }
         var entries = _chronicleFilter == "all"
@@ -1067,7 +1417,7 @@ public partial class Main : Control
             : _state.Chronicle.Where(entry => entry.Type == _chronicleFilter).ToList();
         if (entries.Count == 0)
         {
-            _chronicle.Text = "[color=#7f8b99]当前筛选下没有纪事。[/color]";
+            _chronicle.Text = T("[color=#7f8b99][b]没有符合筛选的记录[/b]\n切回全部即可查看完整编年史。[/color]", "[color=#7f8b99][b]No records match this filter[/b]\nSwitch back to All to view the complete chronicle.[/color]");
             return;
         }
         _chronicle.Text = string.Join(
@@ -1075,7 +1425,9 @@ public partial class Main : Control
             entries.Take(40).Select(entry =>
             {
                 var color = entry.Type switch { "disaster" => "#ff6b6b", "special" => "#ffd166", _ => "#54d8ff" };
-                return $"[bgcolor=#0b121c][color={color}][b] {EscapeBbcode(entry.Title)} [/b][/color]\n[color=#c8d2de] {EscapeBbcode(entry.Text)} [/color][/bgcolor]";
+                var delta = FormatDelta(entry.Delta);
+                var deltaLine = string.IsNullOrEmpty(delta) ? "" : $"\n[color=#91a4b8] {EscapeBbcode(delta)} [/color]";
+                return $"[bgcolor=#0b121c][color={color}][b] {EscapeBbcode(LocalizeCoreText(entry.Title))} [/b][/color]\n[color=#c8d2de] {EscapeBbcode(LocalizeCoreText(entry.Text))} [/color]{deltaLine}[/bgcolor]";
             }));
     }
 
@@ -1110,51 +1462,71 @@ public partial class Main : Control
         return (long)Math.Clamp(result, 2_600, 95_000);
     }
 
-    private static string ScienceEra(double value)
+    private string ScienceEra(double value)
     {
-        string[] eras = ["石器时代", "农业萌芽", "青铜技术", "古典科学", "机械雏形", "蒸汽时代", "电气时代", "原子时代", "信息时代", "航天时代", "星际文明"];
-        return eras[Math.Min(eras.Length - 1, (int)(value / 2_000))];
+        string[] eras = IsEnglish
+            ? ["Stone Age", "Chalcolithic Age", "Bronze Age", "Iron Age", "Classical Mechanics", "Steam Age", "Electrical Age", "Atomic Age", "Information Age", "Space Age", "Interstellar Age", "Cosmic Engineering Age", "Dyson Sphere Age"]
+            : ["石器时代", "铜石并用时代", "青铜时代", "铁器时代", "古典机械时代", "蒸汽时代", "电气时代", "原子时代", "信息时代", "太空时代", "星际航行时代", "宇宙工程时代", "戴森球时代"];
+        return eras[Math.Min(eras.Length - 1, CoreRules.EraIndexFor(value))];
     }
 
-    private static string BeliefEra(double value)
+    private string BeliefEra(double value)
     {
-        string[] eras = ["巫祝萌芽", "祖灵崇拜", "神庙礼制", "经典神学", "普世教会", "经院传统", "宗教改革", "启示时代", "末世信仰", "唯有上帝", "天国王朝"];
-        return eras[Math.Min(eras.Length - 1, (int)(value / 2_000))];
+        string[] eras = IsEnglish
+            ? ["Shamanic Beginnings", "Totem Priests", "Ancestral City-States", "Theocratic Law", "Scholastic Theology", "Holy City System", "Canonical Church", "Trinity", "Papal Election", "Nicene Creed", "Inquisition", "God Alone", "Kingdom of Heaven"]
+            : ["巫祝萌芽", "图腾祭司", "祖灵城邦", "神权律法", "经院神学", "圣城体系", "正典教会", "三位一体", "教皇选举", "尼西亚信经", "异端审判", "唯有上帝", "天国王朝"];
+        return eras[Math.Min(eras.Length - 1, CoreRules.EraIndexFor(value))];
     }
 
-    private static string OrderName(int value) => value switch
+    private string OrderName(int value) => (value, IsEnglish) switch
     {
-        < 20 => "无政府",
-        < 40 => "城邦割据",
-        < 58 => "君主立宪",
-        < 80 => "中央集权",
-        _ => "严密秩序"
+        (< 20, false) => "无政府", (< 20, true) => "Anarchy",
+        (< 40, false) => "城邦割据", (< 40, true) => "Divided City-States",
+        (< 58, false) => "君主立宪", (< 58, true) => "Constitutional Monarchy",
+        (< 80, false) => "中央集权", (< 80, true) => "Centralized Authority",
+        (_, false) => "严密秩序", _ => "Strict Order"
     };
 
-    private static string TrendStage(int value) => value switch
+    private string TrendStage(int value) => (value, IsEnglish) switch
     {
-        <= -50 => "衰退",
-        < 8 => "停滞",
-        < 45 => "萌芽",
-        < 90 => "增长",
-        _ => "跃迁"
+        (<= -50, false) => "衰退", (<= -50, true) => "Decline",
+        (< 8, false) => "停滞", (< 8, true) => "Stagnant",
+        (< 45, false) => "萌芽", (< 45, true) => "Budding",
+        (< 90, false) => "增长", (< 90, true) => "Growth",
+        (_, false) => "跃迁", _ => "Breakthrough"
     };
 
-    private static ActionPresentation Presentation(string actionId) => actionId switch
+    private string FormatDelta(StatDelta delta)
     {
-        "science" => new("SC", "S", "我们必须知道；我们必将知道。\n ——大卫·希尔伯特，1930年", Science),
-        "belief" => new("BE", "B", "万物非主，唯有真主。", Belief),
-        "population" => new("POP", "P", "居者有其屋，耕者有其田。\n安得广厦千万间，大庇天下寒士俱欢颜？", People),
-        "economy" => new("EC", "E", "牛奶会有的，面包也会有的。一切都会有的！\n ——弗拉基米尔·伊里奇·列宁，1917年", Economy),
-        "arts" => new("LA", "L", "真正的艺术，是不显得像艺术。\n——巴尔达萨雷·卡斯蒂廖内，1528年", Arts),
-        "hibernate" => new("HY", "H", "脱水！脱水！！！", Eerf),
-        "balance" => new("EQ", "⇧B", "政治是妥协的艺术。由此，百花齐放，百家争鸣；\n我看没什么，起码挺热闹。", Science),
-        "suppressBelief" => new("-BE", "1", "陛下，我不需要上帝这个假设。\n——皮埃尔·西蒙·拉普拉斯，1802年", Danger),
-        "order" => new("OR", "Z", "您自由了。\n——《悲惨世界》，1862年", People),
-        "suppressScience" => new("-SC", "2", "不管怎么说，它依然在转动！\n——伽利略·伽利莱，1632年", Danger),
-        "buildEerf" => new("EF", "F", "E.E.R.F.极端环境抵抗设施在地下开工。\n子子孙孙无穷匮也，而山不加增，何苦而不平？", Eerf),
-        "upgradeEerf" => new("UP", "U", "风雨不动安如山。\n呜呼！何时眼前突兀见此屋，吾庐独破受冻死亦足！", Eerf),
-        "recovery" => new("ECO", "O", "我想花几分钟时间，向我们的人民谈谈银行的情况。\n ——富兰克林·罗斯福，1933年", Economy),
+        var parts = new List<string>();
+        void Add(string key, double value)
+        {
+            if (Math.Abs(value) >= 0.0001) parts.Add($"{key} {value:+0.##;-0.##;0}");
+        }
+        Add("SC", delta.Science);
+        Add("BE", delta.Belief);
+        Add("LA", delta.LiteratureAndArt);
+        Add("POP", delta.Population);
+        Add("ECO", delta.Economy);
+        Add(IsEnglish ? "ORDER" : "秩序", delta.Stability);
+        return string.Join("   ", parts);
+    }
+
+    private ActionPresentation Presentation(string actionId) => actionId switch
+    {
+        "science" => new("SC", "S", ActionQuote(actionId), Science),
+        "belief" => new("BE", "B", ActionQuote(actionId), Belief),
+        "population" => new("POP", "P", ActionQuote(actionId), People),
+        "economy" => new("EC", "E", ActionQuote(actionId), Economy),
+        "arts" => new("LA", "L", ActionQuote(actionId), Arts),
+        "hibernate" => new("HY", "H", ActionQuote(actionId), Eerf),
+        "balance" => new("EQ", "⇧B", ActionQuote(actionId), Science),
+        "suppressBelief" => new("-BE", "1", ActionQuote(actionId), Danger),
+        "order" => new("OR", "Z", ActionQuote(actionId), People),
+        "suppressScience" => new("-SC", "2", ActionQuote(actionId), Danger),
+        "buildEerf" => new("EF", "F", ActionQuote(actionId), Eerf),
+        "upgradeEerf" => new("UP", "U", ActionQuote(actionId), Eerf),
+        "recovery" => new("ECO", "O", ActionQuote(actionId), Economy),
         _ => new("—", "", "", Ink)
     };
 

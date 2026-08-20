@@ -7,7 +7,7 @@ config_version=5
 
 config/name="Cradles of Civilization"
 config/description="A civilization-cycle strategy game by Tech Echo Collective."
-config/version="0.4.0-alpha.1"
+config/version="0.4.0-alpha.3"
 run/main_scene="res://Main.tscn"
 config/features=PackedStringArray("4.7", "C#")
 

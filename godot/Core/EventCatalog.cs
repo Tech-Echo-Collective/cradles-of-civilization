@@ -9,7 +9,9 @@ public sealed record EventDefinition(
     bool Destroy = false,
     bool PiercesPopulationProtection = false,
     string Effect = "",
-    double EffectValue = 0);
+    double EffectValue = 0,
+    string TextEn = "",
+    string Type = "progress");
 
 internal static class EventCatalog
 {
@@ -153,6 +155,8 @@ internal static class EventCatalog
     {
         return new EventDefinition(
             title,
-            new StatDelta(science, belief, literatureAndArt, population, economy, stability));
+            new StatDelta(science, belief, literatureAndArt, population, economy, stability),
+            EventNarratives.Chinese(title),
+            TextEn: EventNarratives.English(title));
     }
 }

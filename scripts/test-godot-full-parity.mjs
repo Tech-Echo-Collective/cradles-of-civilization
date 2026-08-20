@@ -194,7 +194,9 @@ function computeScenario(scenario) {
         ...scenario,
         expected: {
           eventTitle: event.title,
+          eventText: event.text || "",
           specialEventTitle: "",
+          specialEventText: "",
           actionLocked: true,
           civilizationCollapsed: true,
           rngState: state.rngState,
@@ -230,7 +232,9 @@ function computeScenario(scenario) {
       ...scenario,
       expected: {
         eventTitle: event.title,
+        eventText: event.text || "",
         specialEventTitle: specialEvent?.title || "",
+        specialEventText: specialEvent?.text || "",
         actionLocked: actionResult.locked,
         rngState: state.rngState,
         pressure: {
@@ -248,6 +252,7 @@ function computeScenario(scenario) {
 
 const scenarios = [...actionScenarios, ...boundaryScenarios, ...specialScenarios, ...disasterScenarios].map(computeScenario);
 const scenarioPath = path.join(os.tmpdir(), `cradles-godot-full-parity-${process.pid}.json`);
+const logPath = path.join(os.tmpdir(), `cradles-godot-full-parity-${process.pid}.log`);
 fs.writeFileSync(scenarioPath, JSON.stringify({ version: 1, scenarios }));
 
 const godotBinary = process.env.GODOT_BIN || (process.platform === "win32" ? "godot" : "godot-mono");
@@ -259,7 +264,7 @@ if (process.platform === "darwin" && !environment.DOTNET_ROOT) {
 try {
   const result = spawnSync(
     godotBinary,
-    ["--headless", "--path", path.join(projectRoot, "godot"), "--", "--verify-full", scenarioPath],
+    ["--headless", "--log-file", logPath, "--path", path.join(projectRoot, "godot"), "--", "--verify-full", scenarioPath],
     { cwd: projectRoot, env: environment, encoding: "utf8", timeout: 120000 }
   );
   if (result.stdout) process.stdout.write(result.stdout);
@@ -268,4 +273,5 @@ try {
   if (result.status !== 0) process.exit(result.status ?? 1);
 } finally {
   fs.rmSync(scenarioPath, { force: true });
+  fs.rmSync(logPath, { force: true });
 }

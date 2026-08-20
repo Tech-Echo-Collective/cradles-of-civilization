@@ -34,6 +34,8 @@ public static class SaveStore
             state.SetupComplete = true;
             state.SetupStage = "complete";
         }
+        if (state.ControlLocked && !state.Finished && !state.AwaitingCivilizationRestart)
+            state.AutoRunUntilCollapse = true;
         return state;
     }
 

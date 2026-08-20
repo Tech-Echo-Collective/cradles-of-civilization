@@ -14,11 +14,12 @@ public static class CompleteGameVerifier
 
         VerifyActionSurface(engine, errors);
         VerifySetupStateAndSave(errors);
+        VerifyEerfAndChronicle(engine, errors);
         VerifyCollapseRestartAndSave(engine, errors);
         VerifyCandidateAndAutomaticEndings(engine, errors);
         VerifyHiddenStagnationEnding(engine, errors);
 
-        return new ParityReport(5, errors);
+        return new ParityReport(6, errors);
     }
 
     private static void VerifyActionSurface(GameEngine engine, List<string> errors)
@@ -69,6 +70,25 @@ public static class CompleteGameVerifier
         {
             SaveStore.Delete(path);
         }
+    }
+
+    private static void VerifyEerfAndChronicle(GameEngine engine, List<string> errors)
+    {
+        var state = new GameState(1_058) { Population = 22_000, Economy = 200_000 };
+        var initial = state.Chronicle[0];
+        if (!initial.Text.Contains("这是一个文明的新生", StringComparison.Ordinal) ||
+            initial.Delta.Population != 7_600 || initial.Delta.Economy != 50_000)
+            errors.Add("chronicle: the v0.2 opening prose or initial delta is missing");
+
+        var result = engine.Advance(state, "buildEerf");
+        if (result.ActionLocked || state.EerfLevel != 1)
+            errors.Add("EERF: the initial facility could not be built exactly once");
+        if (engine.DisabledReason(state, "buildEerf") != "EERF 已经存在")
+            errors.Add("EERF: the build action was not locked after level 1 was established");
+        if (state.Chronicle.Count < 2 ||
+            !state.Chronicle[0].Text.Contains("极端环境抵抗设施在地下开工", StringComparison.Ordinal) ||
+            state.Chronicle[0].Delta.Equals(default(StatDelta)))
+            errors.Add("chronicle: action prose or yearly delta was not recorded");
     }
 
     private static void VerifyCollapseRestartAndSave(GameEngine engine, List<string> errors)
