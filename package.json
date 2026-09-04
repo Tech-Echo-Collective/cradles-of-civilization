@@ -1,9 +1,10 @@
 {
   "name": "cradles-of-civilization",
-  "version": "0.4.0-alpha.3",
+  "version": "0.4.0-alpha.4",
   "private": true,
   "scripts": {
-    "test": "node scripts/test-engine.mjs",
+    "test": "node scripts/test-engine.mjs && node scripts/test-web-i18n.mjs",
+    "test:web-i18n": "node scripts/test-web-i18n.mjs",
     "test:godot-fixtures": "node scripts/godot-parity-fixtures.mjs --verify godot/Tests/turn-fixtures.json",
     "test:godot-full": "node scripts/test-godot-full-parity.mjs",
     "test:godot-ui-copy": "node scripts/test-godot-ui-copy.mjs",

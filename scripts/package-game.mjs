@@ -11,6 +11,7 @@ const zipPath = join(dist, `${packageName}.zip`);
 const files = [
   "index.html",
   "ending.html",
+  "localization.js",
   "endings.js",
   "balance-model.js",
   "game.js",
@@ -35,7 +36,7 @@ writeFileSync(
     "运行方式：",
     "1. 解压整个文件夹。",
     "2. 双击 index.html。",
-    "3. 不要只单独发送 index.html；assets 文件夹、ending.html、game.js、balance-model.js、endings.js、styles.css 需要保持原有相对位置。",
+    "3. 不要只单独发送 index.html；assets 文件夹、ending.html、localization.js、game.js、balance-model.js、endings.js、styles.css 需要保持原有相对位置。",
     "",
     "存档说明：",
     "浏览器会把存档保存在本机本浏览器内。把 zip 发给朋友不会带走你的本地存档。",

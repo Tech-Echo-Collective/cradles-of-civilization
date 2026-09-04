@@ -4,13 +4,17 @@
 
 原创企划 / Original concept: Noah Walker.
 
-当前原生试玩版：`v0.4.0-alpha.3`（Godot C#，中英双语，暂不含地图与军事）
+当前开发主线：`v0.4.0-alpha.4`（HTML，中英双语，包含地图与军事）
 
-网页版规则基准：`v0.3.6-web`
+在线试玩：[techecho.org/games/cradles-of-civilization/](https://techecho.org/games/cradles-of-civilization/)
+
+Godot 原生试玩版保留在 `v0.4.0-alpha.3`（中英双语，暂不含地图与军事），当前暂停打包。
 
 无地图内容与文案基准：`v0.2`（最后一个尚未加入地图/军事的正式版本）
 
 ## 运行
+
+网页版可直接用浏览器打开 `index.html`，右上角可切换中文/English；`?lang=en` 可直接打开英文版。
 
 原生版使用 Godot `4.7.1 .NET`，项目位于 `godot/`：
 
@@ -19,13 +23,11 @@ dotnet build godot/CradlesOfCivilization.csproj
 /Applications/Godot_mono.app/Contents/MacOS/Godot --path godot
 ```
 
-网页版仍可直接用浏览器打开 `index.html`。
-
 ## 打包分享
 
 原生版已经配置 `macOS Universal` 与 `Windows x86_64` 两个 Godot 导出预设，生成的 ZIP 位于 `dist/`。详细命令见 `godot/README.md`。
 
-`npm run package` 只保留用于生成旧网页版 ZIP；网页版存档保存在各自浏览器本机，不会跟着 ZIP 传播。
+`npm run package` 生成当前 HTML 版 ZIP，并包含中英双语运行文件；网页版存档保存在各自浏览器本机，不会跟着 ZIP 传播。
 
 ## 基础规则
 
