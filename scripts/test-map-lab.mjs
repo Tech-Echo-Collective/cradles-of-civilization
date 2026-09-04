@@ -686,6 +686,23 @@ const html = read("map-lab/index.html");
 const css = read("map-lab/map-lab.css");
 const ui = read("map-lab/map-lab.js");
 const mapModel = read("map-lab/map-model.js");
+const reliefDepthSource = ui.match(/const RELIEF_DEPTHS = Object\.freeze\(\{([\s\S]*?)\}\);/u)?.[1];
+assert.ok(reliefDepthSource, "map lab must define bounded per-terrain relief depths");
+const reliefDepths = Object.fromEntries(
+  Array.from(reliefDepthSource.matchAll(/^\s*([a-z]+):\s*(\d+),?\s*$/gmu), ([, terrain, depth]) => [terrain, Number(depth)])
+);
+assert.deepEqual(Object.keys(reliefDepths).sort(), Object.keys(data.terrainTypes).sort(), "every terrain family needs an explicit relief depth");
+assert.ok(Object.values(reliefDepths).every((depth) => Number.isInteger(depth) && depth > 0 && depth <= 11), "relief depths must stay within the 11px interaction-safe budget");
+assert.ok(new Set(Object.values(reliefDepths)).size >= 3, "terrain depth must visibly distinguish low, medium, and high ground");
+assert.ok(reliefDepths.mountain > reliefDepths.plain, "mountains must project deeper than plains");
+const reliefProfileSource = ui.match(/function reliefProfile\(\)\s*\{([\s\S]*?)\n\s*\}/u)?.[1];
+const desktopReliefProfile = reliefProfileSource?.match(/:\s*\{\s*skewX:\s*(-?\d+(?:\.\d+)?),\s*scaleY:\s*(\d+(?:\.\d+)?),\s*landY:/u);
+assert.ok(desktopReliefProfile, "map lab must define a desktop relief profile");
+assert.ok(Number(desktopReliefProfile[2]) >= 0.9, "desktop relief scaleY must remain at least 0.90 so labels and hit targets stay aligned");
+const reliefBuildSource = ui.match(/const reliefCells = geography\.cells[\s\S]*?(?=\n\s*geography\.cells\.forEach)/u)?.[0];
+assert.ok(reliefBuildSource, "relief geometry must be derived once from the fixed province cells");
+assert.equal((reliefBuildSource.match(/dom\.provinceReliefLayer\.append\(/gu) || []).length, 1, "each province relief group must be appended only once");
+assert.doesNotMatch(reliefBuildSource, /role:|tabindex:|addEventListener/u, "decorative relief geometry must never duplicate province interaction handlers");
 for (const mode of ["political", "terrain", "military"]) {
   assert.match(html, new RegExp(`data-map-mode="${mode}"`, "u"), `${mode} mode button is missing`);
   assert.match(css, new RegExp(`data-mode="${mode}"`, "u"), `${mode} mode styles are missing`);
@@ -699,8 +716,11 @@ assert.match(html, /id="phaseStatus"/u, "map lab must expose the current turn an
 assert.match(html, /id="phaseReport"/u, "map lab must expose a visible AI phase report");
 assert.match(html, /id="recruitPanel"/u, "map lab must expose recruitment in the province inspector");
 assert.match(html, /id="recruitButton"[^>]*type="button"[^>]*aria-keyshortcuts="V"/u, "recruitment must use a dedicated button with its keyboard shortcut");
-assert.match(html, /id="provinceReliefLayer"/u, "map lab must expose a static relief layer");
-assert.doesNotMatch(html, /feDropShadow|feTurbulence/u, "map relief must avoid expensive SVG filters");
+for (const layerId of ["worldLayer", "provinceLayer", "provinceReliefLayer"]) {
+  assert.equal((html.match(new RegExp(`id="${layerId}"`, "gu")) || []).length, 1, `${layerId} must appear exactly once`);
+}
+assert.match(html, /id="provinceReliefLayer"[^>]*aria-hidden="true"/u, "decorative relief must stay outside the accessibility interaction tree");
+assert.doesNotMatch(`${html}\n${ui}`, /<filter\b|<fe[a-z]+\b|svgElement\(\s*["'](?:filter|fe[a-z]+)["']/iu, "map relief must avoid SVG filters, including blur, drop-shadow, and turbulence primitives");
 assert.match(html, /\.\.\/balance-model\.js\?v=/u, "map lab must reuse the formal deterministic casualty model");
 assert.match(html, /map-model\.js\?v=/u, "map lab must load its isolated model");
 assert.doesNotMatch(html, /src="(?:\.\.\/)?game\.js/u, "map lab must not load the formal game runtime");
@@ -726,10 +746,17 @@ assert.doesNotMatch(ui, /result\.kind === "move" \|\| result\.kind === "attack"/
 assert.match(ui, /combatLockedUntil = Date\.now\(\) \+ 400/u, "battle activation must guard against accidental double resolution");
 assert.match(ui, /lastPhaseReport = null;[\s\S]*phaseLockedUntil = 0;/u, "reshuffling a seed must reset the previous phase report and phase lock");
 assert.match(ui, /lastRecruitReport = null;[\s\S]*recruitLockedUntil = 0;/u, "reshuffling a seed must reset recruitment feedback and its input lock");
-assert.match(ui, /function reliefWallPath/u, "map lab must build lightweight vector sidewalls");
-assert.match(ui, /function reliefWorldTransform/u, "3D relief must include a lightweight oblique projection");
-assert.match(ui, /worldLayer\.setAttribute\("transform"/u, "3D relief must apply its projection to the SVG world layer");
-assert.doesNotMatch(ui, /WebGLRenderingContext|THREE\.|getContext\(["']webgl/u, "map relief must not require WebGL");
+assert.match(ui, /function reliefFacingEdges[\s\S]*function reliefWallPath/u, "map lab must limit sidewalls to visible-facing polygon edges");
+assert.match(reliefBuildSource, /"data-relief-depth": depth/u, "each relief group must expose its per-terrain depth");
+assert.equal((reliefBuildSource.match(/d:\s*reliefWallPath\(cell\.points, depth, "(?:side|front)"\)/gu) || []).length, 2, "relief must render exactly one side face and one front face per province");
+assert.match(reliefBuildSource, /class:\s*"province-relief-rim"[\s\S]*d:\s*reliefRimPath\(cell\.points\)[\s\S]*reliefCell\.append\(side, front, rim\)/u, "relief must keep its three decorative paths inside one province group");
+assert.equal((ui.match(/class:\s*"province-shape"/gu) || []).length, 1, "each province must have only one interactive top-face factory");
+assert.match(ui, /function reliefProfile\(\)[\s\S]*window\.matchMedia\([\s\S]*skewX:[\s\S]*scaleY:/u, "oblique projection parameters must adapt to compact screens");
+assert.match(ui, /function reliefWorldTransform\(\)[\s\S]*reliefProfile\(\)[\s\S]*return `matrix\(/u, "3D relief must derive its SVG projection from the active profile");
+assert.match(ui, /function applyReliefProjection\(\)[\s\S]*landDepth\.setAttribute\("transform"[\s\S]*reliefMode === "3d"[\s\S]*worldLayer\.setAttribute\("transform", reliefWorldTransform\(\)\)[\s\S]*worldLayer\.removeAttribute\("transform"\)/u, "projection and depth offsets must apply in 3D and be removed in 2D");
+assert.match(ui, /function setReliefMode[\s\S]*applyReliefProjection\(\)/u, "changing relief mode must immediately apply the selected projection");
+assert.match(ui, /window\.addEventListener\("resize", \(\) => \{[\s\S]*applyReliefProjection\(\);[\s\S]*applyCamera\(\);[\s\S]*\}\);/u, "responsive projection parameters must be reapplied after resize");
+assert.doesNotMatch(`${html}\n${ui}`, /<canvas\b|WebGL2?RenderingContext|THREE\.|getContext\(\s*["'](?:experimental-)?webgl2?["']/iu, "map relief must not require WebGL or a canvas renderer");
 assert.match(mapModel, /lastActedTurn/u, "turn state must be stored per army in the deterministic model");
 assert.match(mapModel, /executeAiPhase/u, "the deterministic model must export its AI phase runner");
 assert.match(mapModel, /executeRecruitment/u, "the deterministic model must export recruitment");
@@ -745,7 +772,8 @@ assert.match(css, /#endPhaseButton\s*\{[\s\S]*?width:\s*44px;[\s\S]*?height:\s*4
 assert.match(css, /#recruitButton\s*\{[\s\S]*?width:\s*44px;[\s\S]*?height:\s*44px;[\s\S]*?border-radius:\s*0;/u, "the recruitment control must remain a square button");
 assert.doesNotMatch(`${html}\n${ui}`, /战斗待接|战斗尚未接入|combat pending|combat not connected/iu, "completed combat must not be described as pending");
 assert.match(css, /data-zoom-band="far"/u, "map lab needs semantic zoom styles");
-assert.match(css, /data-relief="2d"/u, "map lab needs a flat fallback mode");
+assert.match(css, /body\[data-relief="2d"\] \.land-depth,\s*body\[data-relief="2d"\] \.province-relief-layer\s*\{\s*display:\s*none;/u, "2D fallback must hide both land depth and province relief");
+assert.match(css, /\.province-relief-layer(?:,\s*\.province-relief-cell)?\s*\{\s*pointer-events:\s*none;/u, "decorative relief must not intercept province input");
 assert.match(css, /@media \(max-width: 820px\)/u, "map lab needs a mobile inspector layout");
 const packageScript = read("scripts/package-game.mjs");
 assert.match(packageScript, /rmSync\(dist, \{ force: true, recursive: true \}\)/u, "packaging must clear obsolete outputs first");

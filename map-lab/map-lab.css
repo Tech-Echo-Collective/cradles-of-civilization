@@ -313,10 +313,10 @@ input:focus-visible,
 }
 
 .land-depth {
-  fill: #18231f;
-  stroke: #090e0d;
-  stroke-width: 6;
-  opacity: 0.96;
+  fill: #111c19;
+  stroke: #050908;
+  stroke-width: 6.5;
+  opacity: 1;
   vector-effect: non-scaling-stroke;
 }
 
@@ -327,33 +327,77 @@ input:focus-visible,
   vector-effect: non-scaling-stroke;
 }
 
-.province-relief-layer {
+.province-relief-layer,
+.province-relief-cell {
   pointer-events: none;
 }
 
 .province-relief-wall {
-  --relief-realm-color: #283431;
-  --relief-terrain-color: #34342d;
-  fill: var(--relief-realm-color);
-  fill-opacity: 0.92;
-  stroke: rgba(238, 223, 184, 0.14);
-  stroke-width: 0.65;
+  stroke: rgba(239, 225, 188, 0.18);
+  stroke-width: 0.75;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
 }
 
-body[data-mode="terrain"] .province-relief-wall {
-  fill: var(--relief-terrain-color);
+.province-relief-front {
+  fill: var(--relief-realm-front, #2d3a36);
+  fill-opacity: 0.94;
 }
 
-body[data-mode="military"] .province-relief-wall {
-  fill: var(--relief-realm-color);
-  fill-opacity: 0.72;
+.province-relief-side {
+  fill: var(--relief-realm-side, #202a27);
+  fill-opacity: 0.98;
+}
+
+.province-relief-rim {
+  fill: none;
+  stroke: rgba(248, 235, 201, 0.34);
+  stroke-width: 1.15;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.province-relief-cell.relief-terrain-mountain .province-relief-rim,
+.province-relief-cell.relief-terrain-canyon .province-relief-rim {
+  stroke: rgba(255, 234, 187, 0.48);
+  stroke-width: 1.35;
+}
+
+body[data-mode="terrain"] .province-relief-front {
+  fill: var(--relief-terrain-front, #393930);
+}
+
+body[data-mode="terrain"] .province-relief-side {
+  fill: var(--relief-terrain-side, #292921);
+}
+
+body[data-mode="terrain"] .province-relief-rim {
+  stroke-opacity: 0.92;
+}
+
+body[data-mode="military"] .province-relief-front {
+  fill: var(--relief-realm-front, #2d3a36);
+  fill-opacity: 0.56;
+}
+
+body[data-mode="military"] .province-relief-side {
+  fill: var(--relief-realm-side, #202a27);
+  fill-opacity: 0.62;
+}
+
+body[data-mode="military"] .province-relief-rim {
+  stroke-opacity: 0.46;
 }
 
 body[data-relief="2d"] .land-depth,
 body[data-relief="2d"] .province-relief-layer {
   display: none;
+}
+
+body[data-relief="3d"] .land-base {
+  stroke: rgba(237, 221, 178, 0.32);
+  stroke-width: 2.4;
 }
 
 .province-shape {

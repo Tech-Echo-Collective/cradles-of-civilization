@@ -11,15 +11,16 @@
   const RECRUIT_FORCE = Math.max(1, Math.round(Number(MODEL.RECRUITMENT_FORCE) || 5200));
   const RECRUIT_COOLDOWN = Math.max(1, Math.round(Number(MODEL.RECRUITMENT_COOLDOWN) || 4));
   const MODES = new Set(["political", "terrain", "military"]);
+  const RELIEF_PROJECTION = Object.freeze({ x: 0.34, y: 1 });
   const RELIEF_DEPTHS = Object.freeze({
     coast: 2,
-    river: 2,
-    basin: 3,
-    plain: 4,
-    tundra: 4,
-    waste: 5,
-    canyon: 7,
-    mountain: 9
+    river: 3,
+    basin: 4,
+    plain: 5,
+    tundra: 5,
+    waste: 6,
+    canyon: 9,
+    mountain: 11
   });
   const params = new URLSearchParams(window.location.search);
 
@@ -182,9 +183,8 @@
     }, 0) / 2;
   }
 
-  function reliefWallPath(points, depth) {
-    if (!points?.length || depth <= 0) return "";
-    const projection = { x: depth * 0.34, y: depth };
+  function reliefFacingEdges(points) {
+    if (!points?.length) return [];
     const clockwiseOnScreen = signedPolygonArea(points) >= 0;
     return points.map((start, index) => {
       const end = points[(index + 1) % points.length];
@@ -192,9 +192,24 @@
       const edgeY = end.y - start.y;
       const outwardX = clockwiseOnScreen ? edgeY : -edgeY;
       const outwardY = clockwiseOnScreen ? -edgeX : edgeX;
-      if (outwardX * projection.x + outwardY * projection.y <= 0) return "";
+      if (outwardX * RELIEF_PROJECTION.x + outwardY * RELIEF_PROJECTION.y <= 0) return null;
+      const frontFacing = outwardY >= Math.abs(outwardX) * 0.45;
+      return { start, end, face: frontFacing ? "front" : "side" };
+    }).filter(Boolean);
+  }
+
+  function reliefWallPath(points, depth, face) {
+    if (!points?.length || depth <= 0) return "";
+    const projection = { x: depth * RELIEF_PROJECTION.x, y: depth * RELIEF_PROJECTION.y };
+    return reliefFacingEdges(points).filter((edge) => edge.face === face).map(({ start, end }) => {
       return `M ${start.x} ${start.y} L ${end.x} ${end.y} L ${end.x + projection.x} ${end.y + projection.y} L ${start.x + projection.x} ${start.y + projection.y} Z`;
-    }).filter(Boolean).join(" ");
+    }).join(" ");
+  }
+
+  function reliefRimPath(points) {
+    return reliefFacingEdges(points)
+      .map(({ start, end }) => `M ${start.x} ${start.y} L ${end.x} ${end.y}`)
+      .join(" ");
   }
 
   function darkenHex(color, factor) {
@@ -204,14 +219,28 @@
     return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
   }
 
+  function reliefProfile() {
+    const compact = window.matchMedia("(max-width: 820px), (max-height: 620px) and (orientation: landscape)").matches;
+    const profile = compact
+      ? { skewX: -0.05, scaleY: 0.94, landY: 9 }
+      : { skewX: -0.075, scaleY: 0.9, landY: 11 };
+    return { ...profile, landX: profile.landY * RELIEF_PROJECTION.x };
+  }
+
   function reliefWorldTransform() {
-    const skewX = -0.06;
-    const scaleY = 0.93;
+    const { skewX, scaleY } = reliefProfile();
     const centerY = DATA.viewBox.y + DATA.viewBox.height / 2;
     // Keep the world center fixed while giving the map plane a shallow oblique view.
     const translateX = -skewX * centerY;
     const translateY = (1 - scaleY) * centerY;
     return `matrix(1 0 ${skewX} ${scaleY} ${translateX} ${translateY})`;
+  }
+
+  function applyReliefProjection() {
+    const profile = reliefProfile();
+    dom.landDepth.setAttribute("transform", `translate(${profile.landX} ${profile.landY})`);
+    if (reliefMode === "3d") dom.worldLayer.setAttribute("transform", reliefWorldTransform());
+    else dom.worldLayer.removeAttribute("transform");
   }
 
   function routePath(provinceIds) {
@@ -274,22 +303,34 @@
       dom.oceanDetailLayer.append(path);
     });
 
-    geography.cells
+    const reliefCells = geography.cells
       .map((cell) => {
         const province = geography.provinceById[cell.provinceId];
         return { cell, province, depth: RELIEF_DEPTHS[province.terrain] || 3 };
       })
-      .sort((left, right) => left.province.center[1] + left.depth - right.province.center[1] - right.depth)
-      .forEach(({ cell, province, depth }) => {
-        const wall = svgElement("path", {
-          class: "province-relief-wall",
-          d: reliefWallPath(cell.points, depth),
-          "data-province-id": province.id,
-          "data-relief-depth": depth
-        });
-        reliefNodes.set(province.id, wall);
-        dom.provinceReliefLayer.append(wall);
+      .sort((left, right) => left.province.center[1] + left.depth - right.province.center[1] - right.depth);
+    reliefCells.forEach(({ cell, province, depth }) => {
+      const reliefCell = svgElement("g", {
+        class: `province-relief-cell relief-terrain-${province.terrain}`,
+        "data-province-id": province.id,
+        "data-relief-depth": depth
       });
+      const side = svgElement("path", {
+        class: "province-relief-wall province-relief-side",
+        d: reliefWallPath(cell.points, depth, "side")
+      });
+      const front = svgElement("path", {
+        class: "province-relief-wall province-relief-front",
+        d: reliefWallPath(cell.points, depth, "front")
+      });
+      const rim = svgElement("path", {
+        class: "province-relief-rim",
+        d: reliefRimPath(cell.points)
+      });
+      reliefCell.append(side, front, rim);
+      reliefNodes.set(province.id, reliefCell);
+      dom.provinceReliefLayer.append(reliefCell);
+    });
 
     geography.cells.forEach((cell) => {
       const province = geography.provinceById[cell.provinceId];
@@ -456,8 +497,10 @@
       node.style.setProperty("--realm-color", realm.color);
       node.style.setProperty("--terrain-color", terrain.color);
       const relief = reliefNodes.get(province.id);
-      relief.style.setProperty("--relief-realm-color", darkenHex(realm.color, 0.5));
-      relief.style.setProperty("--relief-terrain-color", darkenHex(terrain.color, 0.54));
+      relief.style.setProperty("--relief-realm-front", darkenHex(realm.color, 0.54));
+      relief.style.setProperty("--relief-realm-side", darkenHex(realm.color, 0.4));
+      relief.style.setProperty("--relief-terrain-front", darkenHex(terrain.color, 0.58));
+      relief.style.setProperty("--relief-terrain-side", darkenHex(terrain.color, 0.42));
       node.dataset.realmId = realm.id;
       node.dataset.terrain = province.terrain;
       node.setAttribute("aria-label", provinceAriaLabel(province));
@@ -569,8 +612,7 @@
     if (nextMode !== "2d" && nextMode !== "3d") return;
     reliefMode = nextMode;
     dom.body.dataset.relief = reliefMode;
-    if (reliefMode === "3d") dom.worldLayer.setAttribute("transform", reliefWorldTransform());
-    else dom.worldLayer.removeAttribute("transform");
+    applyReliefProjection();
     updateReliefControl();
     try {
       localStorage.setItem(RELIEF_KEY, reliefMode);
@@ -1522,7 +1564,10 @@
     }
   });
 
-  window.addEventListener("resize", applyCamera);
+  window.addEventListener("resize", () => {
+    applyReliefProjection();
+    applyCamera();
+  });
 
   buildStaticMap();
   setReliefMode(reliefMode, false);
