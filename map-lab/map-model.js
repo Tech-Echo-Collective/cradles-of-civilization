@@ -228,6 +228,7 @@
       provinceById,
       strategicRegionById: Object.fromEntries(data.strategicRegions.map((region) => [region.id, region])),
       realmById: Object.fromEntries(data.realms.map((realm) => [realm.id, realm])),
+      terrainById: data.terrainTypes,
       signature: geographySignature(data, cells, sharedEdges)
     };
   }
@@ -356,6 +357,7 @@
       controllerByProvince,
       provinceState,
       armies,
+      battleCount: 0,
       signature: fnv1a(JSON.stringify({ seed, capitals, controllerByProvince, provinceState, armies })).toString(16).padStart(8, "0")
     };
   }
@@ -405,6 +407,150 @@
       army: classification.army,
       fromProvinceId,
       toProvinceId: provinceId
+    };
+  }
+
+  function realmProvinceIds(scenario, realmId) {
+    return Object.keys(scenario.controllerByProvince)
+      .filter((provinceId) => scenario.controllerByProvince[provinceId] === realmId)
+      .sort();
+  }
+
+  function strongestProvinceId(scenario, provinceIds) {
+    return [...provinceIds].sort((leftId, rightId) => {
+      const left = scenario.provinceState[leftId];
+      const right = scenario.provinceState[rightId];
+      return right.development - left.development || right.supply - left.supply || leftId.localeCompare(rightId);
+    })[0] || null;
+  }
+
+  function battleSeed(scenario, armyId, originProvinceId, targetProvinceId, battleIndex) {
+    return fnv1a([scenario.seed, battleIndex, armyId, originProvinceId, targetProvinceId, "battle"].join("|")) || 1;
+  }
+
+  function executeArmyBattle(scenario, geography, armyId, provinceId, commandRealmId = "player-realm") {
+    const classification = classifyArmyDestination(scenario, geography, armyId, provinceId);
+    const army = classification.army;
+    if (!army) return { attacked: false, kind: classification.kind };
+    if (army.realmId !== commandRealmId) return { attacked: false, kind: "not-commandable", army };
+    if (classification.kind !== "attack") return { attacked: false, ...classification };
+    if (!Number.isFinite(army.force) || army.force <= 0) return { attacked: false, kind: "no-force", army };
+    if (scenario.controllerByProvince[army.provinceId] !== army.realmId) {
+      return { attacked: false, kind: "invalid-origin", army };
+    }
+    const previousControllerId = classification.controllerId;
+    if (!geography.realmById[previousControllerId]) return { attacked: false, kind: "invalid-controller", army };
+    const thirdPartyArmy = scenario.armies.find((candidate) => candidate.force > 0
+      && candidate.provinceId === provinceId
+      && candidate.realmId !== previousControllerId);
+    if (thirdPartyArmy) return { attacked: false, kind: "contested", army, thirdPartyArmy };
+    const resolver = global.CRADLES_BALANCE?.resolveBattleCasualties;
+    if (typeof resolver !== "function") return { attacked: false, kind: "battle-model-unavailable", army };
+
+    const originProvinceId = army.provinceId;
+    const targetProvince = geography.provinceById[provinceId];
+    const targetState = scenario.provinceState[provinceId];
+    const terrain = geography.terrainById[targetProvince.terrain] || { attack: 0, defense: 0 };
+    const fortificationBefore = clamp(Math.round(Number(targetState.fortification) || 0), 5, 140);
+    const defenders = scenario.armies
+      .filter((candidate) => candidate.force > 0
+        && candidate.provinceId === provinceId
+        && candidate.realmId === previousControllerId)
+      .sort((left, right) => left.id.localeCompare(right.id));
+    const fieldDefenderForce = defenders.reduce((sum, defender) => sum + Math.max(0, Math.round(defender.force)), 0);
+    const garrisonForce = Math.round(350 + fortificationBefore * 28);
+    const defenderEngagedForce = fieldDefenderForce + garrisonForce;
+    const strongestDefense = defenders.reduce((maximum, defender) => Math.max(maximum, Number(defender.defense) || 0), 0);
+    const defenseScore = (defenders.length ? strongestDefense + (defenders.length - 1) * 3 : 12)
+      + Math.round(fortificationBefore * 0.2)
+      + Number(terrain.defense || 0);
+    const forceDifference = clamp(Math.round((army.force - fieldDefenderForce) / 2000), -12, 12);
+    const combatDifference = Number(army.attack || 0) + Number(terrain.attack || 0) + forceDifference - defenseScore;
+    const battleIndex = Math.max(0, Math.round(Number(scenario.battleCount) || 0));
+    const seed = battleSeed(scenario, army.id, originProvinceId, provinceId, battleIndex);
+    const result = resolver({
+      attackerForce: army.force,
+      defenderForce: defenderEngagedForce,
+      combatDifference,
+      technologyGap: 0,
+      seed
+    });
+
+    army.force = Math.max(0, Math.round(result.attackerSurvivors));
+    const fieldCasualtyTarget = fieldDefenderForce > 0
+      ? Math.min(fieldDefenderForce, Math.round(result.defenderCasualties * fieldDefenderForce / defenderEngagedForce))
+      : 0;
+    let assignedFieldCasualties = 0;
+    defenders.forEach((defender, index) => {
+      const remaining = fieldCasualtyTarget - assignedFieldCasualties;
+      const plannedCasualties = index === defenders.length - 1
+        ? remaining
+        : Math.round(fieldCasualtyTarget * defender.force / fieldDefenderForce);
+      const casualties = Math.min(defender.force, remaining, plannedCasualties);
+      defender.force = Math.max(0, Math.round(defender.force - casualties));
+      assignedFieldCasualties += casualties;
+    });
+
+    const attackerWon = Boolean(result.attackerWon && army.force > 0);
+    const retreatProvinceIds = [];
+    let eliminatedRealmId = null;
+    if (attackerWon) {
+      scenario.controllerByProvince[provinceId] = army.realmId;
+      targetState.controllerId = army.realmId;
+      army.provinceId = provinceId;
+      const retreatProvinceId = (geography.neighbors[provinceId] || [])
+        .filter((neighborId) => scenario.controllerByProvince[neighborId] === previousControllerId)
+        .sort()[0] || null;
+      defenders.forEach((defender) => {
+        if (defender.force <= 0) return;
+        if (retreatProvinceId) {
+          defender.provinceId = retreatProvinceId;
+          retreatProvinceIds.push(retreatProvinceId);
+        } else {
+          defender.force = 0;
+        }
+      });
+      const remainingProvinceIds = realmProvinceIds(scenario, previousControllerId);
+      if (!remainingProvinceIds.length) {
+        eliminatedRealmId = previousControllerId;
+        scenario.capitals[previousControllerId] = null;
+        scenario.armies.forEach((candidate) => {
+          if (candidate.realmId === previousControllerId) candidate.force = 0;
+        });
+      } else if (!remainingProvinceIds.includes(scenario.capitals[previousControllerId])) {
+        scenario.capitals[previousControllerId] = strongestProvinceId(scenario, remainingProvinceIds);
+      }
+    }
+
+    const heaviestLoss = Math.max(result.attackerCasualtyRate, result.defenderCasualtyRate);
+    targetState.fortification = clamp(Math.round(fortificationBefore * (0.94 - heaviestLoss * 0.24)), 5, 140);
+    scenario.battleCount = battleIndex + 1;
+    scenario.armies = scenario.armies.filter((candidate) => Number.isFinite(candidate.force) && candidate.force > 0);
+    const fieldDefenderSurvivors = scenario.armies
+      .filter((candidate) => candidate.realmId === previousControllerId && defenders.some((defender) => defender.id === candidate.id))
+      .reduce((sum, defender) => sum + defender.force, 0);
+
+    return {
+      attacked: true,
+      kind: "battle",
+      ...result,
+      attackerWon,
+      seed,
+      battleIndex,
+      attackerId: army.id,
+      defenderArmyIds: defenders.map((defender) => defender.id),
+      previousControllerId,
+      controllerId: attackerWon ? army.realmId : previousControllerId,
+      fromProvinceId: originProvinceId,
+      toProvinceId: provinceId,
+      attackerSurvivors: army.force,
+      fieldDefenderCasualties: assignedFieldCasualties,
+      fieldDefenderSurvivors,
+      garrisonForce,
+      fortificationBefore,
+      fortificationAfter: targetState.fortification,
+      retreatProvinceIds: [...new Set(retreatProvinceIds)],
+      eliminatedRealmId
     };
   }
 
@@ -486,6 +632,7 @@
     isConnectedSubset,
     classifyArmyDestination,
     executeArmyMove,
+    executeArmyBattle,
     cameraView,
     clampCamera,
     zoomCameraAt

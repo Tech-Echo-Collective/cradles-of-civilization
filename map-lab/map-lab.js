@@ -65,6 +65,9 @@
     provinceCode: document.querySelector("#provinceCode"),
     provinceName: document.querySelector("#provinceName"),
     provinceRegion: document.querySelector("#provinceRegion"),
+    battleReport: document.querySelector("#battleReport"),
+    battleReportTitle: document.querySelector("#battleReportTitle"),
+    battleReportText: document.querySelector("#battleReportText"),
     provinceFacts: Array.from(document.querySelectorAll(".province-facts > div")),
     provinceArmies: document.querySelector("#provinceArmies"),
     inspectorNote: document.querySelector("#inspectorNote"),
@@ -93,6 +96,8 @@
   let selectedProvinceId = geography.provinceById[DATA.initialSelection]?.id || DATA.provinces[0].id;
   let selectedArmyId = null;
   let movementCount = 0;
+  let lastBattleReport = null;
+  let combatLockedUntil = 0;
   let dragState = null;
   let pinchState = null;
   let suppressClick = false;
@@ -206,7 +211,8 @@
 
   function updateScenarioReadout() {
     const movementSuffix = movementCount ? ` · M${movementCount}` : "";
-    dom.scenarioReadout.textContent = `${scenario.seed} · ${scenario.signature.toUpperCase()}${movementSuffix}`;
+    const battleSuffix = scenario.battleCount ? ` · B${scenario.battleCount}` : "";
+    dom.scenarioReadout.textContent = `${scenario.seed} · ${scenario.signature.toUpperCase()}${movementSuffix}${battleSuffix}`;
   }
 
   function buildStaticMap() {
@@ -359,10 +365,10 @@
   function buildArmyNodes() {
     dom.armyLayer.replaceChildren();
     armyNodes.clear();
-    scenario.armies.forEach((army, index) => {
+    scenario.armies.forEach((army) => {
       const realm = geography.realmById[army.realmId];
       const marker = svgElement("g", {
-        class: `army-marker${army.realmId === "player-realm" ? " is-player" : ""}${index % 2 ? " secondary-army" : ""}`,
+        class: `army-marker${army.realmId === "player-realm" ? " is-player" : ""}${army.id.endsWith("-frontier") ? " secondary-army" : ""}`,
         role: "button",
         tabindex: "0",
         "data-army-id": army.id,
@@ -385,7 +391,8 @@
       marker.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          activateArmyMarker(army.id);
+          if (event.repeat) return;
+          activateArmyMarker(army.id, { focusAfter: true });
           return;
         }
         if (event.key.startsWith("Arrow")) {
@@ -427,22 +434,27 @@
       const capitalProvince = geography.provinceById[scenario.capitals[realm.id]];
       const capital = capitalNodes.get(realm.id);
       capital.dataset.realmId = realm.id;
-      capital.dataset.x = String(capitalProvince.center[0]);
-      capital.dataset.y = String(capitalProvince.center[1]);
-
       const owned = DATA.provinces.filter((province) => scenario.controllerByProvince[province.id] === realm.id);
+      capital.style.display = capitalProvince ? "" : "none";
+      if (capitalProvince) {
+        capital.dataset.x = String(capitalProvince.center[0]);
+        capital.dataset.y = String(capitalProvince.center[1]);
+      }
       const weightTotal = owned.reduce((sum, province) => sum + scenario.provinceState[province.id].development, 0) || 1;
       const x = owned.reduce((sum, province) => sum + province.center[0] * scenario.provinceState[province.id].development, 0) / weightTotal;
       const y = owned.reduce((sum, province) => sum + province.center[1] * scenario.provinceState[province.id].development, 0) / weightTotal;
       const label = realmLabelNodes.get(realm.id);
+      label.style.display = owned.length ? "" : "none";
       label.setAttribute("x", String(x));
       label.setAttribute("y", String(y));
       label.textContent = localizedName(realm);
     });
 
     buildArmyNodes();
+    syncSelectionStyles();
     updateMapCopy();
     renderMovementTargets();
+    renderLegend();
     applyCamera();
     renderInspector();
   }
@@ -566,10 +578,10 @@
     } else {
       items = [
         { color: "#70e5a7", label: t("可移动", "Move"), meta: t("相邻己方", "friendly") },
-        { color: "#f08072", label: t("攻击目标", "Attack target"), meta: t("战斗待接", "combat pending") },
+        { color: "#f08072", label: t("攻击目标", "Attack target"), meta: t("点击开战", "engage") },
         { color: "#f3b067", label: t("前线", "Front line"), meta: t("敌对边界", "hostile") },
         { color: "#e1d7bd", label: t("军团", "Army"), meta: scenario.armies.length },
-        { color: "#f4ddb1", label: t("首都", "Capital"), meta: DATA.realms.length },
+        { color: "#f4ddb1", label: t("首都", "Capital"), meta: DATA.realms.filter((realm) => scenario.capitals[realm.id]).length },
         { color: "#d2ad70", label: t("干道", "Route"), meta: DATA.routes.length }
       ];
     }
@@ -627,7 +639,49 @@
     fact.querySelector("dd").textContent = value;
   }
 
+  function battleScaleName(scale) {
+    return {
+      conflict: t("冲突", "SKIRMISH"),
+      battle: t("战役", "BATTLE"),
+      bloodbath: t("血战", "BLOODBATH")
+    }[scale] || t("战役", "BATTLE");
+  }
+
+  function renderBattleReport() {
+    if (!lastBattleReport) {
+      dom.battleReport.hidden = true;
+      return;
+    }
+    const report = lastBattleReport;
+    const province = geography.provinceById[report.toProvinceId];
+    const formerRealm = geography.realmById[report.previousControllerId];
+    const numberLocale = language === "en" ? "en-US" : "zh-CN";
+    const formatForce = (value) => Math.max(0, Math.round(Number(value) || 0)).toLocaleString(numberLocale);
+    const scale = battleScaleName(report.scale);
+    dom.battleReport.hidden = false;
+    dom.battleReport.dataset.outcome = report.attackerWon ? "victory" : "defeat";
+    dom.battleReportTitle.textContent = report.attackerWon
+      ? t(`${scale}胜利 · 已攻占${province.nameZh}`, `${scale} VICTORY · ${province.nameEn} CAPTURED`)
+      : t(`${scale}失利 · ${province.nameZh}守住`, `${scale} DEFEAT · ${province.nameEn} HELD`);
+    const retreatNames = report.retreatProvinceIds
+      .map((provinceId) => localizedName(geography.provinceById[provinceId]))
+      .join(t("、", ", "));
+    const retreatText = report.attackerWon && report.defenderArmyIds.length
+      ? retreatNames
+        ? t(`守军退往${retreatNames}。`, `Defenders retreated to ${retreatNames}.`)
+        : t("守军残部已经溃散。", "The defending field armies were routed.")
+      : "";
+    const eliminationText = report.eliminatedRealmId
+      ? t(`${formerRealm.nameZh}已经失去全部领土。`, `${formerRealm.nameEn} has lost all territory.`)
+      : "";
+    dom.battleReportText.textContent = t(
+      `进攻方损失 ${formatForce(report.attackerCasualties)}，剩余 ${formatForce(report.attackerSurvivors)}；守方损失 ${formatForce(report.defenderCasualties)}，野战军剩余 ${formatForce(report.fieldDefenderSurvivors)}。${retreatText}${eliminationText}`,
+      `Attacker lost ${formatForce(report.attackerCasualties)}, ${formatForce(report.attackerSurvivors)} remain; defender lost ${formatForce(report.defenderCasualties)}, ${formatForce(report.fieldDefenderSurvivors)} field troops remain. ${retreatText} ${eliminationText}`
+    ).trim();
+  }
+
   function renderInspector() {
+    renderBattleReport();
     const army = scenario.armies.find((candidate) => candidate.id === selectedArmyId);
     if (army) {
       const province = geography.provinceById[army.provinceId];
@@ -644,7 +698,7 @@
       setFact(5, "指令", "Command", army.realmId === "player-realm" ? t("可移动", "Move ready") : t("仅观察", "Observer only"));
       renderProvinceArmies(province.id, army.id);
       dom.inspectorNote.textContent = army.realmId === "player-realm"
-        ? t("点击绿色相邻省份即可移动；红色省份是攻击目标，战斗暂未接入。移动属于临时沙盘状态，刷新或重排种子会复原。", "Click a green adjacent province to move. Red provinces are attack targets; combat is not connected yet. Movement is temporary sandbox state and resets on reload or reshuffle.")
+        ? t("点击绿色相邻省份移动；点击红色相邻省份立即开战。移动与战斗都属于临时沙盘状态，刷新或重排种子会复原。", "Click a green adjacent province to move; click a red adjacent province to attack immediately. Movement and combat are temporary sandbox state and reset on reload or reshuffle.")
         : t("可以查看其他政权军团，但地图实验室只允许指挥绿色的玩家军团。", "Other realms can be inspected, but only the green player armies are commandable in the map lab.");
       return;
     }
@@ -699,16 +753,20 @@
     });
   }
 
+  function syncSelectionStyles() {
+    provinceNodes.forEach((node, id) => {
+      node.classList.toggle("is-selected", id === selectedProvinceId);
+      node.setAttribute("tabindex", id === selectedProvinceId ? "0" : "-1");
+    });
+    armyNodes.forEach((node, id) => node.classList.toggle("is-selected", id === selectedArmyId));
+  }
+
   function selectProvince(provinceId, options = {}) {
     if (!geography.provinceById[provinceId]) return;
     selectedProvinceId = provinceId;
     selectedArmyId = null;
     renderMovementTargets();
-    provinceNodes.forEach((node, id) => {
-      node.classList.toggle("is-selected", id === provinceId);
-      node.setAttribute("tabindex", id === provinceId ? "0" : "-1");
-    });
-    armyNodes.forEach((node) => node.classList.remove("is-selected"));
+    syncSelectionStyles();
     renderInspector();
     if (window.matchMedia("(max-width: 820px)").matches) setInspectorCollapsed(false);
     const province = geography.provinceById[provinceId];
@@ -722,11 +780,7 @@
     selectedArmyId = army.id;
     selectedProvinceId = army.provinceId;
     if (mode !== "military") setMode("military", false);
-    provinceNodes.forEach((node, id) => {
-      node.classList.toggle("is-selected", id === selectedProvinceId);
-      node.setAttribute("tabindex", id === selectedProvinceId ? "0" : "-1");
-    });
-    armyNodes.forEach((node, id) => node.classList.toggle("is-selected", id === army.id));
+    syncSelectionStyles();
     renderMovementTargets();
     renderInspector();
     if (window.matchMedia("(max-width: 820px)").matches) setInspectorCollapsed(army.realmId === "player-realm");
@@ -738,6 +792,11 @@
       node.classList.remove("is-move-target", "is-attack-target");
       node.setAttribute("aria-label", provinceAriaLabel(geography.provinceById[provinceId]));
     });
+    scenario.armies.forEach((candidate) => {
+      const marker = armyNodes.get(candidate.id);
+      marker?.classList.remove("is-attack-target");
+      marker?.setAttribute("aria-label", localizedArmyLabel(candidate));
+    });
     const army = scenario.armies.find((candidate) => candidate.id === selectedArmyId);
     if (!army || army.realmId !== "player-realm" || mode !== "military") return;
     (geography.neighbors[army.provinceId] || []).forEach((provinceId) => {
@@ -748,18 +807,23 @@
         node.setAttribute("aria-label", `${provinceAriaLabel(geography.provinceById[provinceId])}${t("，可移动至此", ", available move destination")}`);
       } else if (result.kind === "attack") {
         node.classList.add("is-attack-target");
-        node.setAttribute("aria-label", `${provinceAriaLabel(geography.provinceById[provinceId])}${t("，攻击目标，战斗尚未接入", ", attack target, combat not connected yet")}`);
+        node.setAttribute("aria-label", `${provinceAriaLabel(geography.provinceById[provinceId])}${t("，相邻攻击目标，激活即开战", ", adjacent attack target; activate to engage immediately")}`);
+        scenario.armies.filter((candidate) => candidate.provinceId === provinceId).forEach((candidate) => {
+          const marker = armyNodes.get(candidate.id);
+          marker?.classList.add("is-attack-target");
+          marker?.setAttribute("aria-label", `${localizedArmyLabel(candidate)}${t("，激活即向该军团开战", "; activate to engage this army immediately")}`);
+        });
       }
     });
   }
 
-  function activateArmyMarker(armyId) {
+  function activateArmyMarker(armyId, options = {}) {
     const targetArmy = scenario.armies.find((candidate) => candidate.id === armyId);
     const commandArmy = scenario.armies.find((candidate) => candidate.id === selectedArmyId);
     if (mode === "military" && commandArmy?.realmId === "player-realm" && targetArmy && targetArmy.id !== commandArmy.id) {
       const result = MODEL.classifyArmyDestination(scenario, geography, commandArmy.id, targetArmy.provinceId);
-      if (result.kind === "move" || result.kind === "attack") {
-        activateProvince(targetArmy.provinceId);
+      if (result.kind === "attack") {
+        activateProvince(targetArmy.provinceId, options);
         return;
       }
     }
@@ -780,10 +844,7 @@
       if (!result.moved) return;
       selectedProvinceId = provinceId;
       movementCount += 1;
-      provinceNodes.forEach((node, id) => {
-        node.classList.toggle("is-selected", id === provinceId);
-        node.setAttribute("tabindex", id === provinceId ? "0" : "-1");
-      });
+      syncSelectionStyles();
       updateScenarioReadout();
       updateMapCopy();
       renderMovementTargets();
@@ -793,15 +854,41 @@
         `${army.nameZh}已从${origin.nameZh}移动至${destination.nameZh}`,
         `${army.nameEn} moved from ${origin.nameEn} to ${destination.nameEn}`
       ));
+      if (options.focusAfter) {
+        window.requestAnimationFrame(() => provinceNodes.get(selectedProvinceId)?.focus({ preventScroll: true }));
+      }
       return;
     }
     if (classification.kind === "attack") {
+      if (Date.now() < combatLockedUntil) return;
       const destination = geography.provinceById[provinceId];
-      const defender = geography.realmById[classification.controllerId];
-      announce(t(
-        `${destination.nameZh}由${defender.nameZh}控制；战斗将在下一阶段接入`,
-        `${destination.nameEn} is controlled by ${defender.nameEn}; combat will be connected in the next phase`
-      ));
+      const keyboardFocus = options.focusAfter || document.activeElement === provinceNodes.get(provinceId);
+      const report = MODEL.executeArmyBattle(scenario, geography, army.id, provinceId);
+      if (!report.attacked) {
+        announce(t("这次进攻命令无法执行", "This attack order cannot be executed"));
+        return;
+      }
+      combatLockedUntil = Date.now() + 400;
+      lastBattleReport = report;
+      const survivingArmy = scenario.armies.find((candidate) => candidate.id === army.id);
+      selectedArmyId = survivingArmy?.id || null;
+      selectedProvinceId = survivingArmy?.provinceId || report.fromProvinceId;
+      updateScenarioReadout();
+      updateScenarioMap();
+      setInspectorCollapsed(false);
+      dom.inspectorContent.scrollTop = 0;
+      announce(report.attackerWon
+        ? t(
+          `${army.nameZh}攻占${destination.nameZh}；进攻方损失${report.attackerCasualties}，守方损失${report.defenderCasualties}`,
+          `${army.nameEn} captured ${destination.nameEn}; attacker lost ${report.attackerCasualties}, defender lost ${report.defenderCasualties}`
+        )
+        : t(
+          `${army.nameZh}进攻${destination.nameZh}失败；进攻方损失${report.attackerCasualties}，守方损失${report.defenderCasualties}`,
+          `${army.nameEn} failed to take ${destination.nameEn}; attacker lost ${report.attackerCasualties}, defender lost ${report.defenderCasualties}`
+        ));
+      if (keyboardFocus) {
+        window.requestAnimationFrame(() => provinceNodes.get(selectedProvinceId)?.focus({ preventScroll: true }));
+      }
       return;
     }
     announce(classification.kind === "current"
@@ -835,7 +922,8 @@
   function handleProvinceKeydown(event, provinceId) {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      activateProvince(provinceId);
+      if (event.repeat) return;
+      activateProvince(provinceId, { focusAfter: true });
       return;
     }
     const directions = {
@@ -1103,6 +1191,8 @@
     scenario = MODEL.createScenario(DATA, geography, dom.seedInput.value || Date.now());
     dom.seedInput.value = String(scenario.seed);
     movementCount = 0;
+    lastBattleReport = null;
+    combatLockedUntil = 0;
     updateScenarioReadout();
     selectedArmyId = null;
     updateScenarioMap();

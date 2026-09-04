@@ -639,6 +639,12 @@ body[data-mode="military"] .realm-label {
   stroke-width: 3;
 }
 
+.army-marker.is-attack-target .army-marker-shield {
+  stroke: #f08072;
+  stroke-width: 3;
+  stroke-dasharray: 4 2;
+}
+
 body[data-mode="political"] .army-marker {
   opacity: 0.72;
 }
@@ -902,6 +908,42 @@ body[data-zoom-band="far"] .army-marker.secondary-army:not(.is-selected) {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.82rem;
   font-weight: 900;
+}
+
+.inspector-battle {
+  margin-top: 14px;
+  padding: 11px 12px;
+  color: #dce7e0;
+  background: rgba(17, 29, 29, 0.86);
+  border: 1px solid rgba(126, 160, 145, 0.3);
+  border-left: 3px solid #87bda4;
+}
+
+.inspector-battle[data-outcome="defeat"] {
+  border-left-color: #d06f67;
+}
+
+.inspector-battle > span {
+  display: block;
+  margin-bottom: 5px;
+  color: #91a39d;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.52rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.inspector-battle strong {
+  display: block;
+  color: #fff4d8;
+  font-size: 0.82rem;
+}
+
+.inspector-battle p {
+  margin: 5px 0 0;
+  color: #aebcb7;
+  font-size: 0.68rem;
+  line-height: 1.48;
 }
 
 .inspector-armies {

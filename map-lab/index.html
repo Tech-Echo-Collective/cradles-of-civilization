@@ -7,7 +7,7 @@
     <meta name="copyright" content="Original concept by Noah Walker">
     <meta name="theme-color" content="#111a1d">
     <title>文明摇篮：地图实验室</title>
-    <link rel="stylesheet" href="map-lab.css?v=20260904-e">
+    <link rel="stylesheet" href="map-lab.css?v=20260904-f">
   </head>
   <body data-mode="political" data-relief="3d" data-zoom-band="far">
     <div class="map-lab-shell">
@@ -128,6 +128,11 @@
               <h2 id="provinceName">中央盆地</h2>
               <p id="provinceRegion">中央盆地 · 盆地</p>
             </header>
+            <section class="inspector-battle" id="battleReport" role="status" hidden>
+              <span data-zh="最近战报" data-en="LATEST BATTLE">最近战报</span>
+              <strong id="battleReportTitle"></strong>
+              <p id="battleReportText"></p>
+            </section>
             <dl class="province-facts">
               <div><dt data-zh="控制者" data-en="Controller">控制者</dt><dd id="provinceRealm">长生共同体</dd></div>
               <div><dt data-zh="发展" data-en="Development">发展</dt><dd id="provinceDevelopment">24</dd></div>
@@ -144,13 +149,14 @@
           </div>
         </aside>
 
-        <div class="map-hint" data-zh="选绿色军团，再点绿色省份移动 · 红色为待接战斗 · 1/2/3 切换图层" data-en="SELECT A GREEN ARMY, THEN A GREEN PROVINCE TO MOVE · RED IS COMBAT PENDING · 1/2/3 MAP MODES">选绿色军团，再点绿色省份移动 · 红色为待接战斗 · 1/2/3 切换图层</div>
+        <div class="map-hint" data-zh="选绿色军团 · 点绿色省份移动 · 点红色省份开战 · 1/2/3 切换图层" data-en="SELECT A GREEN ARMY · CLICK GREEN TO MOVE · CLICK RED TO ATTACK · 1/2/3 MAP MODES">选绿色军团 · 点绿色省份移动 · 点红色省份开战 · 1/2/3 切换图层</div>
         <div id="liveRegion" class="visually-hidden" aria-live="polite"></div>
       </main>
     </div>
 
-    <script src="map-data.js?v=20260904-e"></script>
-    <script src="map-model.js?v=20260904-e"></script>
-    <script src="map-lab.js?v=20260904-e"></script>
+    <script src="../balance-model.js?v=20260904-v040"></script>
+    <script src="map-data.js?v=20260904-f"></script>
+    <script src="map-model.js?v=20260904-f"></script>
+    <script src="map-lab.js?v=20260904-f"></script>
   </body>
 </html>
