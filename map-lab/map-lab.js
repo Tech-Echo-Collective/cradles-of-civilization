@@ -7,7 +7,18 @@
 
   const SVG_NS = "http://www.w3.org/2000/svg";
   const LANGUAGE_KEY = "three-sun-chronicle:language:v1";
+  const RELIEF_KEY = "three-sun-chronicle:map-relief:v1";
   const MODES = new Set(["political", "terrain", "military"]);
+  const RELIEF_DEPTHS = Object.freeze({
+    coast: 2,
+    river: 2,
+    basin: 3,
+    plain: 4,
+    tundra: 4,
+    waste: 5,
+    canyon: 7,
+    mountain: 9
+  });
   const params = new URLSearchParams(window.location.search);
 
   const dom = {
@@ -15,11 +26,12 @@
     mapStage: document.querySelector("#mapStage"),
     mapSvg: document.querySelector("#mapSvg"),
     landClipPath: document.querySelector("#landClipPath"),
-    landShadow: document.querySelector("#landShadow"),
+    landDepth: document.querySelector("#landDepth"),
     landBase: document.querySelector("#landBase"),
     coastLine: document.querySelector("#coastLine"),
     oceanDetailLayer: document.querySelector("#oceanDetailLayer"),
     provinceLayer: document.querySelector("#provinceLayer"),
+    provinceReliefLayer: document.querySelector("#provinceReliefLayer"),
     terrainTextureLayer: document.querySelector("#terrainTextureLayer"),
     routeLayer: document.querySelector("#routeLayer"),
     riverLayer: document.querySelector("#riverLayer"),
@@ -33,6 +45,7 @@
     modeButtons: Array.from(document.querySelectorAll("[data-map-mode]")),
     seedForm: document.querySelector("#seedForm"),
     seedInput: document.querySelector("#seedInput"),
+    reliefToggle: document.querySelector("#reliefToggle"),
     languageToggle: document.querySelector("#languageToggle"),
     returnLink: document.querySelector("#returnLink"),
     legendModeName: document.querySelector("#legendModeName"),
@@ -59,6 +72,7 @@
 
   const geography = MODEL.buildGeography(DATA);
   const provinceNodes = new Map();
+  const reliefNodes = new Map();
   const textureNodes = new Map();
   const provinceLabelNodes = new Map();
   const realmBorderNodes = [];
@@ -68,6 +82,7 @@
   const pointers = new Map();
   let language = preferredLanguage();
   let mode = MODES.has(params.get("mode")) ? params.get("mode") : "political";
+  let reliefMode = preferredReliefMode();
   let scenario = MODEL.createScenario(DATA, geography, params.get("seed") || "1058");
   let camera = MODEL.clampCamera({
     cx: DATA.viewBox.x + DATA.viewBox.width / 2,
@@ -91,6 +106,16 @@
     }
   }
 
+  function preferredReliefMode() {
+    const requested = String(params.get("relief") || "").toLowerCase();
+    if (requested === "2d" || requested === "3d") return requested;
+    try {
+      return localStorage.getItem(RELIEF_KEY) === "2d" ? "2d" : "3d";
+    } catch {
+      return "3d";
+    }
+  }
+
   function t(chinese, english) {
     return language === "en" ? english : chinese;
   }
@@ -110,6 +135,35 @@
     return `${points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ")} Z`;
   }
 
+  function signedPolygonArea(points) {
+    return points.reduce((area, point, index) => {
+      const next = points[(index + 1) % points.length];
+      return area + point.x * next.y - next.x * point.y;
+    }, 0) / 2;
+  }
+
+  function reliefWallPath(points, depth) {
+    if (!points?.length || depth <= 0) return "";
+    const projection = { x: depth * 0.34, y: depth };
+    const clockwiseOnScreen = signedPolygonArea(points) >= 0;
+    return points.map((start, index) => {
+      const end = points[(index + 1) % points.length];
+      const edgeX = end.x - start.x;
+      const edgeY = end.y - start.y;
+      const outwardX = clockwiseOnScreen ? edgeY : -edgeY;
+      const outwardY = clockwiseOnScreen ? -edgeX : edgeX;
+      if (outwardX * projection.x + outwardY * projection.y <= 0) return "";
+      return `M ${start.x} ${start.y} L ${end.x} ${end.y} L ${end.x + projection.x} ${end.y + projection.y} L ${start.x + projection.x} ${start.y + projection.y} Z`;
+    }).filter(Boolean).join(" ");
+  }
+
+  function darkenHex(color, factor) {
+    const value = String(color || "").replace("#", "");
+    if (!/^[0-9a-f]{6}$/iu.test(value)) return "#18201e";
+    const channels = [0, 2, 4].map((offset) => Math.round(Number.parseInt(value.slice(offset, offset + 2), 16) * factor));
+    return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+  }
+
   function routePath(provinceIds) {
     const points = provinceIds.map((provinceId) => geography.provinceById[provinceId]?.center).filter(Boolean);
     if (!points.length) return "";
@@ -123,6 +177,8 @@
     else url.searchParams.delete("lang");
     if (mode !== "political") url.searchParams.set("mode", mode);
     else url.searchParams.delete("mode");
+    if (reliefMode === "2d") url.searchParams.set("relief", "2d");
+    else url.searchParams.delete("relief");
     try {
       window.history.replaceState({}, "", url.href);
     } catch {
@@ -145,7 +201,7 @@
   function buildStaticMap() {
     const landPath = DATA.landPath;
     dom.landClipPath.setAttribute("d", landPath);
-    dom.landShadow.setAttribute("d", landPath);
+    dom.landDepth.setAttribute("d", landPath);
     dom.landBase.setAttribute("d", landPath);
     dom.coastLine.setAttribute("d", landPath);
 
@@ -158,6 +214,23 @@
       const path = svgElement("path", { class: "ocean-current", d: pathData });
       dom.oceanDetailLayer.append(path);
     });
+
+    geography.cells
+      .map((cell) => {
+        const province = geography.provinceById[cell.provinceId];
+        return { cell, province, depth: RELIEF_DEPTHS[province.terrain] || 3 };
+      })
+      .sort((left, right) => left.province.center[1] + left.depth - right.province.center[1] - right.depth)
+      .forEach(({ cell, province, depth }) => {
+        const wall = svgElement("path", {
+          class: "province-relief-wall",
+          d: reliefWallPath(cell.points, depth),
+          "data-province-id": province.id,
+          "data-relief-depth": depth
+        });
+        reliefNodes.set(province.id, wall);
+        dom.provinceReliefLayer.append(wall);
+      });
 
     geography.cells.forEach((cell) => {
       const province = geography.provinceById[cell.provinceId];
@@ -322,6 +395,9 @@
       const terrain = DATA.terrainTypes[province.terrain];
       node.style.setProperty("--realm-color", realm.color);
       node.style.setProperty("--terrain-color", terrain.color);
+      const relief = reliefNodes.get(province.id);
+      relief.style.setProperty("--relief-realm-color", darkenHex(realm.color, 0.5));
+      relief.style.setProperty("--relief-terrain-color", darkenHex(terrain.color, 0.54));
       node.dataset.realmId = realm.id;
       node.dataset.terrain = province.terrain;
       node.setAttribute("aria-label", provinceAriaLabel(province));
@@ -393,6 +469,7 @@
     });
     dom.languageToggle.textContent = language === "en" ? "中" : "EN";
     dom.languageToggle.setAttribute("aria-label", t("切换到英文", "Switch to Chinese"));
+    updateReliefControl();
     const returnUrl = new URL("../index.html", window.location.href);
     if (language === "en") returnUrl.searchParams.set("lang", "en");
     dom.returnLink.href = returnUrl.href;
@@ -406,6 +483,31 @@
     renderLegend();
     renderInspector();
     updateUrl();
+  }
+
+  function updateReliefControl() {
+    const enabled = reliefMode === "3d";
+    dom.reliefToggle.textContent = enabled ? "3D" : "2D";
+    dom.reliefToggle.setAttribute("aria-pressed", enabled ? "true" : "false");
+    dom.reliefToggle.setAttribute("aria-label", enabled
+      ? t("切换到平面地图", "Switch to flat map")
+      : t("开启立体地形", "Enable relief map"));
+  }
+
+  function setReliefMode(nextMode, shouldAnnounce = true) {
+    if (nextMode !== "2d" && nextMode !== "3d") return;
+    reliefMode = nextMode;
+    dom.body.dataset.relief = reliefMode;
+    updateReliefControl();
+    try {
+      localStorage.setItem(RELIEF_KEY, reliefMode);
+    } catch {
+      // The toggle remains usable when local storage is unavailable.
+    }
+    updateUrl();
+    if (shouldAnnounce) announce(reliefMode === "3d"
+      ? t("轻量立体地形已开启", "Lightweight relief enabled")
+      : t("平面地图已开启", "Flat map enabled"));
   }
 
   function setMode(nextMode, shouldAnnounce = true) {
@@ -977,6 +1079,7 @@
   dom.zoomOutButton.addEventListener("click", () => zoomBy(0.8));
   dom.zoomResetButton.addEventListener("click", resetCamera);
   dom.inspectorToggle.addEventListener("click", () => setInspectorCollapsed(!dom.inspector.classList.contains("is-collapsed")));
+  dom.reliefToggle.addEventListener("click", () => setReliefMode(reliefMode === "3d" ? "2d" : "3d"));
   dom.languageToggle.addEventListener("click", () => {
     language = language === "en" ? "zh" : "en";
     updateStaticLanguage();
@@ -1022,6 +1125,7 @@
   window.addEventListener("resize", applyCamera);
 
   buildStaticMap();
+  setReliefMode(reliefMode, false);
   dom.seedInput.value = String(scenario.seed);
   updateScenarioReadout();
   updateScenarioMap();

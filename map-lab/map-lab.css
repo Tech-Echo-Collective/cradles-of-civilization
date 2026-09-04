@@ -223,8 +223,15 @@ input:focus-visible,
   border-color: rgba(215, 185, 111, 0.58);
 }
 
+#reliefToggle,
 #languageToggle {
   min-width: 42px;
+}
+
+#reliefToggle[aria-pressed="true"] {
+  color: #fff3ce;
+  border-color: rgba(215, 185, 111, 0.58);
+  background: rgba(82, 68, 40, 0.78);
 }
 
 .map-stage {
@@ -305,12 +312,11 @@ input:focus-visible,
   vector-effect: non-scaling-stroke;
 }
 
-.land-shadow {
-  fill: #020708;
-  stroke: #010404;
-  stroke-width: 15;
-  opacity: 0.72;
-  filter: url(#mapShadow);
+.land-depth {
+  fill: #18231f;
+  stroke: #090e0d;
+  stroke-width: 6;
+  opacity: 0.96;
   vector-effect: non-scaling-stroke;
 }
 
@@ -318,8 +324,36 @@ input:focus-visible,
   fill: url(#landGradient);
   stroke: rgba(220, 205, 163, 0.2);
   stroke-width: 2;
-  filter: url(#landNoise);
   vector-effect: non-scaling-stroke;
+}
+
+.province-relief-layer {
+  pointer-events: none;
+}
+
+.province-relief-wall {
+  --relief-realm-color: #283431;
+  --relief-terrain-color: #34342d;
+  fill: var(--relief-realm-color);
+  fill-opacity: 0.92;
+  stroke: rgba(238, 223, 184, 0.14);
+  stroke-width: 0.65;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+body[data-mode="terrain"] .province-relief-wall {
+  fill: var(--relief-terrain-color);
+}
+
+body[data-mode="military"] .province-relief-wall {
+  fill: var(--relief-realm-color);
+  fill-opacity: 0.72;
+}
+
+body[data-relief="2d"] .land-depth,
+body[data-relief="2d"] .province-relief-layer {
+  display: none;
 }
 
 .province-shape {
@@ -379,6 +413,7 @@ body[data-mode="military"] .province-shape.is-attack-target {
   stroke-dasharray: 4 3;
 }
 
+.province-relief-layer,
 .terrain-texture-layer,
 .route-layer,
 .river-layer,

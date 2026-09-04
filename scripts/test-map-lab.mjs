@@ -222,13 +222,19 @@ for (const mode of ["political", "terrain", "military"]) {
   assert.match(css, new RegExp(`data-mode="${mode}"`, "u"), `${mode} mode styles are missing`);
 }
 assert.match(html, /id="languageToggle"/u, "map lab must expose a language toggle");
+assert.match(html, /id="reliefToggle"/u, "map lab must expose a 3D/2D relief toggle");
+assert.match(html, /id="provinceReliefLayer"/u, "map lab must expose a static relief layer");
+assert.doesNotMatch(html, /feDropShadow|feTurbulence/u, "map relief must avoid expensive SVG filters");
 assert.match(html, /map-model\.js\?v=/u, "map lab must load its isolated model");
 assert.doesNotMatch(html, /src="(?:\.\.\/)?game\.js/u, "map lab must not load the formal game runtime");
 assert.match(ui, /window\.history\.replaceState/u, "map lab should preserve scenario state in the URL");
 assert.match(ui, /function activateProvince/u, "map lab needs a unified province command handler");
+assert.match(ui, /function reliefWallPath/u, "map lab must build lightweight vector sidewalls");
+assert.doesNotMatch(ui, /WebGLRenderingContext|THREE\.|getContext\(["']webgl/u, "map relief must not require WebGL");
 assert.match(css, /province-shape\.is-move-target/u, "map lab needs friendly movement target styling");
 assert.match(css, /province-shape\.is-attack-target/u, "map lab needs hostile movement target styling");
 assert.match(css, /data-zoom-band="far"/u, "map lab needs semantic zoom styles");
+assert.match(css, /data-relief="2d"/u, "map lab needs a flat fallback mode");
 assert.match(css, /@media \(max-width: 820px\)/u, "map lab needs a mobile inspector layout");
 const packageScript = read("scripts/package-game.mjs");
 assert.match(packageScript, /rmSync\(dist, \{ force: true, recursive: true \}\)/u, "packaging must clear obsolete outputs first");
