@@ -134,11 +134,61 @@ for (let seed = 1; seed <= 100; seed += 1) {
   scenario.armies.forEach((army) => {
     assert.ok(realmIds.has(army.realmId), `seed ${seed} army references an unknown realm`);
     assert.equal(scenario.controllerByProvince[army.provinceId], army.realmId, `seed ${seed} army must stand on owned territory`);
+    assert.equal(model.classifyArmyDestination(scenario, geography, army.id, army.provinceId).kind, "current", `seed ${seed} army must recognize its current province`);
+    (geography.neighbors[army.provinceId] || []).forEach((provinceId) => {
+      const expected = scenario.controllerByProvince[provinceId] === army.realmId ? "move" : "attack";
+      assert.equal(model.classifyArmyDestination(scenario, geography, army.id, provinceId).kind, expected, `seed ${seed} movement classification mismatch`);
+    });
   });
   if (previousSignature) assert.notEqual(scenario.signature, previousSignature, `adjacent seeds ${seed - 1}/${seed} should produce distinct scenarios`);
   previousSignature = scenario.signature;
   assert.equal(model.buildGeography(data).signature, geography.signature, `seed ${seed} must not mutate fixed geography`);
 }
+
+const movementScenario = model.createScenario(data, geography, 1058);
+const commandArmy = movementScenario.armies.find((army) => army.realmId === "player-realm"
+  && geography.neighbors[army.provinceId].some((provinceId) => movementScenario.controllerByProvince[provinceId] === army.realmId));
+assert.ok(commandArmy, "the player needs an army with a friendly adjacent movement target");
+const friendlyTarget = geography.neighbors[commandArmy.provinceId]
+  .find((provinceId) => movementScenario.controllerByProvince[provinceId] === commandArmy.realmId);
+const originId = commandArmy.provinceId;
+const otherArmyPositions = Object.fromEntries(movementScenario.armies.filter((army) => army.id !== commandArmy.id).map((army) => [army.id, army.provinceId]));
+const controllersBeforeMove = JSON.stringify(movementScenario.controllerByProvince);
+const provinceStateBeforeMove = JSON.stringify(movementScenario.provinceState);
+const scenarioSignatureBeforeMove = movementScenario.signature;
+const moveResult = model.executeArmyMove(movementScenario, geography, commandArmy.id, friendlyTarget);
+assert.equal(moveResult.moved, true, "a player army must move to an adjacent friendly province");
+assert.equal(moveResult.fromProvinceId, originId, "movement must report its origin");
+assert.equal(commandArmy.provinceId, friendlyTarget, "movement must update only the commanded army position");
+assert.deepEqual(
+  Object.fromEntries(movementScenario.armies.filter((army) => army.id !== commandArmy.id).map((army) => [army.id, army.provinceId])),
+  otherArmyPositions,
+  "movement must not relocate other armies"
+);
+assert.equal(JSON.stringify(movementScenario.controllerByProvince), controllersBeforeMove, "sandbox movement must not alter political control");
+assert.equal(JSON.stringify(movementScenario.provinceState), provinceStateBeforeMove, "sandbox movement must not alter province values");
+assert.equal(movementScenario.signature, scenarioSignatureBeforeMove, "sandbox movement must preserve the seeded scenario signature");
+
+const rejectedScenario = model.createScenario(data, geography, 1058);
+const rejectedArmy = rejectedScenario.armies.find((army) => army.realmId === "player-realm");
+const borderOrigin = provinceIds.find((provinceId) => rejectedScenario.controllerByProvince[provinceId] === rejectedArmy.realmId
+  && geography.neighbors[provinceId].some((neighborId) => rejectedScenario.controllerByProvince[neighborId] !== rejectedArmy.realmId));
+const hostileTarget = geography.neighbors[borderOrigin]
+  .find((provinceId) => rejectedScenario.controllerByProvince[provinceId] !== rejectedArmy.realmId);
+rejectedArmy.provinceId = borderOrigin;
+const beforeRejectedAttack = JSON.stringify(rejectedScenario);
+assert.equal(model.executeArmyMove(rejectedScenario, geography, rejectedArmy.id, hostileTarget).kind, "attack", "hostile destination must be classified as an attack");
+assert.equal(JSON.stringify(rejectedScenario), beforeRejectedAttack, "an unavailable attack must have no side effects");
+const distantTarget = provinceIds.find((provinceId) => provinceId !== borderOrigin && !geography.neighbors[borderOrigin].includes(provinceId));
+assert.equal(model.executeArmyMove(rejectedScenario, geography, rejectedArmy.id, distantTarget).kind, "unreachable", "non-adjacent movement must be rejected");
+assert.equal(JSON.stringify(rejectedScenario), beforeRejectedAttack, "rejected long-distance movement must have no side effects");
+const foreignArmy = rejectedScenario.armies.find((army) => army.realmId !== "player-realm");
+const foreignFriendlyTarget = geography.neighbors[foreignArmy.provinceId]
+  .find((provinceId) => rejectedScenario.controllerByProvince[provinceId] === foreignArmy.realmId);
+assert.ok(foreignFriendlyTarget, "foreign army test needs a friendly adjacent province");
+const beforeForeignOrder = JSON.stringify(rejectedScenario);
+assert.equal(model.executeArmyMove(rejectedScenario, geography, foreignArmy.id, foreignFriendlyTarget).kind, "not-commandable", "foreign armies must remain observer-only");
+assert.equal(JSON.stringify(rejectedScenario), beforeForeignOrder, "foreign orders must have no side effects");
 
 const viewBox = data.viewBox;
 const camera = model.clampCamera({ cx: 600, cy: 380, zoom: 1 }, viewBox);
@@ -175,6 +225,9 @@ assert.match(html, /id="languageToggle"/u, "map lab must expose a language toggl
 assert.match(html, /map-model\.js\?v=/u, "map lab must load its isolated model");
 assert.doesNotMatch(html, /src="(?:\.\.\/)?game\.js/u, "map lab must not load the formal game runtime");
 assert.match(ui, /window\.history\.replaceState/u, "map lab should preserve scenario state in the URL");
+assert.match(ui, /function activateProvince/u, "map lab needs a unified province command handler");
+assert.match(css, /province-shape\.is-move-target/u, "map lab needs friendly movement target styling");
+assert.match(css, /province-shape\.is-attack-target/u, "map lab needs hostile movement target styling");
 assert.match(css, /data-zoom-band="far"/u, "map lab needs semantic zoom styles");
 assert.match(css, /@media \(max-width: 820px\)/u, "map lab needs a mobile inspector layout");
 const packageScript = read("scripts/package-game.mjs");

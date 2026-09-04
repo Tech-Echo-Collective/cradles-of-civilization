@@ -377,6 +377,37 @@
     return visited.size === allowed.size;
   }
 
+  function classifyArmyDestination(scenario, geography, armyId, provinceId) {
+    const army = scenario.armies.find((candidate) => candidate.id === armyId);
+    if (!army || !geography.provinceById[provinceId]) return { kind: "invalid", army: army || null };
+    if (army.provinceId === provinceId) return { kind: "current", army };
+    if (!(geography.neighbors[army.provinceId] || []).includes(provinceId)) return { kind: "unreachable", army };
+    const controllerId = scenario.controllerByProvince[provinceId];
+    return {
+      kind: controllerId === army.realmId ? "move" : "attack",
+      army,
+      controllerId
+    };
+  }
+
+  function executeArmyMove(scenario, geography, armyId, provinceId, commandRealmId = "player-realm") {
+    const classification = classifyArmyDestination(scenario, geography, armyId, provinceId);
+    if (!classification.army) return { moved: false, kind: classification.kind };
+    if (classification.army.realmId !== commandRealmId) {
+      return { moved: false, kind: "not-commandable", army: classification.army };
+    }
+    if (classification.kind !== "move") return { moved: false, ...classification };
+    const fromProvinceId = classification.army.provinceId;
+    classification.army.provinceId = provinceId;
+    return {
+      moved: true,
+      kind: "move",
+      army: classification.army,
+      fromProvinceId,
+      toProvinceId: provinceId
+    };
+  }
+
   function cameraDimensions(zoom, viewBox, viewportAspect) {
     const worldAspect = viewBox.width / viewBox.height;
     const aspect = Number.isFinite(Number(viewportAspect)) && Number(viewportAspect) > 0
@@ -453,6 +484,8 @@
     createScenario,
     connectedComponents,
     isConnectedSubset,
+    classifyArmyDestination,
+    executeArmyMove,
     cameraView,
     clampCamera,
     zoomCameraAt
