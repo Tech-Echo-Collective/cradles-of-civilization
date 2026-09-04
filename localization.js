@@ -18,7 +18,7 @@
   "切换到平面地图": "Switch to flat map",
   "开启立体地形": "Enable relief map",
   "三体世界战略地图": "Trisolaran strategic map",
-  "拖动平移 · 滚轮或双指缩放 · 选择军队与相邻地块后在右侧下令": "Drag to pan · wheel or pinch to zoom · select an army and adjacent province, then issue the order on the right",
+  "拖动平移 · Ctrl/⌘ + 滚轮或双指缩放 · 普通滚轮滚动页面 · 选择军队与相邻地块后在右侧下令": "Drag to pan · Ctrl/⌘ + wheel or pinch to zoom · use the wheel normally to scroll the page · select an army and adjacent province, then issue the order on the right",
   "轻量立体地形已开启": "Lightweight relief enabled",
   "平面地图已开启": "Flat map enabled",
   "镜头已重置": "Camera reset",

@@ -5915,8 +5915,8 @@ function syncStrategicMapControls() {
   }
   if (dom.strategicMapHint) {
     dom.strategicMapHint.textContent = strategicMapCopy(
-      "拖动平移 · 滚轮或双指缩放 · 选择军队与相邻地块后在右侧下令",
-      "Drag to pan · wheel or pinch to zoom · select an army and adjacent province, then issue the order on the right"
+      "拖动平移 · Ctrl/⌘ + 滚轮或双指缩放 · 普通滚轮滚动页面 · 选择军队与相邻地块后在右侧下令",
+      "Drag to pan · Ctrl/⌘ + wheel or pinch to zoom · use the wheel normally to scroll the page · select an army and adjacent province, then issue the order on the right"
     );
   }
 }
@@ -6594,6 +6594,7 @@ function handleStrategicMapPointerLeave(event) {
 }
 
 function handleStrategicMapWheel(event) {
+  if (!event.ctrlKey && !event.metaKey) return;
   event.preventDefault();
   zoomStrategicMapBy(Math.exp(-event.deltaY * 0.0014), strategicMapPointerRatio(event));
 }

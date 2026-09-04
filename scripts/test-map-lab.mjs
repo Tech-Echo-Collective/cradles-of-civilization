@@ -20,6 +20,7 @@ assert.ok(data && model, "map lab data and model must load without a browser");
 
 const formalGameSource = read("game.js");
 const formalIndexSource = read("index.html");
+const formalStylesSource = read("styles.css");
 assert.doesNotMatch(
   formalGameSource,
   /STRATEGIC_MAP_MODEL\.(?:createScenario|classifyArmyDestination|executeArmyMove|executeArmyBattle|executeRecruitment|executeAiPhase)\s*\(/u,
@@ -35,6 +36,9 @@ assert.ok(
   "formal relief sidewalls must render above province top faces so internal height remains visible"
 );
 assert.equal((formalIndexSource.match(/data-strategic-map-mode="(?:political|terrain|military)"/gu) || []).length, 4, "formal HTML must expose three mode buttons and one view-state root");
+assert.equal((formalIndexSource.match(/data-action="[^"]+"/gu) || []).length, 21, "the formal page must preserve all 21 action buttons from the pre-integration UI");
+assert.doesNotMatch(formalStylesSource, /@media \(max-width: 1100px\)/u, "the formal map sidebar must not drop below the map at common desktop panel widths");
+assert.match(formalGameSource, /function handleStrategicMapWheel\(event\) \{\s*if \(!event\.ctrlKey && !event\.metaKey\) return;\s*event\.preventDefault\(\);/u, "ordinary wheel input must scroll the page instead of being trapped by the map");
 assert.doesNotMatch(formalIndexSource, /id="endPhaseButton"|id="recruitButton"|id="seedForm"/u, "the formal map must not duplicate map-lab turn, recruitment, or seed controls");
 
 function sampleLandSubpaths(pathData, steps = 24) {

@@ -2987,16 +2987,6 @@ h2 {
   outline: none;
 }
 
-@media (max-width: 1100px) {
-  .map-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .map-sidebar {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 860px) {
   .setup-panel {
     min-height: calc(100vh - 32px);
