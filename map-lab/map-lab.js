@@ -54,6 +54,9 @@
     geographyReadout: document.querySelector("#geographyReadout"),
     scenarioReadout: document.querySelector("#scenarioReadout"),
     zoomReadout: document.querySelector("#zoomReadout"),
+    phaseStatus: document.querySelector("#phaseStatus"),
+    endPhaseButton: document.querySelector("#endPhaseButton"),
+    turnBadge: document.querySelector("#turnBadge"),
     zoomInButton: document.querySelector("#zoomInButton"),
     zoomOutButton: document.querySelector("#zoomOutButton"),
     zoomResetButton: document.querySelector("#zoomResetButton"),
@@ -65,6 +68,9 @@
     provinceCode: document.querySelector("#provinceCode"),
     provinceName: document.querySelector("#provinceName"),
     provinceRegion: document.querySelector("#provinceRegion"),
+    phaseReport: document.querySelector("#phaseReport"),
+    phaseReportTitle: document.querySelector("#phaseReportTitle"),
+    phaseReportActions: document.querySelector("#phaseReportActions"),
     battleReport: document.querySelector("#battleReport"),
     battleReportTitle: document.querySelector("#battleReportTitle"),
     battleReportText: document.querySelector("#battleReportText"),
@@ -97,7 +103,9 @@
   let selectedArmyId = null;
   let movementCount = 0;
   let lastBattleReport = null;
+  let lastPhaseReport = null;
   let combatLockedUntil = 0;
+  let phaseLockedUntil = 0;
   let dragState = null;
   let pinchState = null;
   let suppressClick = false;
@@ -212,7 +220,15 @@
   function updateScenarioReadout() {
     const movementSuffix = movementCount ? ` · M${movementCount}` : "";
     const battleSuffix = scenario.battleCount ? ` · B${scenario.battleCount}` : "";
-    dom.scenarioReadout.textContent = `${scenario.seed} · ${scenario.signature.toUpperCase()}${movementSuffix}${battleSuffix}`;
+    dom.scenarioReadout.textContent = `${scenario.seed} · ${scenario.signature.toUpperCase()} · T${scenario.turn}${movementSuffix}${battleSuffix}`;
+    dom.phaseStatus.textContent = t(`第 ${scenario.turn} 回合 · 玩家阶段`, `ROUND ${scenario.turn} · PLAYER PHASE`);
+    dom.turnBadge.textContent = String(scenario.turn);
+    dom.endPhaseButton.setAttribute("aria-label", t(
+      `结束第 ${scenario.turn} 回合玩家阶段（快捷键 E）`,
+      `End player phase for round ${scenario.turn} (E)`
+    ));
+    const playerSurvives = Object.values(scenario.controllerByProvince).includes("player-realm");
+    dom.endPhaseButton.disabled = !playerSurvives;
   }
 
   function buildStaticMap() {
@@ -493,6 +509,7 @@
     dom.languageToggle.textContent = language === "en" ? "中" : "EN";
     dom.languageToggle.setAttribute("aria-label", t("切换到英文", "Switch to Chinese"));
     updateReliefControl();
+    updateScenarioReadout();
     const returnUrl = new URL("../index.html", window.location.href);
     if (language === "en") returnUrl.searchParams.set("lang", "en");
     dom.returnLink.href = returnUrl.href;
@@ -614,10 +631,19 @@
   function localizedArmyLabel(army) {
     const realm = geography.realmById[army.realmId];
     const province = geography.provinceById[army.provinceId];
+    const acted = army.realmId === "player-realm" && Number(army.lastActedTurn) >= Number(scenario.turn);
     return t(
-      `${realm.nameZh}${army.nameZh}，驻扎${province.nameZh}，兵力${army.force}`,
-      `${realm.nameEn} ${army.nameEn}, stationed in ${province.nameEn}, force ${army.force}`
+      `${realm.nameZh}${army.nameZh}，驻扎${province.nameZh}，兵力${army.force}${acted ? "，本回合已行动" : ""}`,
+      `${realm.nameEn} ${army.nameEn}, stationed in ${province.nameEn}, force ${army.force}${acted ? ", already acted this round" : ""}`
     );
+  }
+
+  function localizedArmyNameById(armyId) {
+    const army = scenario.armies.find((candidate) => candidate.id === armyId);
+    if (army) return localizedName(army);
+    if (armyId?.endsWith("-capital")) return t("首都卫队", "Capital Guard");
+    if (armyId?.endsWith("-frontier")) return t("边境军团", "Frontier Host");
+    return t("军团", "Army");
   }
 
   function compactNumber(value) {
@@ -680,7 +706,50 @@
     ).trim();
   }
 
+  function renderPhaseReport() {
+    if (!lastPhaseReport) {
+      dom.phaseReport.hidden = true;
+      return;
+    }
+    const actions = lastPhaseReport.actions || [];
+    const moveCount = actions.filter((action) => action.kind === "move").length;
+    const battleCount = actions.filter((action) => action.kind === "battle").length;
+    dom.phaseReport.hidden = false;
+    dom.phaseReportTitle.textContent = t(
+      `第 ${lastPhaseReport.turn} 回合 · ${actions.length} 国行动 · ${moveCount} 次移动 · ${battleCount} 场战斗`,
+      `ROUND ${lastPhaseReport.turn} · ${actions.length} REALMS · ${moveCount} MOVES · ${battleCount} BATTLES`
+    );
+    dom.phaseReportActions.replaceChildren();
+    actions.forEach((action) => {
+      const realm = geography.realmById[action.realmId];
+      const item = document.createElement("li");
+      if (action.kind === "move") {
+        const destination = geography.provinceById[action.toProvinceId];
+        item.textContent = t(
+          `${realm.nameZh}：${localizedArmyNameById(action.armyId)}移至${destination.nameZh}`,
+          `${realm.nameEn}: ${localizedArmyNameById(action.armyId)} moved to ${destination.nameEn}`
+        );
+      } else if (action.kind === "battle") {
+        const destination = geography.provinceById[action.toProvinceId];
+        const battle = action.battle;
+        item.textContent = t(
+          `${realm.nameZh}：进攻${destination.nameZh}${battle.attackerWon ? "获胜" : "失利"}，损失${battle.attackerCasualties.toLocaleString("zh-CN")}`,
+          `${realm.nameEn}: attacked ${destination.nameEn} and ${battle.attackerWon ? "won" : "lost"}; ${battle.attackerCasualties.toLocaleString("en-US")} lost`
+        );
+      } else {
+        const reason = action.reason === "eliminated"
+          ? t("已经灭亡", "eliminated")
+          : action.reason === "no-army"
+            ? t("无可用军团", "no available army")
+            : t("原地固守", "held position");
+        item.textContent = `${localizedName(realm)}：${reason}`;
+      }
+      dom.phaseReportActions.append(item);
+    });
+  }
+
   function renderInspector() {
+    renderPhaseReport();
     renderBattleReport();
     const army = scenario.armies.find((candidate) => candidate.id === selectedArmyId);
     if (army) {
@@ -695,10 +764,15 @@
       setFact(2, "兵力", "Force", army.force.toLocaleString(language === "en" ? "en-US" : "zh-CN"));
       setFact(3, "进攻", "Attack", army.attack);
       setFact(4, "防守", "Defense", army.defense);
-      setFact(5, "指令", "Command", army.realmId === "player-realm" ? t("可移动", "Move ready") : t("仅观察", "Observer only"));
+      const acted = Number(army.lastActedTurn) >= Number(scenario.turn);
+      setFact(5, "指令", "Command", army.realmId === "player-realm"
+        ? acted ? t("本回合已行动", "Already acted") : t("可下令", "Ready")
+        : t("仅观察", "Observer only"));
       renderProvinceArmies(province.id, army.id);
       dom.inspectorNote.textContent = army.realmId === "player-realm"
-        ? t("点击绿色相邻省份移动；点击红色相邻省份立即开战。移动与战斗都属于临时沙盘状态，刷新或重排种子会复原。", "Click a green adjacent province to move; click a red adjacent province to attack immediately. Movement and combat are temporary sandbox state and reset on reload or reshuffle.")
+        ? acted
+          ? t("这支军团本回合已经行动；请选择另一支军团，或结束玩家阶段。", "This army has already acted this round. Select another army or end the player phase.")
+          : t("点击绿色相邻省份移动；点击红色相邻省份立即开战。每支军团每回合只能行动一次。", "Click a green adjacent province to move; click a red adjacent province to attack immediately. Each army gets one action per round.")
         : t("可以查看其他政权军团，但地图实验室只允许指挥绿色的玩家军团。", "Other realms can be inspected, but only the green player armies are commandable in the map lab.");
       return;
     }
@@ -744,9 +818,10 @@
       const title = document.createElement("strong");
       title.textContent = `${localizedName(realm)} · ${localizedName(army)}`;
       const meta = document.createElement("span");
+      const acted = army.realmId === "player-realm" && Number(army.lastActedTurn) >= Number(scenario.turn);
       meta.textContent = t(
-        `兵力 ${army.force.toLocaleString("zh-CN")} · 攻 ${army.attack} · 防 ${army.defense}`,
-        `Force ${army.force.toLocaleString("en-US")} · ATK ${army.attack} · DEF ${army.defense}`
+        `兵力 ${army.force.toLocaleString("zh-CN")} · 攻 ${army.attack} · 防 ${army.defense}${acted ? " · 已行动" : ""}`,
+        `Force ${army.force.toLocaleString("en-US")} · ATK ${army.attack} · DEF ${army.defense}${acted ? " · ACTED" : ""}`
       );
       card.append(title, meta);
       dom.provinceArmies.append(card);
@@ -826,6 +901,12 @@
         activateProvince(targetArmy.provinceId, options);
         return;
       }
+      const adjacentHostile = targetArmy.realmId !== commandArmy.realmId
+        && (geography.neighbors[commandArmy.provinceId] || []).includes(targetArmy.provinceId);
+      if (result.kind === "spent" && adjacentHostile) {
+        announce(t("这支军团本回合已经行动", "This army has already acted this round"));
+        return;
+      }
     }
     selectArmy(armyId);
   }
@@ -893,7 +974,33 @@
     }
     announce(classification.kind === "current"
       ? t("军团已驻扎在这里", "The army is already stationed here")
+      : classification.kind === "spent"
+        ? t("这支军团本回合已经行动", "This army has already acted this round")
       : t("这一版只能向相邻省份下令", "This prototype only accepts orders to adjacent provinces"));
+  }
+
+  function endPlayerPhase(options = {}) {
+    const now = Date.now();
+    if (now < phaseLockedUntil || dom.endPhaseButton.disabled) return;
+    phaseLockedUntil = now + 650;
+    const report = MODEL.executeAiPhase(scenario, geography, "player-realm");
+    lastPhaseReport = report;
+    const selectedArmy = scenario.armies.find((candidate) => candidate.id === selectedArmyId);
+    if (selectedArmy) selectedProvinceId = selectedArmy.provinceId;
+    else selectedArmyId = null;
+    updateScenarioReadout();
+    updateScenarioMap();
+    setInspectorCollapsed(false);
+    const moveCount = report.actions.filter((action) => action.kind === "move").length;
+    const battleCount = report.actions.filter((action) => action.kind === "battle").length;
+    dom.inspectorContent.scrollTop = Math.max(0, dom.phaseReport.offsetTop - 8);
+    announce(t(
+      `第 ${report.turn} 回合结束：${report.actions.length} 国行动，${moveCount} 次移动，${battleCount} 场战斗；第 ${report.nextTurn} 回合开始`,
+      `Round ${report.turn} ended: ${report.actions.length} realms acted, ${moveCount} moves, ${battleCount} battles. Round ${report.nextTurn} begins`
+    ));
+    if (options.focusControl) {
+      window.requestAnimationFrame(() => dom.endPhaseButton.focus({ preventScroll: true }));
+    }
   }
 
   function setHoveredProvince(provinceId, pointerEvent) {
@@ -1179,6 +1286,7 @@
   dom.zoomInButton.addEventListener("click", () => zoomBy(1.25));
   dom.zoomOutButton.addEventListener("click", () => zoomBy(0.8));
   dom.zoomResetButton.addEventListener("click", resetCamera);
+  dom.endPhaseButton.addEventListener("click", () => endPlayerPhase({ focusControl: true }));
   dom.inspectorToggle.addEventListener("click", () => setInspectorCollapsed(!dom.inspector.classList.contains("is-collapsed")));
   dom.reliefToggle.addEventListener("click", () => setReliefMode(reliefMode === "3d" ? "2d" : "3d"));
   dom.languageToggle.addEventListener("click", () => {
@@ -1192,7 +1300,9 @@
     dom.seedInput.value = String(scenario.seed);
     movementCount = 0;
     lastBattleReport = null;
+    lastPhaseReport = null;
     combatLockedUntil = 0;
+    phaseLockedUntil = 0;
     updateScenarioReadout();
     selectedArmyId = null;
     updateScenarioMap();
@@ -1203,6 +1313,11 @@
   window.addEventListener("keydown", (event) => {
     const target = event.target;
     if (target?.matches?.("input, textarea, select") || target?.isContentEditable) return;
+    if (event.key.toLowerCase() === "e") {
+      event.preventDefault();
+      if (!event.repeat) endPlayerPhase({ focusControl: true });
+      return;
+    }
     if (["1", "2", "3"].includes(event.key)) {
       setMode(["political", "terrain", "military"][Number(event.key) - 1]);
       return;

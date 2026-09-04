@@ -344,7 +344,8 @@
           nameEn: definition.nameEn,
           force: Math.round((7200 + roll * 7600) * definition.scale),
           attack: Math.round(38 + roll * 28),
-          defense: Math.round(42 + hashUnit(seed, realm.id, definition.suffix, "defense") * 30)
+          defense: Math.round(42 + hashUnit(seed, realm.id, definition.suffix, "defense") * 30),
+          lastActedTurn: 0
         });
       });
     });
@@ -357,6 +358,7 @@
       controllerByProvince,
       provinceState,
       armies,
+      turn: 1,
       battleCount: 0,
       signature: fnv1a(JSON.stringify({ seed, capitals, controllerByProvince, provinceState, armies })).toString(16).padStart(8, "0")
     };
@@ -383,6 +385,8 @@
     const army = scenario.armies.find((candidate) => candidate.id === armyId);
     if (!army || !geography.provinceById[provinceId]) return { kind: "invalid", army: army || null };
     if (army.provinceId === provinceId) return { kind: "current", army };
+    const turn = Math.max(1, Math.round(Number(scenario.turn) || 1));
+    if (Math.round(Number(army.lastActedTurn) || 0) >= turn) return { kind: "spent", army };
     if (!(geography.neighbors[army.provinceId] || []).includes(provinceId)) return { kind: "unreachable", army };
     const controllerId = scenario.controllerByProvince[provinceId];
     return {
@@ -401,6 +405,7 @@
     if (classification.kind !== "move") return { moved: false, ...classification };
     const fromProvinceId = classification.army.provinceId;
     classification.army.provinceId = provinceId;
+    classification.army.lastActedTurn = Math.max(1, Math.round(Number(scenario.turn) || 1));
     return {
       moved: true,
       kind: "move",
@@ -524,6 +529,7 @@
 
     const heaviestLoss = Math.max(result.attackerCasualtyRate, result.defenderCasualtyRate);
     targetState.fortification = clamp(Math.round(fortificationBefore * (0.94 - heaviestLoss * 0.24)), 5, 140);
+    army.lastActedTurn = Math.max(1, Math.round(Number(scenario.turn) || 1));
     scenario.battleCount = battleIndex + 1;
     scenario.armies = scenario.armies.filter((candidate) => Number.isFinite(candidate.force) && candidate.force > 0);
     const fieldDefenderSurvivors = scenario.armies
@@ -552,6 +558,115 @@
       retreatProvinceIds: [...new Set(retreatProvinceIds)],
       eliminatedRealmId
     };
+  }
+
+  function aiAttackScore(scenario, geography, army, provinceId) {
+    const state = scenario.provinceState[provinceId];
+    const terrain = geography.terrainById[geography.provinceById[provinceId].terrain] || { defense: 0 };
+    const defenderForce = scenario.armies
+      .filter((candidate) => candidate.provinceId === provinceId
+        && candidate.realmId === scenario.controllerByProvince[provinceId]
+        && candidate.force > 0)
+      .reduce((sum, candidate) => sum + candidate.force, 0);
+    return defenderForce / 900
+      + state.fortification * 0.34
+      + Number(terrain.defense || 0) * 1.8
+      - army.force / 1100
+      - army.attack * 0.42
+      + hashUnit(scenario.seed, scenario.turn, army.id, provinceId, "ai-attack") * 2;
+  }
+
+  function firstStepTowardFrontier(scenario, geography, army) {
+    const queue = [{ provinceId: army.provinceId, firstStepId: null, distance: 0 }];
+    const visited = new Set([army.provinceId]);
+    while (queue.length) {
+      const current = queue.shift();
+      if (current.provinceId !== army.provinceId
+        && (geography.neighbors[current.provinceId] || []).some((neighborId) => scenario.controllerByProvince[neighborId] !== army.realmId)) {
+        return current;
+      }
+      const friendlyNeighbors = (geography.neighbors[current.provinceId] || [])
+        .filter((neighborId) => scenario.controllerByProvince[neighborId] === army.realmId && !visited.has(neighborId))
+        .sort();
+      friendlyNeighbors.forEach((neighborId) => {
+        visited.add(neighborId);
+        queue.push({
+          provinceId: neighborId,
+          firstStepId: current.firstStepId || neighborId,
+          distance: current.distance + 1
+        });
+      });
+    }
+    return null;
+  }
+
+  function executeRealmAiAction(scenario, geography, realmId) {
+    const ownedProvinceIds = realmProvinceIds(scenario, realmId);
+    if (!ownedProvinceIds.length) return { kind: "hold", realmId, reason: "eliminated" };
+    const turn = Math.max(1, Math.round(Number(scenario.turn) || 1));
+    const armies = scenario.armies
+      .filter((army) => army.realmId === realmId
+        && army.force > 0
+        && scenario.controllerByProvince[army.provinceId] === realmId
+        && Math.round(Number(army.lastActedTurn) || 0) < turn)
+      .sort((left, right) => left.id.localeCompare(right.id));
+    if (!armies.length) return { kind: "hold", realmId, reason: "no-army" };
+
+    const attacks = armies.flatMap((army) => (geography.neighbors[army.provinceId] || [])
+      .filter((provinceId) => scenario.controllerByProvince[provinceId] !== realmId)
+      .map((provinceId) => ({
+        army,
+        provinceId,
+        score: aiAttackScore(scenario, geography, army, provinceId)
+      })));
+    attacks.sort((left, right) => left.score - right.score
+      || left.army.id.localeCompare(right.army.id)
+      || left.provinceId.localeCompare(right.provinceId));
+    if (attacks[0]) {
+      const order = attacks[0];
+      const battle = executeArmyBattle(scenario, geography, order.army.id, order.provinceId, realmId);
+      if (battle.attacked) {
+        return {
+          kind: "battle",
+          realmId,
+          armyId: order.army.id,
+          fromProvinceId: battle.fromProvinceId,
+          toProvinceId: battle.toProvinceId,
+          battle
+        };
+      }
+    }
+
+    const marches = armies.map((army) => ({ army, route: firstStepTowardFrontier(scenario, geography, army) }))
+      .filter((entry) => entry.route?.firstStepId)
+      .sort((left, right) => left.route.distance - right.route.distance
+        || left.army.id.localeCompare(right.army.id)
+        || left.route.firstStepId.localeCompare(right.route.firstStepId));
+    if (marches[0]) {
+      const order = marches[0];
+      const movement = executeArmyMove(scenario, geography, order.army.id, order.route.firstStepId, realmId);
+      if (movement.moved) {
+        return {
+          kind: "move",
+          realmId,
+          armyId: order.army.id,
+          fromProvinceId: movement.fromProvinceId,
+          toProvinceId: movement.toProvinceId
+        };
+      }
+    }
+    return { kind: "hold", realmId, reason: "no-order" };
+  }
+
+  function executeAiPhase(scenario, geography, commandRealmId = "player-realm") {
+    const turn = Math.max(1, Math.round(Number(scenario.turn) || 1));
+    scenario.turn = turn;
+    const actions = Object.keys(geography.realmById)
+      .filter((realmId) => realmId !== commandRealmId)
+      .sort()
+      .map((realmId) => executeRealmAiAction(scenario, geography, realmId));
+    scenario.turn = turn + 1;
+    return { kind: "ai-phase", turn, nextTurn: scenario.turn, actions };
   }
 
   function cameraDimensions(zoom, viewBox, viewportAspect) {
@@ -633,6 +748,7 @@
     classifyArmyDestination,
     executeArmyMove,
     executeArmyBattle,
+    executeAiPhase,
     cameraView,
     clampCamera,
     zoomCameraAt

@@ -7,7 +7,7 @@
     <meta name="copyright" content="Original concept by Noah Walker">
     <meta name="theme-color" content="#111a1d">
     <title>文明摇篮：地图实验室</title>
-    <link rel="stylesheet" href="map-lab.css?v=20260904-f">
+    <link rel="stylesheet" href="map-lab.css?v=20260904-g">
   </head>
   <body data-mode="political" data-relief="3d" data-zoom-band="far">
     <div class="map-lab-shell">
@@ -109,10 +109,18 @@
           <span><b data-zh="镜头" data-en="CAMERA">镜头</b> <strong id="zoomReadout">1.00×</strong></span>
         </div>
 
-        <div class="zoom-controls" aria-label="地图缩放" data-zh-label="地图缩放" data-en-label="Map zoom">
-          <button id="zoomInButton" type="button" aria-label="放大" data-zh-label="放大" data-en-label="Zoom in">+</button>
-          <button id="zoomOutButton" type="button" aria-label="缩小" data-zh-label="缩小" data-en-label="Zoom out">−</button>
-          <button id="zoomResetButton" type="button" aria-label="重置镜头" data-zh-label="重置镜头" data-en-label="Reset camera">0</button>
+        <div class="map-control-cluster">
+          <div class="phase-control">
+            <span id="phaseStatus">第 1 回合 · 玩家阶段</span>
+            <button id="endPhaseButton" type="button" aria-label="结束第 1 回合玩家阶段" aria-keyshortcuts="E">
+              <span aria-hidden="true">▶</span><b id="turnBadge" aria-hidden="true">1</b>
+            </button>
+          </div>
+          <div class="zoom-controls" aria-label="地图缩放" data-zh-label="地图缩放" data-en-label="Map zoom">
+            <button id="zoomInButton" type="button" aria-label="放大" data-zh-label="放大" data-en-label="Zoom in">+</button>
+            <button id="zoomOutButton" type="button" aria-label="缩小" data-zh-label="缩小" data-en-label="Zoom out">−</button>
+            <button id="zoomResetButton" type="button" aria-label="重置镜头" data-zh-label="重置镜头" data-en-label="Reset camera">0</button>
+          </div>
         </div>
 
         <div id="mapTooltip" class="map-tooltip" role="tooltip" hidden></div>
@@ -133,6 +141,11 @@
               <strong id="battleReportTitle"></strong>
               <p id="battleReportText"></p>
             </section>
+            <section class="inspector-phase" id="phaseReport" hidden>
+              <span data-zh="敌方阶段" data-en="AI PHASE">敌方阶段</span>
+              <strong id="phaseReportTitle"></strong>
+              <ul id="phaseReportActions"></ul>
+            </section>
             <dl class="province-facts">
               <div><dt data-zh="控制者" data-en="Controller">控制者</dt><dd id="provinceRealm">长生共同体</dd></div>
               <div><dt data-zh="发展" data-en="Development">发展</dt><dd id="provinceDevelopment">24</dd></div>
@@ -149,14 +162,14 @@
           </div>
         </aside>
 
-        <div class="map-hint" data-zh="选绿色军团 · 点绿色省份移动 · 点红色省份开战 · 1/2/3 切换图层" data-en="SELECT A GREEN ARMY · CLICK GREEN TO MOVE · CLICK RED TO ATTACK · 1/2/3 MAP MODES">选绿色军团 · 点绿色省份移动 · 点红色省份开战 · 1/2/3 切换图层</div>
+        <div class="map-hint" data-zh="每支军团每回合行动一次 · ▶ 结束阶段 · 1/2/3 切换图层" data-en="ONE ACTION PER ARMY EACH TURN · ▶ END PHASE · 1/2/3 MAP MODES">每支军团每回合行动一次 · ▶ 结束阶段 · 1/2/3 切换图层</div>
         <div id="liveRegion" class="visually-hidden" aria-live="polite"></div>
       </main>
     </div>
 
     <script src="../balance-model.js?v=20260904-v040"></script>
-    <script src="map-data.js?v=20260904-f"></script>
-    <script src="map-model.js?v=20260904-f"></script>
-    <script src="map-lab.js?v=20260904-f"></script>
+    <script src="map-data.js?v=20260904-g"></script>
+    <script src="map-model.js?v=20260904-g"></script>
+    <script src="map-lab.js?v=20260904-g"></script>
   </body>
 </html>

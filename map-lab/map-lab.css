@@ -663,7 +663,7 @@ body[data-zoom-band="far"] .army-marker.secondary-army:not(.is-selected) {
 
 .map-legend,
 .map-readout,
-.zoom-controls,
+.map-control-cluster,
 .inspector,
 .map-hint {
   position: absolute;
@@ -765,9 +765,72 @@ body[data-zoom-band="far"] .army-marker.secondary-army:not(.is-selected) {
   font-size: 0.68rem;
 }
 
-.zoom-controls {
+.map-control-cluster {
   right: 374px;
   bottom: 42px;
+  display: grid;
+  justify-items: end;
+  gap: 7px;
+}
+
+.phase-control {
+  display: flex;
+  height: 44px;
+  color: #eee6d3;
+  background: rgba(8, 15, 17, 0.92);
+  border: 1px solid var(--line);
+}
+
+#phaseStatus {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  color: #c4cec8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.61rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+#endPhaseButton {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  color: #fff3ce;
+  background: rgba(82, 68, 40, 0.72);
+  border: 0;
+  border-left: 1px solid rgba(215, 185, 111, 0.38);
+  border-radius: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+#endPhaseButton b {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  color: #d7b96f;
+  font-size: 0.48rem;
+  line-height: 1;
+}
+
+#endPhaseButton:hover,
+#endPhaseButton:focus-visible {
+  color: #fff;
+  background: rgba(117, 93, 47, 0.92);
+}
+
+#endPhaseButton:disabled {
+  color: #6f7773;
+  background: rgba(24, 32, 32, 0.8);
+  cursor: not-allowed;
+}
+
+.zoom-controls {
   display: grid;
   grid-template-columns: repeat(3, 44px);
   border: 1px solid var(--line);
@@ -946,6 +1009,45 @@ body[data-zoom-band="far"] .army-marker.secondary-army:not(.is-selected) {
   line-height: 1.48;
 }
 
+.inspector-phase {
+  margin-top: 14px;
+  padding: 11px 12px;
+  color: #dce7e0;
+  background: rgba(19, 27, 25, 0.9);
+  border: 1px solid rgba(215, 185, 111, 0.27);
+  border-left: 3px solid var(--gold);
+}
+
+.inspector-phase > span {
+  display: block;
+  margin-bottom: 5px;
+  color: #a99b79;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.52rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.inspector-phase strong {
+  display: block;
+  color: #fff4d8;
+  font-size: 0.82rem;
+}
+
+.inspector-phase ul {
+  display: grid;
+  gap: 5px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.inspector-phase li {
+  color: #aebcb7;
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
 .inspector-armies {
   margin-top: 18px;
 }
@@ -1022,7 +1124,7 @@ body[data-zoom-band="far"] .army-marker.secondary-army:not(.is-selected) {
   pointer-events: none;
 }
 
-body[data-inspector-collapsed="true"] .zoom-controls {
+body[data-inspector-collapsed="true"] .map-control-cluster {
   right: 16px;
 }
 
@@ -1154,14 +1256,18 @@ body[data-inspector-collapsed="true"] .map-hint {
     display: none;
   }
 
-  .zoom-controls {
+  .map-control-cluster {
     right: 10px;
     bottom: calc(45dvh + 16px);
   }
 
-  body[data-inspector-collapsed="true"] .zoom-controls {
+  body[data-inspector-collapsed="true"] .map-control-cluster {
     right: 10px;
     bottom: 62px;
+  }
+
+  #phaseStatus {
+    display: none;
   }
 
   .inspector.is-collapsed ~ .map-hint {
@@ -1241,6 +1347,12 @@ body[data-inspector-collapsed="true"] .map-hint {
     width: 42px;
     height: 42px;
   }
+
+  .phase-control,
+  #endPhaseButton {
+    width: 42px;
+    height: 42px;
+  }
 }
 
 @media (max-height: 620px) and (orientation: landscape) {
@@ -1289,7 +1401,7 @@ body[data-inspector-collapsed="true"] .map-hint {
     height: 43px;
   }
 
-  .zoom-controls {
+  .map-control-cluster {
     right: 318px;
     bottom: 12px;
   }

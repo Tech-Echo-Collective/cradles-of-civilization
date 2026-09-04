@@ -124,6 +124,7 @@ for (let seed = 1; seed <= 100; seed += 1) {
   const scenario = model.createScenario(data, geography, seed);
   const repeated = model.createScenario(data, geography, seed);
   assert.equal(scenario.signature, repeated.signature, `seed ${seed} must reproduce the same scenario`);
+  assert.equal(scenario.turn, 1, `seed ${seed} must begin on turn one`);
   assert.equal(Object.keys(scenario.controllerByProvince).length, 64, `seed ${seed} must assign every province`);
   assert.equal(scenario.armies.length, data.realms.length * 2, `seed ${seed} must create two armies per realm`);
   data.realms.forEach((realm) => {
@@ -134,6 +135,7 @@ for (let seed = 1; seed <= 100; seed += 1) {
   });
   scenario.armies.forEach((army) => {
     assert.ok(realmIds.has(army.realmId), `seed ${seed} army references an unknown realm`);
+    assert.equal(army.lastActedTurn, 0, `seed ${seed} army must begin ready to act`);
     assert.equal(scenario.controllerByProvince[army.provinceId], army.realmId, `seed ${seed} army must stand on owned territory`);
     assert.equal(model.classifyArmyDestination(scenario, geography, army.id, army.provinceId).kind, "current", `seed ${seed} army must recognize its current province`);
     (geography.neighbors[army.provinceId] || []).forEach((provinceId) => {
@@ -161,6 +163,7 @@ const moveResult = model.executeArmyMove(movementScenario, geography, commandArm
 assert.equal(moveResult.moved, true, "a player army must move to an adjacent friendly province");
 assert.equal(moveResult.fromProvinceId, originId, "movement must report its origin");
 assert.equal(commandArmy.provinceId, friendlyTarget, "movement must update only the commanded army position");
+assert.equal(commandArmy.lastActedTurn, movementScenario.turn, "a successful move must spend that army for the current turn");
 assert.deepEqual(
   Object.fromEntries(movementScenario.armies.filter((army) => army.id !== commandArmy.id).map((army) => [army.id, army.provinceId])),
   otherArmyPositions,
@@ -169,6 +172,16 @@ assert.deepEqual(
 assert.equal(JSON.stringify(movementScenario.controllerByProvince), controllersBeforeMove, "sandbox movement must not alter political control");
 assert.equal(JSON.stringify(movementScenario.provinceState), provinceStateBeforeMove, "sandbox movement must not alter province values");
 assert.equal(movementScenario.signature, scenarioSignatureBeforeMove, "sandbox movement must preserve the seeded scenario signature");
+const afterFirstMove = JSON.stringify(movementScenario);
+const duplicateMove = model.executeArmyMove(movementScenario, geography, commandArmy.id, originId);
+assert.equal(duplicateMove.moved, false, "the same army must not move twice in one turn");
+assert.equal(duplicateMove.kind, "spent", "a duplicate movement command must report that the army is spent");
+assert.equal(JSON.stringify(movementScenario), afterFirstMove, "a rejected second move must have no side effects");
+const otherReadyPlayerArmy = movementScenario.armies.find((army) => army.realmId === "player-realm" && army.id !== commandArmy.id);
+assert.ok(otherReadyPlayerArmy, "the player needs a second army for per-army action checks");
+assert.equal(otherReadyPlayerArmy.lastActedTurn, 0, "spending one army must not spend the player's other army");
+const otherReadyTarget = geography.neighbors[otherReadyPlayerArmy.provinceId][0];
+assert.notEqual(model.classifyArmyDestination(movementScenario, geography, otherReadyPlayerArmy.id, otherReadyTarget).kind, "spent", "an unspent player army must keep its available orders");
 
 const rejectedScenario = model.createScenario(data, geography, 1058);
 const rejectedArmy = rejectedScenario.armies.find((army) => army.realmId === "player-realm");
@@ -183,6 +196,7 @@ assert.equal(JSON.stringify(rejectedScenario), beforeRejectedAttack, "an unavail
 const distantTarget = provinceIds.find((provinceId) => provinceId !== borderOrigin && !geography.neighbors[borderOrigin].includes(provinceId));
 assert.equal(model.executeArmyMove(rejectedScenario, geography, rejectedArmy.id, distantTarget).kind, "unreachable", "non-adjacent movement must be rejected");
 assert.equal(JSON.stringify(rejectedScenario), beforeRejectedAttack, "rejected long-distance movement must have no side effects");
+assert.equal(rejectedArmy.lastActedTurn, 0, "an invalid order must not spend the army");
 const foreignArmy = rejectedScenario.armies.find((army) => army.realmId !== "player-realm");
 const foreignFriendlyTarget = geography.neighbors[foreignArmy.provinceId]
   .find((provinceId) => rejectedScenario.controllerByProvince[provinceId] === foreignArmy.realmId);
@@ -224,6 +238,7 @@ assert.equal(victoryResult.attackerWon, true, "an overwhelming attack must win t
 assert.equal(victoryScenario.controllerByProvince[victoryTargetId], victoryArmy.realmId, "victory must update the controller index");
 assert.equal(victoryScenario.provinceState[victoryTargetId].controllerId, victoryArmy.realmId, "victory must update rendered province control");
 assert.equal(victoryArmy.provinceId, victoryTargetId, "the victorious army must enter the captured province");
+assert.equal(victoryArmy.lastActedTurn, victoryScenario.turn, "a successful attack must spend the attacker for the current turn");
 assert.ok(victoryScenario.provinceState[victoryTargetId].fortification < victoryFortification, "battle damage must reduce fortification");
 assert.equal(victoryScenario.signature, victorySignature, "sandbox combat must preserve the seeded scenario signature");
 assert.notEqual(victoryPreviousController, victoryArmy.realmId, "the victory fixture must begin against another realm");
@@ -272,6 +287,33 @@ assert.equal(defeatResult.attackerWon, false, "a one-soldier attack must fail");
 assert.equal(defeatScenario.controllerByProvince[defeatTargetId], defeatControllerId, "defeat must preserve province control");
 assert.ok(!defeatScenario.armies.some((army) => army.id === doomedArmy.id), "a destroyed attacker must leave the roster");
 
+const duplicateBattleScenario = model.createScenario(data, geography, 1);
+const duplicateBattleArmy = duplicateBattleScenario.armies.find((army) => army.realmId === "player-realm");
+const duplicateBattleOriginId = provinceIds.find((provinceId) => duplicateBattleScenario.controllerByProvince[provinceId] === duplicateBattleArmy.realmId
+  && geography.neighbors[provinceId].some((neighborId) => duplicateBattleScenario.controllerByProvince[neighborId] !== duplicateBattleArmy.realmId));
+const duplicateBattleTargetId = geography.neighbors[duplicateBattleOriginId]
+  .find((provinceId) => duplicateBattleScenario.controllerByProvince[provinceId] !== duplicateBattleArmy.realmId);
+const duplicateBattleDefenderRealmId = duplicateBattleScenario.controllerByProvince[duplicateBattleTargetId];
+const duplicateBattleDefender = duplicateBattleScenario.armies.find((army) => army.realmId === duplicateBattleDefenderRealmId);
+assert.ok(duplicateBattleDefender, "the duplicate attack fixture needs a defending army");
+duplicateBattleArmy.provinceId = duplicateBattleOriginId;
+duplicateBattleArmy.force = 6000;
+duplicateBattleArmy.attack = 0;
+duplicateBattleDefender.provinceId = duplicateBattleTargetId;
+duplicateBattleDefender.force = 25000;
+duplicateBattleDefender.defense = 300;
+const firstDuplicateBattle = model.executeArmyBattle(duplicateBattleScenario, geography, duplicateBattleArmy.id, duplicateBattleTargetId);
+assert.equal(firstDuplicateBattle.attacked, true, "the first click in the duplicate attack fixture must resolve a battle");
+assert.equal(firstDuplicateBattle.attackerWon, false, "the duplicate attack fixture must leave the target hostile");
+assert.ok(firstDuplicateBattle.attackerSurvivors > 0, "the duplicate attack fixture must leave the attacker alive for a meaningful second-click check");
+assert.equal(duplicateBattleArmy.lastActedTurn, duplicateBattleScenario.turn, "a failed but resolved attack must still spend the attacker");
+const afterFirstDuplicateBattle = JSON.stringify(duplicateBattleScenario);
+const secondDuplicateBattle = model.executeArmyBattle(duplicateBattleScenario, geography, duplicateBattleArmy.id, duplicateBattleTargetId);
+assert.equal(secondDuplicateBattle.attacked, false, "a duplicate attack click must not resolve a second battle");
+assert.equal(secondDuplicateBattle.kind, "spent", "a duplicate attack click must report that the army is spent");
+assert.equal(duplicateBattleScenario.battleCount, 1, "a duplicate attack click must increment the battle counter only once");
+assert.equal(JSON.stringify(duplicateBattleScenario), afterFirstDuplicateBattle, "a duplicate attack click must not inflict additional casualties");
+
 const eliminationScenario = model.createScenario(data, geography, 1058);
 const eliminationArmy = eliminationScenario.armies.find((army) => army.realmId === "player-realm");
 const eliminatedRealm = data.realms.find((realm) => realm.id !== eliminationArmy.realmId);
@@ -309,7 +351,106 @@ const beforeRejectedForeignBattle = JSON.stringify(rejectedBattleScenario);
 assert.equal(model.executeArmyBattle(rejectedBattleScenario, geography, rejectedForeignArmy.id, foreignAttackTarget).kind, "not-commandable", "foreign attacks must remain observer-only");
 assert.equal(JSON.stringify(rejectedBattleScenario), beforeRejectedForeignBattle, "rejected foreign attacks must have no side effects");
 
-for (const scenario of [repeatedBattleLeft.scenario, victoryScenario, guardedScenario, defeatScenario]) {
+const aiRealmIds = data.realms.filter((realm) => realm.id !== "player-realm").map((realm) => realm.id).sort();
+const repeatAiPhase = () => {
+  const scenario = model.createScenario(data, geography, 1058);
+  const initialArmyRealms = Object.fromEntries(scenario.armies.map((army) => [army.id, army.realmId]));
+  const report = model.executeAiPhase(scenario, geography);
+  return { scenario, report, initialArmyRealms };
+};
+const repeatedAiLeft = repeatAiPhase();
+const repeatedAiRight = repeatAiPhase();
+assert.equal(JSON.stringify(repeatedAiLeft.report), JSON.stringify(repeatedAiRight.report), "the same seed and turn must reproduce the same AI orders and battles");
+assert.equal(JSON.stringify(repeatedAiLeft.scenario), JSON.stringify(repeatedAiRight.scenario), "the same seed and turn must reproduce the same post-AI scenario");
+assert.equal(repeatedAiLeft.report.kind, "ai-phase", "ending the player phase must run one AI phase");
+assert.equal(repeatedAiLeft.report.turn, 1, "the first AI phase must resolve turn one");
+assert.equal(repeatedAiLeft.report.nextTurn, 2, "the first AI phase must open turn two");
+assert.equal(repeatedAiLeft.scenario.turn, 2, "the scenario must advance exactly one turn after an AI phase");
+assert.equal(JSON.stringify(repeatedAiLeft.report.actions.map((action) => action.realmId)), JSON.stringify(aiRealmIds), "every non-player realm must receive exactly one AI step in stable realm order");
+assert.equal(new Set(repeatedAiLeft.report.actions.map((action) => action.realmId)).size, aiRealmIds.length, "an AI realm must not receive two steps in one phase");
+assert.ok(repeatedAiLeft.report.actions.some((action) => action.kind === "battle"), "the standard AI fixture must exercise an attack");
+assert.ok(repeatedAiLeft.report.actions.some((action) => action.kind === "move"), "the standard AI fixture must exercise a friendly march");
+assert.equal(repeatedAiLeft.scenario.battleCount, repeatedAiLeft.report.actions.filter((action) => action.kind === "battle").length, "each reported AI attack must resolve exactly one battle");
+repeatedAiLeft.report.actions.forEach((action) => {
+  assert.ok(["move", "battle", "hold"].includes(action.kind), `${action.realmId} must produce one recognized AI result`);
+  if (action.armyId) {
+    assert.equal(repeatedAiLeft.initialArmyRealms[action.armyId], action.realmId, `${action.realmId} must command only its own army`);
+    const survivor = repeatedAiLeft.scenario.armies.find((army) => army.id === action.armyId);
+    if (survivor) assert.equal(survivor.lastActedTurn, repeatedAiLeft.report.turn, `${action.armyId} must be spent after its AI action`);
+    else assert.equal(action.kind, "battle", "only a defeated battle attacker may disappear during its AI action");
+  }
+});
+repeatedAiLeft.scenario.armies.filter((army) => army.realmId === "player-realm").forEach((army) => {
+  assert.equal(army.lastActedTurn, 0, "the AI phase must not spend a surviving player army merely for defending or retreating");
+});
+
+const recoveryScenario = model.createScenario(data, geography, 1058);
+const recoveryArmy = recoveryScenario.armies.find((army) => army.realmId === "player-realm"
+  && geography.neighbors[army.provinceId].some((provinceId) => recoveryScenario.controllerByProvince[provinceId] === army.realmId));
+const recoveryOriginId = recoveryArmy.provinceId;
+const recoveryFirstTargetId = geography.neighbors[recoveryOriginId]
+  .find((provinceId) => recoveryScenario.controllerByProvince[provinceId] === recoveryArmy.realmId);
+assert.equal(model.executeArmyMove(recoveryScenario, geography, recoveryArmy.id, recoveryFirstTargetId).moved, true, "the recovery fixture must spend a player army on turn one");
+assert.equal(model.classifyArmyDestination(recoveryScenario, geography, recoveryArmy.id, recoveryOriginId).kind, "spent", "the recovery fixture army must remain spent until the turn ends");
+const recoverySignature = recoveryScenario.signature;
+const recoveryPhase = model.executeAiPhase(recoveryScenario, geography);
+assert.equal(recoveryPhase.nextTurn, 2, "ending turn one must advance the recovery fixture to turn two");
+const recoveredArmy = recoveryScenario.armies.find((army) => army.id === recoveryArmy.id);
+assert.ok(recoveredArmy, "the recovery fixture player army must survive the AI phase");
+assert.equal(recoveryScenario.controllerByProvince[recoveryOriginId], recoveredArmy.realmId, "the recovery fixture destination must remain friendly on turn two");
+assert.equal(model.classifyArmyDestination(recoveryScenario, geography, recoveredArmy.id, recoveryOriginId).kind, "move", "a spent army must become ready again when the next turn opens");
+assert.equal(model.executeArmyMove(recoveryScenario, geography, recoveredArmy.id, recoveryOriginId).moved, true, "the recovered army must be able to act on the new turn");
+assert.equal(recoveredArmy.lastActedTurn, 2, "the recovered army must record its new turn action");
+assert.equal(recoveryScenario.signature, recoverySignature, "advancing sandbox turns must preserve the seeded scenario signature");
+
+const noArmyScenario = model.createScenario(data, geography, 1058);
+noArmyScenario.armies = noArmyScenario.armies.filter((army) => army.realmId === "player-realm");
+const noArmyControlBefore = JSON.stringify(noArmyScenario.controllerByProvince);
+const noArmyPhase = model.executeAiPhase(noArmyScenario, geography);
+assert.equal(JSON.stringify(noArmyPhase.actions.map((action) => action.realmId)), JSON.stringify(aiRealmIds), "AI realms without armies must still each receive one scheduler step");
+assert.ok(noArmyPhase.actions.every((action) => action.kind === "hold" && action.reason === "no-army"), "a realm with territory but no army must hold without inventing a unit");
+assert.equal(JSON.stringify(noArmyScenario.controllerByProvince), noArmyControlBefore, "an all-hold AI phase must not alter territorial control");
+assert.equal(noArmyScenario.turn, 2, "an all-hold AI phase must still advance the turn");
+
+const eliminatedAiScenario = model.createScenario(data, geography, 1058);
+const eliminatedAiRealmId = aiRealmIds[0];
+provinceIds.forEach((provinceId) => {
+  if (eliminatedAiScenario.controllerByProvince[provinceId] !== eliminatedAiRealmId) return;
+  eliminatedAiScenario.controllerByProvince[provinceId] = "player-realm";
+  eliminatedAiScenario.provinceState[provinceId].controllerId = "player-realm";
+});
+eliminatedAiScenario.capitals[eliminatedAiRealmId] = null;
+eliminatedAiScenario.armies = eliminatedAiScenario.armies.filter((army) => army.realmId !== eliminatedAiRealmId);
+const eliminatedAiPhase = model.executeAiPhase(eliminatedAiScenario, geography);
+const eliminatedAiAction = eliminatedAiPhase.actions.find((action) => action.realmId === eliminatedAiRealmId);
+assert.equal(eliminatedAiAction.kind, "hold", "an eliminated AI realm must not receive a movement or attack order");
+assert.equal(eliminatedAiAction.reason, "eliminated", "an eliminated AI realm must report why it was skipped");
+assert.equal(JSON.stringify(eliminatedAiPhase.actions.map((action) => action.realmId)), JSON.stringify(aiRealmIds), "an eliminated realm must not prevent later AI realms from taking their steps");
+
+for (let seed = 1; seed <= 30; seed += 1) {
+  const left = model.createScenario(data, geography, seed);
+  const right = model.createScenario(data, geography, seed);
+  const initialSignature = left.signature;
+  for (let round = 1; round <= 6; round += 1) {
+    const leftReport = model.executeAiPhase(left, geography);
+    const rightReport = model.executeAiPhase(right, geography);
+    assert.equal(JSON.stringify(leftReport), JSON.stringify(rightReport), `seed ${seed} round ${round} AI report must be deterministic`);
+    assert.equal(JSON.stringify(left), JSON.stringify(right), `seed ${seed} round ${round} AI state must be deterministic`);
+    assert.equal(JSON.stringify(leftReport.actions.map((action) => action.realmId)), JSON.stringify(aiRealmIds), `seed ${seed} round ${round} must schedule each AI realm once`);
+    assert.equal(left.turn, round + 1, `seed ${seed} round ${round} must advance exactly one turn`);
+    assert.equal(left.signature, initialSignature, `seed ${seed} round ${round} must preserve its initial scenario signature`);
+    left.armies.forEach((army) => {
+      assert.ok(Number.isInteger(army.force) && army.force > 0, `seed ${seed} round ${round} must retain only living integer-strength armies`);
+      assert.equal(left.controllerByProvince[army.provinceId], army.realmId, `seed ${seed} round ${round} army must finish in friendly territory`);
+      assert.ok(army.lastActedTurn < left.turn, `seed ${seed} round ${round} surviving army action stamps must never point into the future`);
+    });
+    provinceIds.forEach((provinceId) => {
+      assert.equal(left.provinceState[provinceId].controllerId, left.controllerByProvince[provinceId], `seed ${seed} round ${round} province control indexes must stay synchronized`);
+    });
+  }
+}
+
+for (const scenario of [repeatedBattleLeft.scenario, victoryScenario, guardedScenario, defeatScenario, duplicateBattleScenario, repeatedAiLeft.scenario]) {
   scenario.armies.forEach((army) => {
     assert.ok(Number.isInteger(army.force) && army.force > 0, "every surviving army must retain a positive integer force");
     assert.equal(scenario.controllerByProvince[army.provinceId], army.realmId, "every surviving army must stand in friendly territory after battle");
@@ -343,6 +484,7 @@ assert.ok(boundedView.y + boundedView.height <= viewBox.y + viewBox.height * 1.0
 const html = read("map-lab/index.html");
 const css = read("map-lab/map-lab.css");
 const ui = read("map-lab/map-lab.js");
+const mapModel = read("map-lab/map-model.js");
 for (const mode of ["political", "terrain", "military"]) {
   assert.match(html, new RegExp(`data-map-mode="${mode}"`, "u"), `${mode} mode button is missing`);
   assert.match(css, new RegExp(`data-mode="${mode}"`, "u"), `${mode} mode styles are missing`);
@@ -350,6 +492,10 @@ for (const mode of ["political", "terrain", "military"]) {
 assert.match(html, /id="languageToggle"/u, "map lab must expose a language toggle");
 assert.match(html, /id="reliefToggle"/u, "map lab must expose a 3D/2D relief toggle");
 assert.match(html, /id="battleReport"/u, "map lab must expose a visible battle report");
+assert.match(html, /id="endPhaseButton"[^>]*type="button"/u, "map lab must expose a dedicated end-phase button");
+assert.match(html, /id="endPhaseButton"[^>]*aria-keyshortcuts="E"/u, "the end-phase control must expose its keyboard shortcut");
+assert.match(html, /id="phaseStatus"/u, "map lab must expose the current turn and player phase");
+assert.match(html, /id="phaseReport"/u, "map lab must expose a visible AI phase report");
 assert.match(html, /id="provinceReliefLayer"/u, "map lab must expose a static relief layer");
 assert.doesNotMatch(html, /feDropShadow|feTurbulence/u, "map relief must avoid expensive SVG filters");
 assert.match(html, /\.\.\/balance-model\.js\?v=/u, "map lab must reuse the formal deterministic casualty model");
@@ -358,16 +504,29 @@ assert.doesNotMatch(html, /src="(?:\.\.\/)?game\.js/u, "map lab must not load th
 assert.match(ui, /window\.history\.replaceState/u, "map lab should preserve scenario state in the URL");
 assert.match(ui, /function activateProvince/u, "map lab needs a unified province command handler");
 assert.match(ui, /MODEL\.executeArmyBattle/u, "hostile province activation must resolve a battle");
+assert.match(ui, /MODEL\.executeAiPhase/u, "ending the player phase must execute the deterministic AI phase");
+assert.match(ui, /function endPlayerPhase/u, "map lab must route end-phase input through one guarded handler");
+assert.match(ui, /phaseLockedUntil = now \+ 650/u, "the end-phase handler must reject accidental double activation");
+assert.match(ui, /if \(!event\.repeat\) endPlayerPhase/u, "holding the end-phase keyboard shortcut must not skip multiple turns");
 assert.match(ui, /function renderBattleReport/u, "map lab must render bilingual battle feedback");
+assert.match(ui, /function renderPhaseReport/u, "map lab must render bilingual AI movement, attack, and hold feedback");
+assert.match(ui, /classification\.kind === "spent"/u, "the UI must explain when a selected army has already acted");
+assert.match(ui, /function renderMovementTargets[\s\S]*MODEL\.classifyArmyDestination[\s\S]*result\.kind === "move"[\s\S]*result\.kind === "attack"/u, "spent armies must expose neither movement nor attack target styling");
 assert.doesNotMatch(ui, /result\.kind === "move" \|\| result\.kind === "attack"/u, "clicking another friendly army must select it instead of moving the current army");
 assert.match(ui, /combatLockedUntil = Date\.now\(\) \+ 400/u, "battle activation must guard against accidental double resolution");
+assert.match(ui, /lastPhaseReport = null;[\s\S]*phaseLockedUntil = 0;/u, "reshuffling a seed must reset the previous phase report and phase lock");
 assert.match(ui, /function reliefWallPath/u, "map lab must build lightweight vector sidewalls");
 assert.match(ui, /function reliefWorldTransform/u, "3D relief must include a lightweight oblique projection");
 assert.match(ui, /worldLayer\.setAttribute\("transform"/u, "3D relief must apply its projection to the SVG world layer");
 assert.doesNotMatch(ui, /WebGLRenderingContext|THREE\.|getContext\(["']webgl/u, "map relief must not require WebGL");
+assert.match(mapModel, /lastActedTurn/u, "turn state must be stored per army in the deterministic model");
+assert.match(mapModel, /executeAiPhase/u, "the deterministic model must export its AI phase runner");
+assert.doesNotMatch(mapModel, /Math\.random|Date\.now/u, "AI decisions must not depend on nondeterministic randomness or wall-clock time");
 assert.match(css, /province-shape\.is-move-target/u, "map lab needs friendly movement target styling");
 assert.match(css, /province-shape\.is-attack-target/u, "map lab needs hostile movement target styling");
 assert.match(css, /\.inspector-battle/u, "map lab needs visible battle report styling");
+assert.match(css, /\.inspector-phase/u, "map lab needs visible AI phase report styling");
+assert.match(css, /#endPhaseButton\s*\{[\s\S]*?width:\s*44px;[\s\S]*?height:\s*44px;[\s\S]*?border-radius:\s*0;/u, "the end-phase control must remain a square button");
 assert.doesNotMatch(`${html}\n${ui}`, /战斗待接|战斗尚未接入|combat pending|combat not connected/iu, "completed combat must not be described as pending");
 assert.match(css, /data-zoom-band="far"/u, "map lab needs semantic zoom styles");
 assert.match(css, /data-relief="2d"/u, "map lab needs a flat fallback mode");
