@@ -1387,6 +1387,7 @@
     dom.inspector.classList.toggle("is-collapsed", collapsed);
     dom.body.dataset.inspectorCollapsed = collapsed ? "true" : "false";
     dom.inspectorToggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    window.requestAnimationFrame(applyCamera);
   }
 
   dom.mapSvg.addEventListener("pointerdown", (event) => {

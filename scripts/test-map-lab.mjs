@@ -775,6 +775,24 @@ assert.match(css, /data-zoom-band="far"/u, "map lab needs semantic zoom styles")
 assert.match(css, /body\[data-relief="2d"\] \.land-depth,\s*body\[data-relief="2d"\] \.province-relief-layer\s*\{\s*display:\s*none;/u, "2D fallback must hide both land depth and province relief");
 assert.match(css, /\.province-relief-layer(?:,\s*\.province-relief-cell)?\s*\{\s*pointer-events:\s*none;/u, "decorative relief must not intercept province input");
 assert.match(css, /@media \(max-width: 820px\)/u, "map lab needs a mobile inspector layout");
+assert.match(css, /--inspector-rail:\s*374px;/u, "desktop layout must reserve a 374px inspector rail");
+assert.match(css, /\.map-surface\s*\{[^}]*width:\s*calc\(100% - var\(--inspector-rail\)\);/u, "the desktop map surface must exclude the expanded inspector rail");
+assert.match(css, /body\[data-inspector-collapsed="true"\] \.map-surface\s*\{[^}]*width:\s*100%;/u, "collapsing the inspector must restore the full map width");
+const compactInspectorCss = css.slice(
+  css.indexOf("@media (max-width: 820px)"),
+  css.indexOf("@media (max-width: 520px)")
+);
+assert.match(compactInspectorCss, /\.map-surface\s*\{[^}]*right:\s*0;[^}]*width:\s*100%;/u, "compact layouts must keep the map full width beneath the bottom inspector sheet");
+const lowLandscapeCss = css.slice(
+  css.indexOf("@media (max-height: 620px) and (orientation: landscape)"),
+  css.indexOf("@media (prefers-reduced-motion: reduce)")
+);
+assert.match(lowLandscapeCss, /--inspector-rail:\s*318px;/u, "low landscape layouts must reserve the narrower 318px inspector rail");
+assert.match(html, /id="inspectorToggle"[^>]*type="button"[^>]*aria-expanded="true"/u, "the inspector handle must remain an accessible toggle button");
+const inspectorCollapseSource = ui.match(/function setInspectorCollapsed\(collapsed\)\s*\{([\s\S]*?)\n\s*\}/u)?.[1];
+assert.ok(inspectorCollapseSource, "map lab must keep a unified inspector collapse handler");
+assert.match(inspectorCollapseSource, /inspectorToggle\.setAttribute\("aria-expanded",[\s\S]*?window\.requestAnimationFrame\(applyCamera\);/u, "inspector collapse must update accessibility state before recalculating the camera on the next frame");
+assert.match(ui, /inspectorToggle\.addEventListener\("click",\s*\(\)\s*=>\s*setInspectorCollapsed\(/u, "the inspector handle must remain wired to the collapse handler");
 const packageScript = read("scripts/package-game.mjs");
 assert.match(packageScript, /rmSync\(dist, \{ force: true, recursive: true \}\)/u, "packaging must clear obsolete outputs first");
 assert.match(packageScript, /cpSync\(join\(root, "map-lab"\)/u, "offline package must include the map lab");

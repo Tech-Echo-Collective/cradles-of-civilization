@@ -9,6 +9,7 @@
   --cyan: #74d9da;
   --danger: #e48778;
   --header-height: 74px;
+  --inspector-rail: 374px;
 }
 
 * {
@@ -286,10 +287,10 @@ input:focus-visible,
 
 .map-surface {
   position: absolute;
-  inset: 0;
+  inset: 0 auto 0 0;
   z-index: 1;
   display: block;
-  width: 100%;
+  width: calc(100% - var(--inspector-rail));
   height: 100%;
   user-select: none;
   touch-action: none;
@@ -830,7 +831,7 @@ body[data-zoom-band="far"] .army-marker.secondary-army:not(.is-selected) {
 }
 
 .map-control-cluster {
-  right: 374px;
+  right: var(--inspector-rail);
   bottom: 42px;
   display: grid;
   justify-items: end;
@@ -1263,7 +1264,7 @@ body[data-zoom-band="far"] .army-marker.secondary-army:not(.is-selected) {
 }
 
 .map-hint {
-  right: 374px;
+  right: var(--inspector-rail);
   bottom: 16px;
   color: rgba(212, 219, 212, 0.55);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -1279,6 +1280,10 @@ body[data-inspector-collapsed="true"] .map-control-cluster {
 
 body[data-inspector-collapsed="true"] .map-hint {
   right: 160px;
+}
+
+body[data-inspector-collapsed="true"] .map-surface {
+  width: 100%;
 }
 
 .visually-hidden {
@@ -1379,6 +1384,11 @@ body[data-inspector-collapsed="true"] .map-hint {
     top: 10px;
     left: 10px;
     width: 166px;
+  }
+
+  .map-surface {
+    right: 0;
+    width: 100%;
   }
 
   .legend-items .legend-item:nth-child(n + 6) {
@@ -1516,6 +1526,7 @@ body[data-inspector-collapsed="true"] .map-hint {
 @media (max-height: 620px) and (orientation: landscape) {
   :root {
     --header-height: 56px;
+    --inspector-rail: 318px;
   }
 
   .command-bar {
@@ -1523,6 +1534,10 @@ body[data-inspector-collapsed="true"] .map-hint {
     grid-template-rows: 1fr;
     gap: 8px;
     padding: 6px 10px;
+  }
+
+  .map-surface {
+    width: calc(100% - var(--inspector-rail));
   }
 
   .map-brand,
@@ -1560,12 +1575,12 @@ body[data-inspector-collapsed="true"] .map-hint {
   }
 
   .map-control-cluster {
-    right: 318px;
+    right: var(--inspector-rail);
     bottom: 12px;
   }
 
   .map-hint {
-    right: 318px;
+    right: var(--inspector-rail);
   }
 }
 
