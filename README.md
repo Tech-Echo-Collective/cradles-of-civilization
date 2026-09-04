@@ -8,6 +8,8 @@
 
 在线试玩：[techecho.org/games/cradles-of-civilization/](https://techecho.org/games/cradles-of-civilization/)
 
+CK3-lite 地图实验室位于 `map-lab/`：固定三体大陆、64 个省份、10 个战略区，支持政治/地形/军事三种地图模式、缩放拖动和中英双语。它目前是独立交互原型，不读写正式游戏存档，也尚未接入正式战斗循环。
+
 Godot 原生试玩版保留在 `v0.4.0-alpha.3`（中英双语，暂不含地图与军事），当前暂停打包。
 
 无地图内容与文案基准：`v0.2`（最后一个尚未加入地图/军事的正式版本）
@@ -15,6 +17,8 @@ Godot 原生试玩版保留在 `v0.4.0-alpha.3`（中英双语，暂不含地图
 ## 运行
 
 网页版可直接用浏览器打开 `index.html`，右上角可切换中文/English；`?lang=en` 可直接打开英文版。
+
+地图实验室可打开 `map-lab/index.html`；也可以用本地静态服务器访问 `/map-lab/`，用种子输入框只重排政权、首都、军队和数值，固定地理不会变化。
 
 原生版使用 Godot `4.7.1 .NET`，项目位于 `godot/`：
 

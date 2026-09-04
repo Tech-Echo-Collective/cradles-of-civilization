@@ -18,14 +18,14 @@ const files = [
   "styles.css"
 ];
 
-rmSync(packageDir, { force: true, recursive: true });
-rmSync(zipPath, { force: true });
+rmSync(dist, { force: true, recursive: true });
 mkdirSync(packageDir, { recursive: true });
 
 files.forEach((file) => {
   cpSync(join(root, file), join(packageDir, file));
 });
 cpSync(join(root, "assets"), join(packageDir, "assets"), { recursive: true });
+cpSync(join(root, "map-lab"), join(packageDir, "map-lab"), { recursive: true });
 
 writeFileSync(
   join(packageDir, "START_HERE.txt"),
@@ -37,6 +37,7 @@ writeFileSync(
     "1. 解压整个文件夹。",
     "2. 双击 index.html。",
     "3. 不要只单独发送 index.html；assets 文件夹、ending.html、localization.js、game.js、balance-model.js、endings.js、styles.css 需要保持原有相对位置。",
+    "4. 想单独体验新版地图交互，可打开 map-lab/index.html；地图实验室不会读写正式游戏存档。",
     "",
     "存档说明：",
     "浏览器会把存档保存在本机本浏览器内。把 zip 发给朋友不会带走你的本地存档。",
