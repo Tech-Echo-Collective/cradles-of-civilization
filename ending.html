@@ -6,7 +6,7 @@
     <meta name="author" content="Noah Walker">
     <meta name="copyright" content="Original concept by Noah Walker">
     <title>文明摇篮：终局</title>
-    <link rel="stylesheet" href="styles.css?v=20260905-formal-map">
+    <link rel="stylesheet" href="styles.css?v=20260905-ending-bilingual">
   </head>
   <body class="ending-body">
     <div class="site-tools">
@@ -60,8 +60,8 @@
       </section>
     </main>
 
-    <script src="localization.js?v=20260905-formal-map"></script>
-    <script src="endings.js?v=20260904-v040"></script>
+    <script src="localization.js?v=20260905-ending-bilingual"></script>
+    <script src="endings.js?v=20260905-ending-bilingual"></script>
     <script>
       "use strict";
 
@@ -115,15 +115,27 @@
         quote: "",
         quoteEn: ""
       };
-      const endingName = I18N.isEnglish() ? ending.nameEn : ending.name.split("/")[0];
+      const endingNameParts = String(ending.name || "").split("/");
+      const endingNameZh = endingNameParts[0] || "尚无结局记录";
+      const endingNameEn = ending.nameEn || endingNameParts.slice(1).join("/") || "No Ending Recorded";
+      const endingName = I18N.isEnglish() ? endingNameEn : endingNameZh;
+      const endingTitleLines = endingNameZh === endingNameEn
+        ? [endingName]
+        : I18N.isEnglish()
+          ? [endingNameEn, endingNameZh]
+          : [endingNameZh, endingNameEn];
       const endingParagraphs = I18N.isEnglish() ? ending.paragraphsEn : ending.paragraphs;
       const endingQuote = I18N.isEnglish() ? ending.quoteEn : ending.quote;
 
-      document.title = T(`文明摇篮：${endingName}`, `Cradles of Civilization: ${endingName}`);
+      document.title = T(
+        `文明摇篮：${endingTitleLines.join(" / ")}`,
+        `Cradles of Civilization: ${endingTitleLines.join(" / ")}`
+      );
       endingTitle.innerHTML = "";
-      [endingName].forEach((line) => {
+      endingTitleLines.forEach((line) => {
         const titleLine = document.createElement("span");
         titleLine.className = "ending-title-line";
+        titleLine.dataset.i18nSkip = "";
         titleLine.textContent = line;
         endingTitle.append(titleLine);
       });
@@ -232,7 +244,7 @@
         if (storedEnding?.seed) {
           url.searchParams.set("seed", storedEnding.seed);
         }
-        if (I18N.isEnglish()) url.searchParams.set("lang", "en");
+        url.searchParams.set("lang", I18N.isEnglish() ? "en" : "zh");
         return url.href;
       }
 
@@ -387,7 +399,7 @@
       function restartGame() {
         clearGame();
         const url = new URL("index.html", window.location.href);
-        if (I18N.isEnglish()) url.searchParams.set("lang", "en");
+        url.searchParams.set("lang", I18N.isEnglish() ? "en" : "zh");
         window.location.href = url.href;
       }
 
@@ -402,7 +414,7 @@
         clearGame();
         const url = new URL("index.html", window.location.href);
         url.searchParams.set("seed", seedText);
-        if (I18N.isEnglish()) url.searchParams.set("lang", "en");
+        url.searchParams.set("lang", I18N.isEnglish() ? "en" : "zh");
         window.location.href = url.href;
       }
 

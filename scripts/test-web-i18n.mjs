@@ -64,10 +64,25 @@ for (const file of ["index.html", "ending.html"]) {
 const endingPageSource = read("ending.html");
 assert.doesNotMatch(endingPageSource, /storedEnding\?\.id \|\| "A"/u, "opening the ending page without a record must not claim ending A");
 assert.match(endingPageSource, /nameEn: "No Ending Recorded"/u, "the empty ending page needs a neutral English state");
+assert.match(endingPageSource, /I18N\.isEnglish\(\)\s*\? \[endingNameEn, endingNameZh\]\s*:\s*\[endingNameZh, endingNameEn\]/u, "ending headings must preserve their bilingual two-line identity in both languages");
+assert.match(endingPageSource, /titleLine\.dataset\.i18nSkip = ""/u, "the bilingual ending heading must not be collapsed by document translation");
+for (const asset of ["styles.css", "localization.js", "endings.js"]) {
+  assert.match(endingPageSource, new RegExp(`${asset.replace(".", "\\.")}\\?v=20260905-ending-bilingual`, "u"), `${asset} must use the synchronized ending release token`);
+}
 assert.match(endingPageSource, /`Civilization \$\{formatNumber\(entry\.civilization\)\}/u, "ending archive options need explicit English wording");
 assert.match(endingPageSource, /endings reached \/ \$\{formatNumber\(endingStats\.total\)\} total/u, "ending statistics need explicit English wording");
 
+const formalStyles = read("styles.css");
+for (const endingId of [..."ABCDEFGHIJKL"]) {
+  assert.match(formalStyles, new RegExp(`body\\.ending-body\\[data-ending="${endingId}"\\]`, "u"), `ending ${endingId} must retain its dedicated color theme`);
+}
+assert.match(formalStyles, /body\.ending-body::before,[\s\S]*body\.ending-body::after/u, "ending pages must retain their established layered background");
+assert.match(formalStyles, /\.ending-title-line \+ \.ending-title-line\s*\{[\s\S]*color:\s*var\(--ending-secondary\)/u, "the English/Chinese secondary title line must retain the ending accent color");
+
 const gameSource = read("game.js");
+assert.match(gameSource, /language:\s*I18N\.isEnglish\(\) \? "en" : "zh"/u, "the settled ending record must remember its language");
+assert.match(gameSource, /function goToEndingPage\(endingId\)[\s\S]*url\.searchParams\.set\("lang", I18N\.isEnglish\(\) \? "en" : "zh"\)/u, "ending navigation must always carry an explicit language");
+assert.equal((endingPageSource.match(/url\.searchParams\.set\("lang", I18N\.isEnglish\(\) \? "en" : "zh"\)/gu) || []).length, 3, "ending links must preserve either Chinese or English explicitly");
 for (const match of gameSource.matchAll(/"((?:\\.|[^"\\])*)"/gsu)) {
   let value;
   try {

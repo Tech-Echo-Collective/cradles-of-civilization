@@ -5333,6 +5333,7 @@ function finishGame(endingId, context = {}) {
     difficulty: normalizeDifficulty(state.difficulty),
     aiAggression: normalizeAiAggression(state.aiAggression),
     mapUiExpanded: state.mapUiExpanded !== false,
+    language: I18N.isEnglish() ? "en" : "zh",
     seed: state.seed,
     civilization: state.count,
     turn: state.turn,
@@ -5477,7 +5478,7 @@ function clearSavedRun() {
 function goToEndingPage(endingId) {
   const url = new URL(ENDING_PAGE, window.location.href);
   url.searchParams.set("ending", endingId);
-  if (I18N.isEnglish()) url.searchParams.set("lang", "en");
+  url.searchParams.set("lang", I18N.isEnglish() ? "en" : "zh");
   window.location.href = url.href;
 }
 
