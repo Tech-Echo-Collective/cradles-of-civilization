@@ -233,6 +233,88 @@ const report = vm.runInContext(`(() => {
   state.governorId = "listener";
   check(visibleMilitaryRegionIds().size === MAP_REGIONS.length, "the listener must remove the fog of war");
   check(foggedRegions < MAP_REGIONS.length, "ordinary governors must retain fog of war");
+  const strategicBusinessSnapshot = JSON.stringify({
+    turn: state.turn,
+    map: state.map,
+    military: state.military,
+    specialDecisionState: state.specialDecisionState,
+    selectedRegionId: state.selectedRegionId,
+    selectedArmyId: state.selectedArmyId
+  });
+  setStrategicMapViewMode("terrain");
+  toggleStrategicMapRelief();
+  toggleStrategicMapRelief();
+  resetStrategicMapCamera(false);
+  setStrategicMapViewMode("political");
+  check(
+    JSON.stringify({
+      turn: state.turn,
+      map: state.map,
+      military: state.military,
+      specialDecisionState: state.specialDecisionState,
+      selectedRegionId: state.selectedRegionId,
+      selectedArmyId: state.selectedArmyId
+    }) === strategicBusinessSnapshot,
+    "map layer, relief, and camera controls must not mutate formal game state"
+  );
+  check(!Object.prototype.hasOwnProperty.call(state, "strategicMapView"), "view-only map state must never enter the formal save object");
+
+  const fakeMapTarget = (kind, id) => ({
+    closest(selector) {
+      if (kind === "army" && selector === "[data-army]") return { dataset: { army: id } };
+      if (kind === "region" && selector === "[data-region]") return { dataset: { region: id } };
+      return null;
+    }
+  });
+  dom.strategicMapSvg = {
+    setPointerCapture() {},
+    classList: { add() {}, remove() {} }
+  };
+  dom.actionButtons = [];
+  const tapRegionId = MAP_REGIONS.find((region) => region.id !== state.selectedRegionId).id;
+  const duplicateClickRegionId = MAP_REGIONS.find((region) => region.id !== tapRegionId).id;
+  handleStrategicMapPointerDown({
+    pointerType: "mouse",
+    button: 0,
+    pointerId: 1,
+    clientX: 100,
+    clientY: 100,
+    target: fakeMapTarget("region", tapRegionId)
+  });
+  finishStrategicMapPointer({ type: "pointerup", pointerId: 1 });
+  check(state.selectedRegionId === tapRegionId, "a captured pointer tap must select its pointerdown province");
+  check(strategicMapView.suppressClick, "a captured pointer tap must suppress its synthetic follow-up click");
+  handleMapInteraction({ target: fakeMapTarget("region", duplicateClickRegionId) });
+  check(state.selectedRegionId === tapRegionId, "the suppressed follow-up click must not activate a second province");
+
+  strategicMapView.suppressClick = false;
+  handleStrategicMapPointerDown({
+    pointerType: "mouse",
+    button: 0,
+    pointerId: 2,
+    clientX: 120,
+    clientY: 120,
+    target: fakeMapTarget("region", duplicateClickRegionId)
+  });
+  strategicMapView.dragState.total = 6;
+  finishStrategicMapPointer({ type: "pointerup", pointerId: 2 });
+  check(state.selectedRegionId === tapRegionId, "dragging farther than five pixels must never activate a province");
+
+  strategicMapView.suppressClick = false;
+  const tapArmy = armies().find((army) => army.id !== state.selectedArmyId);
+  handleStrategicMapPointerDown({
+    pointerType: "touch",
+    button: 0,
+    pointerId: 3,
+    clientX: 140,
+    clientY: 140,
+    target: fakeMapTarget("army", tapArmy.id)
+  });
+  finishStrategicMapPointer({ type: "pointerup", pointerId: 3 });
+  check(state.selectedArmyId === tapArmy.id, "a captured touch tap must select its pointerdown army");
+  check(state.selectedRegionId === tapArmy.regionId, "selecting an army must select its formal stationed province");
+  strategicMapView.suppressClick = false;
+  dom.strategicMapSvg = null;
   const collapsedMap = collapseMapState("测试灾变");
   check(
     collapsedMap.regions.every((region) => region.owner === MAP_OWNER_RUINS && region.controllerId === null),

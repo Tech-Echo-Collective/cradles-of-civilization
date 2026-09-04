@@ -18,6 +18,25 @@ const data = context.CRADLES_MAP_LAB_DATA;
 const model = context.CRADLES_MAP_LAB_MODEL;
 assert.ok(data && model, "map lab data and model must load without a browser");
 
+const formalGameSource = read("game.js");
+const formalIndexSource = read("index.html");
+assert.doesNotMatch(
+  formalGameSource,
+  /STRATEGIC_MAP_MODEL\.(?:createScenario|classifyArmyDestination|executeArmyMove|executeArmyBattle|executeRecruitment|executeAiPhase)\s*\(/u,
+  "the formal map view must never call map-lab scenario or mutation APIs"
+);
+assert.doesNotMatch(formalGameSource, /dom\.worldMap\.innerHTML\s*=/u, "formal renders must preserve the stable SVG scene and camera bindings");
+assert.match(formalGameSource, /querySelectorAll\("\.strategic-map-modes button\[data-strategic-map-mode\]"\)/u, "mode bindings must target buttons without binding the map-state root");
+assert.match(formalGameSource, /activeMapRoads\(\)\.forEach\(\(road\)/u, "formal map roads must come from the authoritative 167-edge topology");
+assert.match(formalGameSource, /STRATEGIC_GEOGRAPHY\.sharedEdges\.forEach/u, "formal political borders must use the fixed geography edges");
+assert.match(formalIndexSource, /id="strategicMapSvg"[^>]*viewBox="0 0 1200 760"/u, "the formal page must expose the fixed 1200x760 SVG map");
+assert.ok(
+  formalIndexSource.indexOf('id="strategicProvinceLayer"') < formalIndexSource.indexOf('id="strategicProvinceReliefLayer"'),
+  "formal relief sidewalls must render above province top faces so internal height remains visible"
+);
+assert.equal((formalIndexSource.match(/data-strategic-map-mode="(?:political|terrain|military)"/gu) || []).length, 4, "formal HTML must expose three mode buttons and one view-state root");
+assert.doesNotMatch(formalIndexSource, /id="endPhaseButton"|id="recruitButton"|id="seedForm"/u, "the formal map must not duplicate map-lab turn, recruitment, or seed controls");
+
 function sampleLandSubpaths(pathData, steps = 24) {
   const tokens = pathData.match(/[MCZ]|-?\d+(?:\.\d+)?/gu) || [];
   const subpaths = [];
