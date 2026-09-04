@@ -25,6 +25,7 @@
     body: document.body,
     mapStage: document.querySelector("#mapStage"),
     mapSvg: document.querySelector("#mapSvg"),
+    worldLayer: document.querySelector("#worldLayer"),
     landClipPath: document.querySelector("#landClipPath"),
     landDepth: document.querySelector("#landDepth"),
     landBase: document.querySelector("#landBase"),
@@ -162,6 +163,16 @@
     if (!/^[0-9a-f]{6}$/iu.test(value)) return "#18201e";
     const channels = [0, 2, 4].map((offset) => Math.round(Number.parseInt(value.slice(offset, offset + 2), 16) * factor));
     return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+  }
+
+  function reliefWorldTransform() {
+    const skewX = -0.06;
+    const scaleY = 0.93;
+    const centerY = DATA.viewBox.y + DATA.viewBox.height / 2;
+    // Keep the world center fixed while giving the map plane a shallow oblique view.
+    const translateX = -skewX * centerY;
+    const translateY = (1 - scaleY) * centerY;
+    return `matrix(1 0 ${skewX} ${scaleY} ${translateX} ${translateY})`;
   }
 
   function routePath(provinceIds) {
@@ -498,6 +509,8 @@
     if (nextMode !== "2d" && nextMode !== "3d") return;
     reliefMode = nextMode;
     dom.body.dataset.relief = reliefMode;
+    if (reliefMode === "3d") dom.worldLayer.setAttribute("transform", reliefWorldTransform());
+    else dom.worldLayer.removeAttribute("transform");
     updateReliefControl();
     try {
       localStorage.setItem(RELIEF_KEY, reliefMode);

@@ -230,6 +230,8 @@ assert.doesNotMatch(html, /src="(?:\.\.\/)?game\.js/u, "map lab must not load th
 assert.match(ui, /window\.history\.replaceState/u, "map lab should preserve scenario state in the URL");
 assert.match(ui, /function activateProvince/u, "map lab needs a unified province command handler");
 assert.match(ui, /function reliefWallPath/u, "map lab must build lightweight vector sidewalls");
+assert.match(ui, /function reliefWorldTransform/u, "3D relief must include a lightweight oblique projection");
+assert.match(ui, /worldLayer\.setAttribute\("transform"/u, "3D relief must apply its projection to the SVG world layer");
 assert.doesNotMatch(ui, /WebGLRenderingContext|THREE\.|getContext\(["']webgl/u, "map relief must not require WebGL");
 assert.match(css, /province-shape\.is-move-target/u, "map lab needs friendly movement target styling");
 assert.match(css, /province-shape\.is-attack-target/u, "map lab needs hostile movement target styling");
