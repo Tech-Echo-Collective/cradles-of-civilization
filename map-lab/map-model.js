@@ -4,6 +4,12 @@
   const EPSILON = 1e-7;
   const MIN_ZOOM = 0.8;
   const MAX_ZOOM = 4;
+  const PLAYER_REALM_ID = "player-realm";
+  const RECRUITMENT_FORCE = 5200;
+  const RECRUITMENT_COOLDOWN = 4;
+  const MILITARY_FORCE_CAP = 120000;
+  const NEUTRAL_REALM_IDS = new Set(["polaris-see", "free-cities"]);
+  const HOSTILE_REALM_IDS = new Set(["solar-court", "ash-confederacy"]);
 
   function clamp(value, minimum, maximum) {
     return Math.min(maximum, Math.max(minimum, value));
@@ -31,6 +37,15 @@
 
   function hashUnit(seed, ...parts) {
     return fnv1a(`${normalizeSeed(seed)}|${parts.join("|")}`) / 4294967296;
+  }
+
+  function initialRealmRelations(data) {
+    return Object.fromEntries(data.realms.map((realm) => {
+      if (realm.id === PLAYER_REALM_ID) return [realm.id, "player"];
+      if (NEUTRAL_REALM_IDS.has(realm.id)) return [realm.id, "neutral"];
+      if (HOSTILE_REALM_IDS.has(realm.id)) return [realm.id, "hostile"];
+      return [realm.id, "neutral"];
+    }));
   }
 
   function polygonArea(points) {
@@ -350,6 +365,8 @@
       });
     });
 
+    const realmRelations = initialRealmRelations(data);
+    const recruitment = { cooldown: 0, used: 0, lastUsedTurn: 0 };
     return {
       mapId: data.id,
       scenarioVersion: 1,
@@ -358,9 +375,11 @@
       controllerByProvince,
       provinceState,
       armies,
+      realmRelations,
+      recruitment,
       turn: 1,
       battleCount: 0,
-      signature: fnv1a(JSON.stringify({ seed, capitals, controllerByProvince, provinceState, armies })).toString(16).padStart(8, "0")
+      signature: fnv1a(JSON.stringify({ seed, capitals, controllerByProvince, provinceState, armies, realmRelations, recruitment })).toString(16).padStart(8, "0")
     };
   }
 
@@ -379,6 +398,135 @@
       });
     }
     return visited.size === allowed.size;
+  }
+
+  function realmRelation(scenario, realmId) {
+    if (realmId === PLAYER_REALM_ID) return "player";
+    const stored = scenario?.realmRelations?.[realmId];
+    if (stored === "neutral" || stored === "hostile") return stored;
+    if (HOSTILE_REALM_IDS.has(realmId)) return "hostile";
+    return "neutral";
+  }
+
+  function canRealmAttack(scenario, attackerRealmId, defenderRealmId, playerRealmId = PLAYER_REALM_ID) {
+    if (!attackerRealmId || !defenderRealmId || attackerRealmId === defenderRealmId) return false;
+    return defenderRealmId !== playerRealmId || realmRelation(scenario, attackerRealmId) !== "neutral";
+  }
+
+  function ensureRealmRelations(scenario, geography) {
+    if (!scenario.realmRelations || typeof scenario.realmRelations !== "object") scenario.realmRelations = {};
+    Object.keys(geography.realmById).forEach((realmId) => {
+      if (["player", "neutral", "hostile"].includes(scenario.realmRelations[realmId])) return;
+      scenario.realmRelations[realmId] = realmId === PLAYER_REALM_ID
+        ? "player"
+        : HOSTILE_REALM_IDS.has(realmId) ? "hostile" : "neutral";
+    });
+    return scenario.realmRelations;
+  }
+
+  function recruitmentRecord(scenario) {
+    const source = scenario?.recruitment && typeof scenario.recruitment === "object" ? scenario.recruitment : {};
+    return {
+      cooldown: Math.max(0, Math.round(Number(source.cooldown) || 0)),
+      used: Math.max(0, Math.round(Number(source.used) || 0)),
+      lastUsedTurn: Math.max(0, Math.round(Number(source.lastUsedTurn) || 0))
+    };
+  }
+
+  function tickRecruitmentCooldown(scenario) {
+    if (!scenario?.recruitment || typeof scenario.recruitment !== "object") {
+      return { before: 0, after: 0 };
+    }
+    const record = recruitmentRecord(scenario);
+    const before = record.cooldown;
+    record.cooldown = Math.max(0, before - 1);
+    scenario.recruitment = record;
+    return { before, after: record.cooldown };
+  }
+
+  function recruitmentResultBase(scenario, realmId, provinceId) {
+    const record = recruitmentRecord(scenario);
+    return {
+      realmId,
+      provinceId,
+      cooldown: record.cooldown,
+      used: record.used
+    };
+  }
+
+  function executeRecruitment(scenario, geography, provinceId, commandRealmId = PLAYER_REALM_ID) {
+    const base = recruitmentResultBase(scenario, commandRealmId, provinceId);
+    if (commandRealmId !== PLAYER_REALM_ID) {
+      return { recruited: false, kind: "not-commandable", ...base };
+    }
+    if (!scenario || !Array.isArray(scenario.armies)) {
+      return { recruited: false, kind: "invalid-scenario", ...base };
+    }
+    if (!geography?.provinceById?.[provinceId]) {
+      return { recruited: false, kind: "invalid-province", ...base };
+    }
+    const controllerId = scenario.controllerByProvince?.[provinceId];
+    if (controllerId !== commandRealmId) {
+      return { recruited: false, kind: "not-owned", controllerId, ...base };
+    }
+    if (base.cooldown > 0) {
+      return { recruited: false, kind: "cooldown", ...base };
+    }
+
+    const turn = Math.max(1, Math.round(Number(scenario.turn) || 1));
+    const playerArmies = scenario.armies
+      .filter((army) => army.realmId === commandRealmId && Number(army.force) > 0)
+      .sort((left, right) => left.id.localeCompare(right.id));
+    let army = playerArmies.find((candidate) => candidate.provinceId === provinceId) || null;
+    let kind = "merge";
+    const nextUsed = base.used + 1;
+
+    if (!army) {
+      const rebuilding = playerArmies.length === 0;
+      kind = rebuilding ? "rebuild" : "new-army";
+      const id = rebuilding ? `${PLAYER_REALM_ID}-capital` : `player-field-army-${turn}-${nextUsed}`;
+      army = scenario.armies.find((candidate) => candidate.id === id) || {
+        id,
+        realmId: commandRealmId,
+        provinceId,
+        nameZh: rebuilding ? "新生军团" : "地方军团",
+        nameEn: rebuilding ? "Reborn Legion" : "Local Legion",
+        force: 0,
+        attack: 42,
+        defense: 46,
+        lastActedTurn: turn - 1
+      };
+      army.realmId = commandRealmId;
+      army.provinceId = provinceId;
+      army.force = Math.max(0, Math.round(Number(army.force) || 0));
+      army.attack = Math.round(Number(army.attack) || 42);
+      army.defense = Math.round(Number(army.defense) || 46);
+      army.lastActedTurn = turn - 1;
+      if (!scenario.armies.includes(army)) scenario.armies.push(army);
+    }
+
+    const forceBefore = clamp(Math.round(Number(army.force) || 0), 0, MILITARY_FORCE_CAP);
+    const forceAfter = clamp(forceBefore + RECRUITMENT_FORCE, 0, MILITARY_FORCE_CAP);
+    army.force = forceAfter;
+    scenario.recruitment = {
+      cooldown: RECRUITMENT_COOLDOWN,
+      used: nextUsed,
+      lastUsedTurn: turn
+    };
+    return {
+      recruited: true,
+      kind,
+      realmId: commandRealmId,
+      provinceId,
+      armyId: army.id,
+      forceRequested: RECRUITMENT_FORCE,
+      forceAdded: forceAfter - forceBefore,
+      forceBefore,
+      forceAfter,
+      capped: forceAfter - forceBefore < RECRUITMENT_FORCE,
+      cooldown: scenario.recruitment.cooldown,
+      used: scenario.recruitment.used
+    };
   }
 
   function classifyArmyDestination(scenario, geography, armyId, provinceId) {
@@ -445,6 +593,15 @@
     }
     const previousControllerId = classification.controllerId;
     if (!geography.realmById[previousControllerId]) return { attacked: false, kind: "invalid-controller", army };
+    if (!canRealmAttack(scenario, army.realmId, previousControllerId)) {
+      return {
+        attacked: false,
+        kind: "neutrality",
+        army,
+        previousControllerId,
+        controllerId: previousControllerId
+      };
+    }
     const thirdPartyArmy = scenario.armies.find((candidate) => candidate.force > 0
       && candidate.provinceId === provinceId
       && candidate.realmId !== previousControllerId);
@@ -480,6 +637,20 @@
       technologyGap: 0,
       seed
     });
+
+    const relationChanges = [];
+    let provokedRealmId = null;
+    if (army.realmId === PLAYER_REALM_ID && realmRelation(scenario, previousControllerId) === "neutral") {
+      const relations = ensureRealmRelations(scenario, geography);
+      relations[previousControllerId] = "hostile";
+      provokedRealmId = previousControllerId;
+      relationChanges.push({
+        realmId: previousControllerId,
+        from: "neutral",
+        to: "hostile",
+        reason: "player-attack"
+      });
+    }
 
     army.force = Math.max(0, Math.round(result.attackerSurvivors));
     const fieldCasualtyTarget = fieldDefenderForce > 0
@@ -556,7 +727,9 @@
       fortificationBefore,
       fortificationAfter: targetState.fortification,
       retreatProvinceIds: [...new Set(retreatProvinceIds)],
-      eliminatedRealmId
+      eliminatedRealmId,
+      provokedRealmId,
+      relationChanges
     };
   }
 
@@ -576,13 +749,16 @@
       + hashUnit(scenario.seed, scenario.turn, army.id, provinceId, "ai-attack") * 2;
   }
 
-  function firstStepTowardFrontier(scenario, geography, army) {
+  function firstStepTowardFrontier(scenario, geography, army, playerRealmId = PLAYER_REALM_ID) {
     const queue = [{ provinceId: army.provinceId, firstStepId: null, distance: 0 }];
     const visited = new Set([army.provinceId]);
     while (queue.length) {
       const current = queue.shift();
       if (current.provinceId !== army.provinceId
-        && (geography.neighbors[current.provinceId] || []).some((neighborId) => scenario.controllerByProvince[neighborId] !== army.realmId)) {
+        && (geography.neighbors[current.provinceId] || []).some((neighborId) => {
+          const defenderRealmId = scenario.controllerByProvince[neighborId];
+          return canRealmAttack(scenario, army.realmId, defenderRealmId, playerRealmId);
+        })) {
         return current;
       }
       const friendlyNeighbors = (geography.neighbors[current.provinceId] || [])
@@ -613,7 +789,7 @@
     if (!armies.length) return { kind: "hold", realmId, reason: "no-army" };
 
     const attacks = armies.flatMap((army) => (geography.neighbors[army.provinceId] || [])
-      .filter((provinceId) => scenario.controllerByProvince[provinceId] !== realmId)
+      .filter((provinceId) => canRealmAttack(scenario, realmId, scenario.controllerByProvince[provinceId]))
       .map((provinceId) => ({
         army,
         provinceId,
@@ -665,8 +841,9 @@
       .filter((realmId) => realmId !== commandRealmId)
       .sort()
       .map((realmId) => executeRealmAiAction(scenario, geography, realmId));
+    const recruitmentCooldown = tickRecruitmentCooldown(scenario);
     scenario.turn = turn + 1;
-    return { kind: "ai-phase", turn, nextTurn: scenario.turn, actions };
+    return { kind: "ai-phase", turn, nextTurn: scenario.turn, actions, recruitmentCooldown };
   }
 
   function cameraDimensions(zoom, viewBox, viewportAspect) {
@@ -738,6 +915,9 @@
   global.CRADLES_MAP_LAB_MODEL = Object.freeze({
     MIN_ZOOM,
     MAX_ZOOM,
+    RECRUITMENT_FORCE,
+    RECRUITMENT_COOLDOWN,
+    MILITARY_FORCE_CAP,
     normalizeSeed,
     hashUnit,
     polygonArea,
@@ -745,6 +925,10 @@
     createScenario,
     connectedComponents,
     isConnectedSubset,
+    realmRelation,
+    canRealmAttack,
+    executeRecruitment,
+    tickRecruitmentCooldown,
     classifyArmyDestination,
     executeArmyMove,
     executeArmyBattle,

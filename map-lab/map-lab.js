@@ -8,6 +8,8 @@
   const SVG_NS = "http://www.w3.org/2000/svg";
   const LANGUAGE_KEY = "three-sun-chronicle:language:v1";
   const RELIEF_KEY = "three-sun-chronicle:map-relief:v1";
+  const RECRUIT_FORCE = Math.max(1, Math.round(Number(MODEL.RECRUITMENT_FORCE) || 5200));
+  const RECRUIT_COOLDOWN = Math.max(1, Math.round(Number(MODEL.RECRUITMENT_COOLDOWN) || 4));
   const MODES = new Set(["political", "terrain", "military"]);
   const RELIEF_DEPTHS = Object.freeze({
     coast: 2,
@@ -68,6 +70,10 @@
     provinceCode: document.querySelector("#provinceCode"),
     provinceName: document.querySelector("#provinceName"),
     provinceRegion: document.querySelector("#provinceRegion"),
+    recruitPanel: document.querySelector("#recruitPanel"),
+    recruitStatus: document.querySelector("#recruitStatus"),
+    recruitFeedback: document.querySelector("#recruitFeedback"),
+    recruitButton: document.querySelector("#recruitButton"),
     phaseReport: document.querySelector("#phaseReport"),
     phaseReportTitle: document.querySelector("#phaseReportTitle"),
     phaseReportActions: document.querySelector("#phaseReportActions"),
@@ -104,8 +110,10 @@
   let movementCount = 0;
   let lastBattleReport = null;
   let lastPhaseReport = null;
+  let lastRecruitReport = null;
   let combatLockedUntil = 0;
   let phaseLockedUntil = 0;
+  let recruitLockedUntil = 0;
   let dragState = null;
   let pinchState = null;
   let suppressClick = false;
@@ -136,6 +144,24 @@
 
   function localizedName(record) {
     return language === "en" ? record?.nameEn : record?.nameZh;
+  }
+
+  function realmRelation(realmId) {
+    if (typeof MODEL.realmRelation === "function") return MODEL.realmRelation(scenario, realmId);
+    if (realmId === "player-realm") return "player";
+    return scenario.realmRelations?.[realmId] || "hostile";
+  }
+
+  function relationName(realmId) {
+    return {
+      player: t("本国", "Player"),
+      neutral: t("中立", "Neutral"),
+      hostile: t("敌对", "Hostile")
+    }[realmRelation(realmId)] || t("未知", "Unknown");
+  }
+
+  function localizedNumber(value) {
+    return Math.max(0, Math.round(Number(value) || 0)).toLocaleString(language === "en" ? "en-US" : "zh-CN");
   }
 
   function svgElement(tag, attributes = {}) {
@@ -441,9 +467,14 @@
       const leftOwner = scenario.controllerByProvince[edge.a];
       const rightOwner = scenario.controllerByProvince[edge.b];
       const visible = leftOwner !== rightOwner;
+      const playerRelation = leftOwner === "player-realm"
+        ? realmRelation(rightOwner)
+        : rightOwner === "player-realm" ? realmRelation(leftOwner) : "foreign";
       node.dataset.active = visible ? "true" : "false";
+      node.dataset.playerRelation = playerRelation;
       node.style.display = visible ? "" : "none";
-      node.classList.toggle("frontline", visible && mode === "military");
+      node.classList.toggle("frontline", visible && mode === "military" && playerRelation === "hostile");
+      node.classList.toggle("neutral-frontier", visible && mode === "military" && playerRelation === "neutral");
     });
 
     DATA.realms.forEach((realm) => {
@@ -559,7 +590,11 @@
     dom.modeButtons.forEach((button) => {
       button.setAttribute("aria-pressed", button.dataset.mapMode === mode ? "true" : "false");
     });
-    realmBorderNodes.forEach(({ node }) => node.classList.toggle("frontline", node.dataset.active === "true" && mode === "military"));
+    realmBorderNodes.forEach(({ node }) => {
+      const active = node.dataset.active === "true" && mode === "military";
+      node.classList.toggle("frontline", active && node.dataset.playerRelation === "hostile");
+      node.classList.toggle("neutral-frontier", active && node.dataset.playerRelation === "neutral");
+    });
     updateMapCopy();
     renderMovementTargets();
     renderLegend();
@@ -595,7 +630,8 @@
     } else {
       items = [
         { color: "#70e5a7", label: t("可移动", "Move"), meta: t("相邻己方", "friendly") },
-        { color: "#f08072", label: t("攻击目标", "Attack target"), meta: t("点击开战", "engage") },
+        { color: "#f08072", label: t("敌对目标", "Hostile target"), meta: t("点击开战", "engage") },
+        { color: "#efc76e", label: t("中立目标", "Neutral target"), meta: t("进攻即敌对", "attack provokes") },
         { color: "#f3b067", label: t("前线", "Front line"), meta: t("敌对边界", "hostile") },
         { color: "#e1d7bd", label: t("军团", "Army"), meta: scenario.armies.length },
         { color: "#f4ddb1", label: t("首都", "Capital"), meta: DATA.realms.filter((realm) => scenario.capitals[realm.id]).length },
@@ -623,8 +659,8 @@
     const region = geography.strategicRegionById[province.strategicRegionId];
     const terrain = DATA.terrainTypes[province.terrain];
     return t(
-      `${province.nameZh}，${region.nameZh}，${terrain.nameZh}，由${realm.nameZh}控制`,
-      `${province.nameEn}, ${region.nameEn}, ${terrain.nameEn}, controlled by ${realm.nameEn}`
+      `${province.nameZh}，${region.nameZh}，${terrain.nameZh}，由${realm.nameZh}控制，关系${relationName(realm.id)}`,
+      `${province.nameEn}, ${region.nameEn}, ${terrain.nameEn}, controlled by ${realm.nameEn}, relation ${relationName(realm.id)}`
     );
   }
 
@@ -665,6 +701,72 @@
     fact.querySelector("dd").textContent = value;
   }
 
+  function inspectorProvince() {
+    const army = scenario.armies.find((candidate) => candidate.id === selectedArmyId);
+    return geography.provinceById[army?.provinceId || selectedProvinceId] || null;
+  }
+
+  function recruitmentFeedback(report) {
+    const armyName = localizedArmyNameById(report.armyId);
+    const added = localizedNumber(report.forceAdded);
+    const after = localizedNumber(report.forceAfter);
+    const capped = report.capped ? t("，已达到兵力上限", "; force cap reached") : "";
+    if (report.kind === "merge") {
+      return t(
+        `已并入${armyName}：增加 ${added}，现有 ${after}${capped}`,
+        `Merged into ${armyName}: +${added}, now ${after}${capped}`
+      );
+    }
+    if (report.kind === "rebuild") {
+      return t(
+        `已重建${armyName}：兵力 ${after}${capped}`,
+        `${armyName} rebuilt with ${after} troops${capped}`
+      );
+    }
+    return t(
+      `已组建${armyName}：兵力 ${after}${capped}`,
+      `${armyName} raised with ${after} troops${capped}`
+    );
+  }
+
+  function renderRecruitment() {
+    const province = inspectorProvince();
+    const state = province ? scenario.provinceState[province.id] : null;
+    const isOwned = state?.controllerId === "player-realm" && realmRelation(state.controllerId) === "player";
+    dom.recruitPanel.hidden = !isOwned;
+    if (!isOwned) {
+      dom.recruitFeedback.hidden = true;
+      return;
+    }
+
+    const modelAvailable = typeof MODEL.executeRecruitment === "function";
+    const cooldown = Math.max(0, Math.round(Number(scenario.recruitment?.cooldown) || 0));
+    const ready = modelAvailable && cooldown === 0;
+    dom.recruitPanel.dataset.state = ready ? "ready" : "cooldown";
+    dom.recruitButton.disabled = !ready;
+    dom.recruitStatus.textContent = !modelAvailable
+      ? t("征兵系统暂不可用", "Recruitment is unavailable")
+      : cooldown > 0
+        ? t(`冷却中 · 还需 ${cooldown} 回合`, `Cooldown · ${cooldown} rounds remaining`)
+        : t(
+          `可征召 ${localizedNumber(RECRUIT_FORCE)} · 使用后冷却 ${RECRUIT_COOLDOWN} 回合`,
+          `Recruit ${localizedNumber(RECRUIT_FORCE)} · ${RECRUIT_COOLDOWN}-round cooldown`
+        );
+    dom.recruitButton.setAttribute("aria-label", ready
+      ? t(
+        `在${province.nameZh}征召${localizedNumber(RECRUIT_FORCE)}人，使用后冷却${RECRUIT_COOLDOWN}回合（快捷键 V）`,
+        `Recruit ${localizedNumber(RECRUIT_FORCE)} troops in ${province.nameEn}; ${RECRUIT_COOLDOWN}-round cooldown (V)`
+      )
+      : t(
+        `${province.nameZh}征兵冷却中，还需${cooldown}回合`,
+        `Recruitment in ${province.nameEn} is on cooldown for ${cooldown} more rounds`
+      ));
+
+    const showFeedback = Boolean(lastRecruitReport?.recruited && lastRecruitReport.provinceId === province.id);
+    dom.recruitFeedback.hidden = !showFeedback;
+    if (showFeedback) dom.recruitFeedback.textContent = recruitmentFeedback(lastRecruitReport);
+  }
+
   function battleScaleName(scale) {
     return {
       conflict: t("冲突", "SKIRMISH"),
@@ -700,9 +802,12 @@
     const eliminationText = report.eliminatedRealmId
       ? t(`${formerRealm.nameZh}已经失去全部领土。`, `${formerRealm.nameEn} has lost all territory.`)
       : "";
+    const provocationText = report.provokedRealmId
+      ? t(`${formerRealm.nameZh}已由中立转为敌对。`, `${formerRealm.nameEn} has turned from neutral to hostile.`)
+      : "";
     dom.battleReportText.textContent = t(
-      `进攻方损失 ${formatForce(report.attackerCasualties)}，剩余 ${formatForce(report.attackerSurvivors)}；守方损失 ${formatForce(report.defenderCasualties)}，野战军剩余 ${formatForce(report.fieldDefenderSurvivors)}。${retreatText}${eliminationText}`,
-      `Attacker lost ${formatForce(report.attackerCasualties)}, ${formatForce(report.attackerSurvivors)} remain; defender lost ${formatForce(report.defenderCasualties)}, ${formatForce(report.fieldDefenderSurvivors)} field troops remain. ${retreatText} ${eliminationText}`
+      `进攻方损失 ${formatForce(report.attackerCasualties)}，剩余 ${formatForce(report.attackerSurvivors)}；守方损失 ${formatForce(report.defenderCasualties)}，野战军剩余 ${formatForce(report.fieldDefenderSurvivors)}。${retreatText}${eliminationText}${provocationText}`,
+      `Attacker lost ${formatForce(report.attackerCasualties)}, ${formatForce(report.attackerSurvivors)} remain; defender lost ${formatForce(report.defenderCasualties)}, ${formatForce(report.fieldDefenderSurvivors)} field troops remain. ${retreatText} ${eliminationText} ${provocationText}`
     ).trim();
   }
 
@@ -749,6 +854,7 @@
   }
 
   function renderInspector() {
+    renderRecruitment();
     renderPhaseReport();
     renderBattleReport();
     const army = scenario.armies.find((candidate) => candidate.id === selectedArmyId);
@@ -759,7 +865,7 @@
       dom.provinceCode.textContent = army.id.toUpperCase();
       dom.provinceName.textContent = localizedName(army);
       dom.provinceRegion.textContent = `${localizedName(realm)} · ${localizedName(province)}`;
-      setFact(0, "阵营", "Realm", localizedName(realm));
+      setFact(0, "阵营", "Realm", `${localizedName(realm)} · ${relationName(realm.id)}`);
       setFact(1, "驻地", "Station", localizedName(province));
       setFact(2, "兵力", "Force", army.force.toLocaleString(language === "en" ? "en-US" : "zh-CN"));
       setFact(3, "进攻", "Attack", army.attack);
@@ -786,7 +892,7 @@
     dom.provinceCode.textContent = province.id.toUpperCase();
     dom.provinceName.textContent = localizedName(province);
     dom.provinceRegion.textContent = `${localizedName(region)} · ${localizedName(terrain)}`;
-    setFact(0, "控制者", "Controller", localizedName(realm));
+    setFact(0, "控制者", "Controller", `${localizedName(realm)} · ${relationName(realm.id)}`);
     setFact(1, "发展", "Development", state.development);
     setFact(2, "工事", "Fortification", state.fortification);
     setFact(3, "补给", "Supply", `${state.supply}%`);
@@ -864,12 +970,12 @@
 
   function renderMovementTargets() {
     provinceNodes.forEach((node, provinceId) => {
-      node.classList.remove("is-move-target", "is-attack-target");
+      node.classList.remove("is-move-target", "is-attack-target", "is-neutral-target");
       node.setAttribute("aria-label", provinceAriaLabel(geography.provinceById[provinceId]));
     });
     scenario.armies.forEach((candidate) => {
       const marker = armyNodes.get(candidate.id);
-      marker?.classList.remove("is-attack-target");
+      marker?.classList.remove("is-attack-target", "is-neutral-target");
       marker?.setAttribute("aria-label", localizedArmyLabel(candidate));
     });
     const army = scenario.armies.find((candidate) => candidate.id === selectedArmyId);
@@ -881,12 +987,18 @@
         node.classList.add("is-move-target");
         node.setAttribute("aria-label", `${provinceAriaLabel(geography.provinceById[provinceId])}${t("，可移动至此", ", available move destination")}`);
       } else if (result.kind === "attack") {
-        node.classList.add("is-attack-target");
-        node.setAttribute("aria-label", `${provinceAriaLabel(geography.provinceById[provinceId])}${t("，相邻攻击目标，激活即开战", ", adjacent attack target; activate to engage immediately")}`);
+        const relation = realmRelation(result.controllerId);
+        const targetClass = relation === "neutral" ? "is-neutral-target" : "is-attack-target";
+        node.classList.add(targetClass);
+        node.setAttribute("aria-label", `${provinceAriaLabel(geography.provinceById[provinceId])}${relation === "neutral"
+          ? t("，中立攻击目标；进攻将使该政权转为敌对", ", neutral attack target; attacking will turn this realm hostile")
+          : t("，相邻攻击目标，激活即开战", ", adjacent attack target; activate to engage immediately")}`);
         scenario.armies.filter((candidate) => candidate.provinceId === provinceId).forEach((candidate) => {
           const marker = armyNodes.get(candidate.id);
-          marker?.classList.add("is-attack-target");
-          marker?.setAttribute("aria-label", `${localizedArmyLabel(candidate)}${t("，激活即向该军团开战", "; activate to engage this army immediately")}`);
+          marker?.classList.add(targetClass);
+          marker?.setAttribute("aria-label", `${localizedArmyLabel(candidate)}${relation === "neutral"
+            ? t("，激活即进攻并打破中立", "; activate to attack and break neutrality")
+            : t("，激活即向该军团开战", "; activate to engage this army immediately")}`);
         });
       }
     });
@@ -958,14 +1070,18 @@
       updateScenarioMap();
       setInspectorCollapsed(false);
       dom.inspectorContent.scrollTop = 0;
+      const provokedRealm = report.provokedRealmId ? geography.realmById[report.provokedRealmId] : null;
+      const provocationSuffix = provokedRealm
+        ? t(`；${provokedRealm.nameZh}已由中立转为敌对`, `; ${provokedRealm.nameEn} is now hostile`)
+        : "";
       announce(report.attackerWon
         ? t(
-          `${army.nameZh}攻占${destination.nameZh}；进攻方损失${report.attackerCasualties}，守方损失${report.defenderCasualties}`,
-          `${army.nameEn} captured ${destination.nameEn}; attacker lost ${report.attackerCasualties}, defender lost ${report.defenderCasualties}`
+          `${army.nameZh}攻占${destination.nameZh}；进攻方损失${report.attackerCasualties}，守方损失${report.defenderCasualties}${provocationSuffix}`,
+          `${army.nameEn} captured ${destination.nameEn}; attacker lost ${report.attackerCasualties}, defender lost ${report.defenderCasualties}${provocationSuffix}`
         )
         : t(
-          `${army.nameZh}进攻${destination.nameZh}失败；进攻方损失${report.attackerCasualties}，守方损失${report.defenderCasualties}`,
-          `${army.nameEn} failed to take ${destination.nameEn}; attacker lost ${report.attackerCasualties}, defender lost ${report.defenderCasualties}`
+          `${army.nameZh}进攻${destination.nameZh}失败；进攻方损失${report.attackerCasualties}，守方损失${report.defenderCasualties}${provocationSuffix}`,
+          `${army.nameEn} failed to take ${destination.nameEn}; attacker lost ${report.attackerCasualties}, defender lost ${report.defenderCasualties}${provocationSuffix}`
         ));
       if (keyboardFocus) {
         window.requestAnimationFrame(() => provinceNodes.get(selectedProvinceId)?.focus({ preventScroll: true }));
@@ -979,10 +1095,68 @@
       : t("这一版只能向相邻省份下令", "This prototype only accepts orders to adjacent provinces"));
   }
 
+  function executeRecruitment() {
+    const now = Date.now();
+    if (now < recruitLockedUntil) return;
+    const province = inspectorProvince();
+    if (!province) return;
+    if (dom.recruitPanel.hidden) {
+      announce(t("只能在本国控制的省份征兵", "Recruitment is only available in a province you control"));
+      return;
+    }
+    if (dom.recruitButton.disabled) {
+      const cooldown = Math.max(0, Math.round(Number(scenario.recruitment?.cooldown) || 0));
+      announce(cooldown > 0
+        ? t(`征兵仍在冷却，还需 ${cooldown} 回合`, `Recruitment is on cooldown for ${cooldown} more rounds`)
+        : t("征兵系统暂不可用", "Recruitment is unavailable"));
+      return;
+    }
+    if (typeof MODEL.executeRecruitment !== "function") return;
+    recruitLockedUntil = now + 450;
+    const report = MODEL.executeRecruitment(scenario, geography, province.id);
+    lastRecruitReport = report;
+    if (!report.recruited) {
+      renderRecruitment();
+      const cooldown = Math.max(0, Math.round(Number(report.cooldown) || 0));
+      announce(report.kind === "cooldown"
+        ? t(`征兵仍在冷却，还需 ${cooldown} 回合`, `Recruitment is on cooldown for ${cooldown} more rounds`)
+        : report.kind === "not-owned"
+          ? t("只能在本国控制的省份征兵", "Recruitment is only available in a province you control")
+          : t("这次征兵命令无法执行", "This recruitment order cannot be executed"));
+      return;
+    }
+
+    selectedProvinceId = province.id;
+    selectedArmyId = report.armyId;
+    updateScenarioReadout();
+    updateScenarioMap();
+    setInspectorCollapsed(false);
+    const armyName = localizedArmyNameById(report.armyId);
+    const resultText = report.kind === "merge"
+      ? t(
+        `${province.nameZh}征召 ${localizedNumber(report.forceAdded)} 人并入${armyName}，现有兵力 ${localizedNumber(report.forceAfter)}`,
+        `${localizedNumber(report.forceAdded)} troops recruited in ${province.nameEn} and merged into ${armyName}; current force ${localizedNumber(report.forceAfter)}`
+      )
+      : report.kind === "rebuild"
+        ? t(
+          `${armyName}已在${province.nameZh}重建，兵力 ${localizedNumber(report.forceAfter)}`,
+          `${armyName} was rebuilt in ${province.nameEn} with ${localizedNumber(report.forceAfter)} troops`
+        )
+        : t(
+          `${province.nameZh}已组建${armyName}，兵力 ${localizedNumber(report.forceAfter)}`,
+          `${armyName} was raised in ${province.nameEn} with ${localizedNumber(report.forceAfter)} troops`
+        );
+    announce(t(
+      `${resultText}；征兵冷却 ${report.cooldown} 回合`,
+      `${resultText}; recruitment cooldown ${report.cooldown} rounds`
+    ));
+  }
+
   function endPlayerPhase(options = {}) {
     const now = Date.now();
     if (now < phaseLockedUntil || dom.endPhaseButton.disabled) return;
     phaseLockedUntil = now + 650;
+    lastRecruitReport = null;
     const report = MODEL.executeAiPhase(scenario, geography, "player-realm");
     lastPhaseReport = report;
     const selectedArmy = scenario.armies.find((candidate) => candidate.id === selectedArmyId);
@@ -1287,6 +1461,7 @@
   dom.zoomOutButton.addEventListener("click", () => zoomBy(0.8));
   dom.zoomResetButton.addEventListener("click", resetCamera);
   dom.endPhaseButton.addEventListener("click", () => endPlayerPhase({ focusControl: true }));
+  dom.recruitButton.addEventListener("click", executeRecruitment);
   dom.inspectorToggle.addEventListener("click", () => setInspectorCollapsed(!dom.inspector.classList.contains("is-collapsed")));
   dom.reliefToggle.addEventListener("click", () => setReliefMode(reliefMode === "3d" ? "2d" : "3d"));
   dom.languageToggle.addEventListener("click", () => {
@@ -1301,8 +1476,10 @@
     movementCount = 0;
     lastBattleReport = null;
     lastPhaseReport = null;
+    lastRecruitReport = null;
     combatLockedUntil = 0;
     phaseLockedUntil = 0;
+    recruitLockedUntil = 0;
     updateScenarioReadout();
     selectedArmyId = null;
     updateScenarioMap();
@@ -1313,6 +1490,11 @@
   window.addEventListener("keydown", (event) => {
     const target = event.target;
     if (target?.matches?.("input, textarea, select") || target?.isContentEditable) return;
+    if (event.key.toLowerCase() === "v") {
+      event.preventDefault();
+      if (!event.repeat) executeRecruitment();
+      return;
+    }
     if (event.key.toLowerCase() === "e") {
       event.preventDefault();
       if (!event.repeat) endPlayerPhase({ focusControl: true });

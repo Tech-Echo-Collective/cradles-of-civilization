@@ -413,6 +413,14 @@ body[data-mode="military"] .province-shape.is-attack-target {
   stroke-dasharray: 4 3;
 }
 
+body[data-mode="military"] .province-shape.is-neutral-target {
+  fill-opacity: 0.86;
+  filter: brightness(1.08) saturate(1.18);
+  stroke: #efc76e;
+  stroke-width: 3.2;
+  stroke-dasharray: 7 3;
+}
+
 .province-relief-layer,
 .terrain-texture-layer,
 .route-layer,
@@ -519,6 +527,12 @@ body[data-mode="military"] .strategic-border {
   stroke: #f3b067;
   stroke-width: 6.5;
   stroke-dasharray: 10 5;
+}
+
+.realm-border.neutral-frontier {
+  stroke: #efc76e;
+  stroke-width: 5.5;
+  stroke-dasharray: 5 5;
 }
 
 body[data-mode="terrain"] .realm-border {
@@ -643,6 +657,12 @@ body[data-mode="military"] .realm-label {
   stroke: #f08072;
   stroke-width: 3;
   stroke-dasharray: 4 2;
+}
+
+.army-marker.is-neutral-target .army-marker-shield {
+  stroke: #efc76e;
+  stroke-width: 3;
+  stroke-dasharray: 7 2;
 }
 
 body[data-mode="political"] .army-marker {
@@ -942,6 +962,91 @@ body[data-zoom-band="far"] .army-marker.secondary-army:not(.is-selected) {
   margin: 0;
   color: #9dafaa;
   font-size: 0.78rem;
+}
+
+.inspector-recruit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: stretch;
+  gap: 10px;
+  min-height: 54px;
+  margin-top: 14px;
+  padding: 8px;
+  color: #dce7e0;
+  background: rgba(20, 34, 30, 0.86);
+  border: 1px solid rgba(111, 188, 151, 0.3);
+  border-left: 3px solid #70d9a3;
+}
+
+.inspector-recruit[hidden] {
+  display: none;
+}
+
+.recruit-copy {
+  display: grid;
+  align-content: center;
+  min-width: 0;
+  padding-left: 3px;
+}
+
+.recruit-copy > span {
+  color: #8fa69d;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.51rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.recruit-copy strong {
+  overflow: hidden;
+  margin-top: 3px;
+  color: #f2f5ec;
+  font-size: 0.72rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+}
+
+.recruit-copy p {
+  margin: 4px 0 0;
+  color: #9fb4ac;
+  font-size: 0.64rem;
+  line-height: 1.35;
+}
+
+#recruitButton {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  color: #dff8e8;
+  background: rgba(39, 104, 76, 0.74);
+  border: 1px solid rgba(126, 221, 170, 0.46);
+  border-radius: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.25rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+#recruitButton:hover,
+#recruitButton:focus-visible {
+  color: #ffffff;
+  background: rgba(52, 139, 99, 0.92);
+  border-color: rgba(187, 247, 213, 0.8);
+}
+
+#recruitButton:disabled {
+  color: #707d77;
+  background: rgba(25, 36, 34, 0.84);
+  border-color: rgba(129, 151, 141, 0.25);
+  cursor: not-allowed;
+}
+
+.inspector-recruit[data-state="cooldown"] {
+  border-left-color: #a99b79;
+}
+
+.inspector-recruit[data-state="cooldown"] .recruit-copy strong {
+  color: #c6bda8;
 }
 
 .province-facts {
@@ -1350,6 +1455,15 @@ body[data-inspector-collapsed="true"] .map-hint {
 
   .phase-control,
   #endPhaseButton {
+    width: 42px;
+    height: 42px;
+  }
+
+  .inspector-recruit {
+    grid-template-columns: minmax(0, 1fr) 42px;
+  }
+
+  #recruitButton {
     width: 42px;
     height: 42px;
   }

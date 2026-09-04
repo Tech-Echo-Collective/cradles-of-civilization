@@ -148,6 +148,127 @@ for (let seed = 1; seed <= 100; seed += 1) {
   assert.equal(model.buildGeography(data).signature, geography.signature, `seed ${seed} must not mutate fixed geography`);
 }
 
+assert.equal(model.RECRUITMENT_FORCE, 5200, "each recruitment must request exactly 5,200 troops");
+assert.equal(model.RECRUITMENT_COOLDOWN, 4, "recruitment must use a four-round cooldown");
+assert.equal(model.MILITARY_FORCE_CAP, 120000, "no army may exceed the 120,000 force cap");
+
+const relationScenario = model.createScenario(data, geography, 1058);
+const neutralRealmIds = data.realms
+  .filter((realm) => model.realmRelation(relationScenario, realm.id) === "neutral")
+  .map((realm) => realm.id)
+  .sort();
+const hostileRealmIds = data.realms
+  .filter((realm) => model.realmRelation(relationScenario, realm.id) === "hostile")
+  .map((realm) => realm.id)
+  .sort();
+assert.equal(JSON.stringify(neutralRealmIds), JSON.stringify(["free-cities", "polaris-see"]), "the initial map must contain exactly the two intended neutral realms");
+assert.equal(JSON.stringify(hostileRealmIds), JSON.stringify(["ash-confederacy", "solar-court"]), "the initial map must contain exactly the two intended hostile realms");
+assert.equal(model.realmRelation(relationScenario, "player-realm"), "player", "the player realm must have its own relationship state");
+neutralRealmIds.forEach((realmId) => {
+  assert.equal(model.canRealmAttack(relationScenario, realmId, "player-realm"), false, `${realmId} must not attack the player while neutral`);
+});
+hostileRealmIds.forEach((realmId) => {
+  assert.equal(model.canRealmAttack(relationScenario, realmId, "player-realm"), true, `${realmId} must be allowed to attack the player while hostile`);
+});
+
+const mergeRecruitScenario = model.createScenario(data, geography, 1058);
+const mergeRecruitArmy = mergeRecruitScenario.armies.find((army) => army.realmId === "player-realm");
+const mergeForceBefore = mergeRecruitArmy.force;
+const mergeLastActedTurn = mergeRecruitArmy.lastActedTurn;
+const mergeArmyCount = mergeRecruitScenario.armies.length;
+const mergeSignature = mergeRecruitScenario.signature;
+const mergeRecruitment = model.executeRecruitment(mergeRecruitScenario, geography, mergeRecruitArmy.provinceId);
+assert.equal(mergeRecruitment.recruited, true, "recruitment in an occupied friendly province must succeed");
+assert.equal(mergeRecruitment.kind, "merge", "recruitment in an occupied province must merge into the resident army");
+assert.equal(mergeRecruitment.forceRequested, 5200, "a merge must request the standard 5,200 troops");
+assert.equal(mergeRecruitment.forceAdded, 5200, "an uncapped merge must add all 5,200 troops");
+assert.equal(mergeRecruitArmy.force, mergeForceBefore + 5200, "a merge must increase the resident army by 5,200");
+assert.equal(mergeRecruitArmy.lastActedTurn, mergeLastActedTurn, "merging recruits must not refresh or spend the resident army's action");
+assert.equal(mergeRecruitScenario.armies.length, mergeArmyCount, "a merge must not create a duplicate army marker");
+assert.equal(mergeRecruitScenario.recruitment.cooldown, 4, "successful recruitment must start the four-round cooldown");
+assert.equal(mergeRecruitScenario.recruitment.used, 1, "successful recruitment must increment its deterministic use counter");
+assert.equal(mergeRecruitScenario.signature, mergeSignature, "recruitment must preserve the seeded scenario signature");
+
+const newRecruitScenario = model.createScenario(data, geography, 1058);
+const emptyRecruitProvinceId = provinceIds.find((provinceId) => newRecruitScenario.controllerByProvince[provinceId] === "player-realm"
+  && !newRecruitScenario.armies.some((army) => army.realmId === "player-realm" && army.provinceId === provinceId)
+  && geography.neighbors[provinceId].some((neighborId) => newRecruitScenario.controllerByProvince[neighborId] === "player-realm"));
+assert.ok(emptyRecruitProvinceId, "the recruitment fixture needs an empty friendly province with a friendly neighbor");
+const newRecruitArmyCount = newRecruitScenario.armies.length;
+const newRecruitSignature = newRecruitScenario.signature;
+const newRecruitment = model.executeRecruitment(newRecruitScenario, geography, emptyRecruitProvinceId);
+assert.equal(newRecruitment.recruited, true, "recruitment in an empty friendly province must succeed");
+assert.equal(newRecruitment.kind, "new-army", "an empty friendly province must raise a new field army");
+assert.equal(newRecruitment.forceAdded, 5200, "a new field army must receive exactly 5,200 troops");
+assert.equal(newRecruitScenario.armies.length, newRecruitArmyCount + 1, "raising a field army must add exactly one army");
+const newRecruitArmy = newRecruitScenario.armies.find((army) => army.id === newRecruitment.armyId);
+assert.ok(newRecruitArmy, "new recruitment must return the id of the created army");
+assert.equal(newRecruitArmy.force, 5200, "a new field army must begin with 5,200 troops");
+assert.equal(newRecruitArmy.provinceId, emptyRecruitProvinceId, "a new field army must appear in the selected province");
+assert.equal(newRecruitArmy.lastActedTurn, newRecruitScenario.turn - 1, "a newly raised army must begin ready to act");
+const newRecruitMoveTargetId = geography.neighbors[emptyRecruitProvinceId]
+  .find((provinceId) => newRecruitScenario.controllerByProvince[provinceId] === "player-realm");
+assert.equal(model.executeArmyMove(newRecruitScenario, geography, newRecruitArmy.id, newRecruitMoveTargetId).moved, true, "a newly raised army must be able to move in its recruitment turn");
+assert.equal(newRecruitArmy.lastActedTurn, newRecruitScenario.turn, "a new army's same-turn move must spend its action normally");
+assert.equal(newRecruitScenario.signature, newRecruitSignature, "raising and moving a field army must preserve the seeded scenario signature");
+
+const rebuildRecruitScenario = model.createScenario(data, geography, 1058);
+rebuildRecruitScenario.armies = rebuildRecruitScenario.armies.filter((army) => army.realmId !== "player-realm");
+const rebuildProvinceId = provinceIds.find((provinceId) => rebuildRecruitScenario.controllerByProvince[provinceId] === "player-realm");
+const rebuildSignature = rebuildRecruitScenario.signature;
+const rebuildRecruitment = model.executeRecruitment(rebuildRecruitScenario, geography, rebuildProvinceId);
+assert.equal(rebuildRecruitment.recruited, true, "a player with no surviving army must still be able to recruit");
+assert.equal(rebuildRecruitment.kind, "rebuild", "the first army after total military loss must be reported as a rebuild");
+const rebuiltArmy = rebuildRecruitScenario.armies.find((army) => army.id === rebuildRecruitment.armyId);
+assert.ok(rebuiltArmy, "a rebuild must create a replacement player army");
+assert.equal(rebuiltArmy.force, 5200, "a rebuilt army must begin with 5,200 troops");
+assert.equal(rebuiltArmy.lastActedTurn, rebuildRecruitScenario.turn - 1, "a rebuilt army must be ready to act immediately");
+assert.equal(rebuildRecruitScenario.signature, rebuildSignature, "rebuilding after total military loss must preserve the seeded signature");
+
+const rejectedRecruitScenario = model.createScenario(data, geography, 1058);
+const enemyRecruitProvinceId = provinceIds.find((provinceId) => rejectedRecruitScenario.controllerByProvince[provinceId] !== "player-realm");
+const beforeRejectedRecruitment = JSON.stringify(rejectedRecruitScenario);
+const rejectedRecruitment = model.executeRecruitment(rejectedRecruitScenario, geography, enemyRecruitProvinceId);
+assert.equal(rejectedRecruitment.recruited, false, "recruitment in an enemy province must be rejected");
+assert.equal(rejectedRecruitment.kind, "not-owned", "enemy-province recruitment must identify the ownership failure");
+assert.equal(JSON.stringify(rejectedRecruitScenario), beforeRejectedRecruitment, "rejected enemy-province recruitment must have no side effects");
+
+const cappedRecruitScenario = model.createScenario(data, geography, 1058);
+const cappedRecruitArmy = cappedRecruitScenario.armies.find((army) => army.realmId === "player-realm");
+cappedRecruitArmy.force = 118000;
+const cappedSignature = cappedRecruitScenario.signature;
+const cappedRecruitment = model.executeRecruitment(cappedRecruitScenario, geography, cappedRecruitArmy.provinceId);
+assert.equal(cappedRecruitment.recruited, true, "recruitment below the force cap must still succeed");
+assert.equal(cappedRecruitment.forceAdded, 2000, "recruitment must add only the room remaining below 120,000");
+assert.equal(cappedRecruitment.forceAfter, 120000, "recruitment must clamp force at 120,000");
+assert.equal(cappedRecruitment.capped, true, "a partially applied recruitment must report the cap");
+assert.equal(cappedRecruitArmy.force, 120000, "the resident army must never exceed 120,000");
+assert.equal(cappedRecruitScenario.signature, cappedSignature, "capped recruitment must preserve the seeded signature");
+
+const cooldownRecruitScenario = model.createScenario(data, geography, 1058);
+const cooldownSignature = cooldownRecruitScenario.signature;
+const cooldownProvinceId = cooldownRecruitScenario.armies.find((army) => army.realmId === "player-realm").provinceId;
+assert.equal(model.executeRecruitment(cooldownRecruitScenario, geography, cooldownProvinceId).recruited, true, "the cooldown fixture must recruit on turn one");
+for (const expectedCooldown of [3, 2, 1, 0]) {
+  const phase = model.executeAiPhase(cooldownRecruitScenario, geography);
+  assert.equal(phase.recruitmentCooldown.after, expectedCooldown, `AI phase must tick recruitment cooldown to ${expectedCooldown}`);
+  assert.equal(cooldownRecruitScenario.recruitment.cooldown, expectedCooldown, `scenario cooldown must persist as ${expectedCooldown}`);
+  if (expectedCooldown > 0) {
+    const ownedProvinceId = provinceIds.find((provinceId) => cooldownRecruitScenario.controllerByProvince[provinceId] === "player-realm");
+    const beforeCooldownRejection = JSON.stringify(cooldownRecruitScenario);
+    const cooldownRejection = model.executeRecruitment(cooldownRecruitScenario, geography, ownedProvinceId);
+    assert.equal(cooldownRejection.recruited, false, "recruitment must remain blocked before all four cooldown ticks complete");
+    assert.equal(cooldownRejection.kind, "cooldown", "blocked repeat recruitment must report its cooldown");
+    assert.equal(JSON.stringify(cooldownRecruitScenario), beforeCooldownRejection, "a cooldown rejection must not mutate scenario state");
+  }
+}
+assert.equal(cooldownRecruitScenario.turn, 5, "four completed AI phases must open turn five");
+const turnFiveRecruitProvinceId = provinceIds.find((provinceId) => cooldownRecruitScenario.controllerByProvince[provinceId] === "player-realm");
+const turnFiveRecruitment = model.executeRecruitment(cooldownRecruitScenario, geography, turnFiveRecruitProvinceId);
+assert.equal(turnFiveRecruitment.recruited, true, "recruitment must become available again on turn five");
+assert.equal(turnFiveRecruitment.used, 2, "the second legal recruitment must advance the use counter deterministically");
+assert.equal(cooldownRecruitScenario.signature, cooldownSignature, "cooldown ticks and repeated recruitment must preserve the seeded signature");
+
 const movementScenario = model.createScenario(data, geography, 1058);
 const commandArmy = movementScenario.armies.find((army) => army.realmId === "player-realm"
   && geography.neighbors[army.provinceId].some((provinceId) => movementScenario.controllerByProvince[provinceId] === army.realmId));
@@ -351,6 +472,69 @@ const beforeRejectedForeignBattle = JSON.stringify(rejectedBattleScenario);
 assert.equal(model.executeArmyBattle(rejectedBattleScenario, geography, rejectedForeignArmy.id, foreignAttackTarget).kind, "not-commandable", "foreign attacks must remain observer-only");
 assert.equal(JSON.stringify(rejectedBattleScenario), beforeRejectedForeignBattle, "rejected foreign attacks must have no side effects");
 
+const neutralAttackScenario = model.createScenario(data, geography, 1058);
+const neutralAttackRealmId = neutralRealmIds.find((realmId) => provinceIds.some((provinceId) => neutralAttackScenario.controllerByProvince[provinceId] === realmId
+  && geography.neighbors[provinceId].some((neighborId) => neutralAttackScenario.controllerByProvince[neighborId] === "player-realm")));
+assert.ok(neutralAttackRealmId, "the neutrality fixture needs a neutral realm bordering the player");
+const neutralAttackOriginId = provinceIds.find((provinceId) => neutralAttackScenario.controllerByProvince[provinceId] === neutralAttackRealmId
+  && geography.neighbors[provinceId].some((neighborId) => neutralAttackScenario.controllerByProvince[neighborId] === "player-realm"));
+const neutralAttackTargetId = geography.neighbors[neutralAttackOriginId]
+  .find((provinceId) => neutralAttackScenario.controllerByProvince[provinceId] === "player-realm");
+const neutralAttackArmy = neutralAttackScenario.armies.find((army) => army.realmId === neutralAttackRealmId);
+neutralAttackArmy.provinceId = neutralAttackOriginId;
+const beforeNeutralAttack = JSON.stringify(neutralAttackScenario);
+const blockedNeutralAttack = model.executeArmyBattle(
+  neutralAttackScenario,
+  geography,
+  neutralAttackArmy.id,
+  neutralAttackTargetId,
+  neutralAttackRealmId
+);
+assert.equal(blockedNeutralAttack.attacked, false, "an unprovoked neutral realm must not attack the player");
+assert.equal(blockedNeutralAttack.kind, "neutrality", "a blocked neutral attack must identify the diplomatic restriction");
+assert.equal(JSON.stringify(neutralAttackScenario), beforeNeutralAttack, "a blocked neutral attack must have no side effects");
+
+function runNeutralProvocation() {
+  const scenario = model.createScenario(data, geography, 1058);
+  const originProvinceId = provinceIds.find((provinceId) => scenario.controllerByProvince[provinceId] === "player-realm"
+    && geography.neighbors[provinceId].some((neighborId) => model.realmRelation(scenario, scenario.controllerByProvince[neighborId]) === "neutral"));
+  const targetProvinceId = geography.neighbors[originProvinceId]
+    .find((provinceId) => model.realmRelation(scenario, scenario.controllerByProvince[provinceId]) === "neutral");
+  const neutralRealmId = scenario.controllerByProvince[targetProvinceId];
+  const army = scenario.armies.find((candidate) => candidate.realmId === "player-realm");
+  army.provinceId = originProvinceId;
+  army.force = 40000;
+  army.attack = 300;
+  const signature = scenario.signature;
+  const report = model.executeArmyBattle(scenario, geography, army.id, targetProvinceId);
+  return { scenario, report, neutralRealmId, signature };
+}
+
+const provocationLeft = runNeutralProvocation();
+const provocationRight = runNeutralProvocation();
+assert.equal(JSON.stringify(provocationLeft.report), JSON.stringify(provocationRight.report), "provoking a neutral realm must produce a deterministic battle report");
+assert.equal(JSON.stringify(provocationLeft.scenario), JSON.stringify(provocationRight.scenario), "provoking a neutral realm must produce deterministic scenario state");
+assert.equal(provocationLeft.report.attacked, true, "the player must be able to choose an attack against a neutral realm");
+assert.equal(provocationLeft.report.previousControllerId, provocationLeft.neutralRealmId, "the provocation fixture must attack neutral territory");
+assert.equal(provocationLeft.report.provokedRealmId, provocationLeft.neutralRealmId, "an accepted player attack must report the provoked neutral realm");
+assert.equal(JSON.stringify(provocationLeft.report.relationChanges), JSON.stringify([{
+  realmId: provocationLeft.neutralRealmId,
+  from: "neutral",
+  to: "hostile",
+  reason: "player-attack"
+}]), "a player attack must report exactly one neutral-to-hostile relationship change");
+assert.equal(model.realmRelation(provocationLeft.scenario, provocationLeft.neutralRealmId), "hostile", "an attacked neutral realm must become hostile immediately");
+assert.equal(model.canRealmAttack(provocationLeft.scenario, provocationLeft.neutralRealmId, "player-realm"), true, "a provoked realm must be allowed to attack the player thereafter");
+assert.equal(provocationLeft.scenario.signature, provocationLeft.signature, "provocation and relationship changes must preserve the seeded scenario signature");
+for (let round = 1; round <= 3; round += 1) {
+  const leftPhase = model.executeAiPhase(provocationLeft.scenario, geography);
+  const rightPhase = model.executeAiPhase(provocationRight.scenario, geography);
+  assert.equal(JSON.stringify(leftPhase), JSON.stringify(rightPhase), `provoked relationship round ${round} must keep AI decisions deterministic`);
+  assert.equal(JSON.stringify(provocationLeft.scenario), JSON.stringify(provocationRight.scenario), `provoked relationship round ${round} must keep scenario state deterministic`);
+  assert.equal(model.realmRelation(provocationLeft.scenario, provocationLeft.neutralRealmId), "hostile", `provoked relationship round ${round} must not revert to neutral`);
+  assert.equal(provocationLeft.scenario.signature, provocationLeft.signature, `provoked relationship round ${round} must preserve the seeded signature`);
+}
+
 const aiRealmIds = data.realms.filter((realm) => realm.id !== "player-realm").map((realm) => realm.id).sort();
 const repeatAiPhase = () => {
   const scenario = model.createScenario(data, geography, 1058);
@@ -373,6 +557,9 @@ assert.ok(repeatedAiLeft.report.actions.some((action) => action.kind === "move")
 assert.equal(repeatedAiLeft.scenario.battleCount, repeatedAiLeft.report.actions.filter((action) => action.kind === "battle").length, "each reported AI attack must resolve exactly one battle");
 repeatedAiLeft.report.actions.forEach((action) => {
   assert.ok(["move", "battle", "hold"].includes(action.kind), `${action.realmId} must produce one recognized AI result`);
+  if (neutralRealmIds.includes(action.realmId) && action.kind === "battle") {
+    assert.notEqual(action.battle.previousControllerId, "player-realm", `${action.realmId} must not choose the player as a battle target while neutral`);
+  }
   if (action.armyId) {
     assert.equal(repeatedAiLeft.initialArmyRealms[action.armyId], action.realmId, `${action.realmId} must command only its own army`);
     const survivor = repeatedAiLeft.scenario.armies.find((army) => army.id === action.armyId);
@@ -439,8 +626,22 @@ for (let seed = 1; seed <= 30; seed += 1) {
     assert.equal(JSON.stringify(leftReport.actions.map((action) => action.realmId)), JSON.stringify(aiRealmIds), `seed ${seed} round ${round} must schedule each AI realm once`);
     assert.equal(left.turn, round + 1, `seed ${seed} round ${round} must advance exactly one turn`);
     assert.equal(left.signature, initialSignature, `seed ${seed} round ${round} must preserve its initial scenario signature`);
+    neutralRealmIds.forEach((realmId) => {
+      assert.equal(model.realmRelation(left, realmId), "neutral", `seed ${seed} round ${round} unprovoked ${realmId} must remain neutral`);
+    });
+    hostileRealmIds.forEach((realmId) => {
+      assert.equal(model.realmRelation(left, realmId), "hostile", `seed ${seed} round ${round} ${realmId} must remain hostile`);
+    });
+    leftReport.actions.forEach((action) => {
+      if (neutralRealmIds.includes(action.realmId) && action.kind === "battle") {
+        assert.notEqual(action.battle.previousControllerId, "player-realm", `seed ${seed} round ${round} neutral AI must not attack the player`);
+      }
+    });
+    assert.ok(left.recruitment.cooldown >= 0 && left.recruitment.cooldown <= model.RECRUITMENT_COOLDOWN, `seed ${seed} round ${round} recruitment cooldown must remain bounded`);
+    assert.ok(Number.isInteger(left.recruitment.used) && left.recruitment.used >= 0, `seed ${seed} round ${round} recruitment use counter must remain a nonnegative integer`);
     left.armies.forEach((army) => {
       assert.ok(Number.isInteger(army.force) && army.force > 0, `seed ${seed} round ${round} must retain only living integer-strength armies`);
+      assert.ok(army.force <= model.MILITARY_FORCE_CAP, `seed ${seed} round ${round} army force must remain at or below 120,000`);
       assert.equal(left.controllerByProvince[army.provinceId], army.realmId, `seed ${seed} round ${round} army must finish in friendly territory`);
       assert.ok(army.lastActedTurn < left.turn, `seed ${seed} round ${round} surviving army action stamps must never point into the future`);
     });
@@ -496,6 +697,8 @@ assert.match(html, /id="endPhaseButton"[^>]*type="button"/u, "map lab must expos
 assert.match(html, /id="endPhaseButton"[^>]*aria-keyshortcuts="E"/u, "the end-phase control must expose its keyboard shortcut");
 assert.match(html, /id="phaseStatus"/u, "map lab must expose the current turn and player phase");
 assert.match(html, /id="phaseReport"/u, "map lab must expose a visible AI phase report");
+assert.match(html, /id="recruitPanel"/u, "map lab must expose recruitment in the province inspector");
+assert.match(html, /id="recruitButton"[^>]*type="button"[^>]*aria-keyshortcuts="V"/u, "recruitment must use a dedicated button with its keyboard shortcut");
 assert.match(html, /id="provinceReliefLayer"/u, "map lab must expose a static relief layer");
 assert.doesNotMatch(html, /feDropShadow|feTurbulence/u, "map relief must avoid expensive SVG filters");
 assert.match(html, /\.\.\/balance-model\.js\?v=/u, "map lab must reuse the formal deterministic casualty model");
@@ -505,28 +708,41 @@ assert.match(ui, /window\.history\.replaceState/u, "map lab should preserve scen
 assert.match(ui, /function activateProvince/u, "map lab needs a unified province command handler");
 assert.match(ui, /MODEL\.executeArmyBattle/u, "hostile province activation must resolve a battle");
 assert.match(ui, /MODEL\.executeAiPhase/u, "ending the player phase must execute the deterministic AI phase");
+assert.match(ui, /MODEL\.executeRecruitment/u, "the inspector recruitment control must use the deterministic recruitment model");
+assert.match(ui, /function executeRecruitment/u, "map lab must route recruitment through one guarded handler");
+assert.match(ui, /recruitLockedUntil = now \+ 450/u, "recruitment must guard against accidental double activation");
+assert.match(ui, /if \(!event\.repeat\) executeRecruitment/u, "holding the recruitment keyboard shortcut must not recruit more than once");
 assert.match(ui, /function endPlayerPhase/u, "map lab must route end-phase input through one guarded handler");
 assert.match(ui, /phaseLockedUntil = now \+ 650/u, "the end-phase handler must reject accidental double activation");
 assert.match(ui, /if \(!event\.repeat\) endPlayerPhase/u, "holding the end-phase keyboard shortcut must not skip multiple turns");
 assert.match(ui, /function renderBattleReport/u, "map lab must render bilingual battle feedback");
 assert.match(ui, /function renderPhaseReport/u, "map lab must render bilingual AI movement, attack, and hold feedback");
+assert.match(ui, /function renderRecruitment/u, "map lab must render recruitment availability and cooldown feedback");
+assert.match(ui, /provokedRealmId/u, "battle feedback must explain when an attacked neutral realm becomes hostile");
+assert.match(ui, /is-neutral-target/u, "neutral targets must remain visually distinct from hostile targets");
 assert.match(ui, /classification\.kind === "spent"/u, "the UI must explain when a selected army has already acted");
 assert.match(ui, /function renderMovementTargets[\s\S]*MODEL\.classifyArmyDestination[\s\S]*result\.kind === "move"[\s\S]*result\.kind === "attack"/u, "spent armies must expose neither movement nor attack target styling");
 assert.doesNotMatch(ui, /result\.kind === "move" \|\| result\.kind === "attack"/u, "clicking another friendly army must select it instead of moving the current army");
 assert.match(ui, /combatLockedUntil = Date\.now\(\) \+ 400/u, "battle activation must guard against accidental double resolution");
 assert.match(ui, /lastPhaseReport = null;[\s\S]*phaseLockedUntil = 0;/u, "reshuffling a seed must reset the previous phase report and phase lock");
+assert.match(ui, /lastRecruitReport = null;[\s\S]*recruitLockedUntil = 0;/u, "reshuffling a seed must reset recruitment feedback and its input lock");
 assert.match(ui, /function reliefWallPath/u, "map lab must build lightweight vector sidewalls");
 assert.match(ui, /function reliefWorldTransform/u, "3D relief must include a lightweight oblique projection");
 assert.match(ui, /worldLayer\.setAttribute\("transform"/u, "3D relief must apply its projection to the SVG world layer");
 assert.doesNotMatch(ui, /WebGLRenderingContext|THREE\.|getContext\(["']webgl/u, "map relief must not require WebGL");
 assert.match(mapModel, /lastActedTurn/u, "turn state must be stored per army in the deterministic model");
 assert.match(mapModel, /executeAiPhase/u, "the deterministic model must export its AI phase runner");
+assert.match(mapModel, /executeRecruitment/u, "the deterministic model must export recruitment");
+assert.match(mapModel, /realmRelation[\s\S]*canRealmAttack/u, "the deterministic model must expose relationship-aware attack rules");
 assert.doesNotMatch(mapModel, /Math\.random|Date\.now/u, "AI decisions must not depend on nondeterministic randomness or wall-clock time");
 assert.match(css, /province-shape\.is-move-target/u, "map lab needs friendly movement target styling");
 assert.match(css, /province-shape\.is-attack-target/u, "map lab needs hostile movement target styling");
+assert.match(css, /province-shape\.is-neutral-target/u, "map lab needs distinct neutral target styling");
 assert.match(css, /\.inspector-battle/u, "map lab needs visible battle report styling");
 assert.match(css, /\.inspector-phase/u, "map lab needs visible AI phase report styling");
+assert.match(css, /\.inspector-recruit/u, "map lab needs visible recruitment styling");
 assert.match(css, /#endPhaseButton\s*\{[\s\S]*?width:\s*44px;[\s\S]*?height:\s*44px;[\s\S]*?border-radius:\s*0;/u, "the end-phase control must remain a square button");
+assert.match(css, /#recruitButton\s*\{[\s\S]*?width:\s*44px;[\s\S]*?height:\s*44px;[\s\S]*?border-radius:\s*0;/u, "the recruitment control must remain a square button");
 assert.doesNotMatch(`${html}\n${ui}`, /战斗待接|战斗尚未接入|combat pending|combat not connected/iu, "completed combat must not be described as pending");
 assert.match(css, /data-zoom-band="far"/u, "map lab needs semantic zoom styles");
 assert.match(css, /data-relief="2d"/u, "map lab needs a flat fallback mode");

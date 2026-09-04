@@ -7,7 +7,7 @@
     <meta name="copyright" content="Original concept by Noah Walker">
     <meta name="theme-color" content="#111a1d">
     <title>文明摇篮：地图实验室</title>
-    <link rel="stylesheet" href="map-lab.css?v=20260904-g">
+    <link rel="stylesheet" href="map-lab.css?v=20260904-h">
   </head>
   <body data-mode="political" data-relief="3d" data-zoom-band="far">
     <div class="map-lab-shell">
@@ -136,6 +136,16 @@
               <h2 id="provinceName">中央盆地</h2>
               <p id="provinceRegion">中央盆地 · 盆地</p>
             </header>
+            <section class="inspector-recruit" id="recruitPanel" hidden>
+              <div class="recruit-copy">
+                <span data-zh="征兵" data-en="RECRUIT">征兵</span>
+                <strong id="recruitStatus"></strong>
+                <p id="recruitFeedback" hidden></p>
+              </div>
+              <button id="recruitButton" type="button" aria-label="在所选省份征兵" aria-describedby="recruitStatus recruitFeedback" aria-keyshortcuts="V">
+                <span aria-hidden="true">＋</span>
+              </button>
+            </section>
             <section class="inspector-battle" id="battleReport" role="status" hidden>
               <span data-zh="最近战报" data-en="LATEST BATTLE">最近战报</span>
               <strong id="battleReportTitle"></strong>
@@ -162,14 +172,14 @@
           </div>
         </aside>
 
-        <div class="map-hint" data-zh="每支军团每回合行动一次 · ▶ 结束阶段 · 1/2/3 切换图层" data-en="ONE ACTION PER ARMY EACH TURN · ▶ END PHASE · 1/2/3 MAP MODES">每支军团每回合行动一次 · ▶ 结束阶段 · 1/2/3 切换图层</div>
+        <div class="map-hint" data-zh="选本国省份按 V 征兵 · E 结束阶段 · 1/2/3 切换图层" data-en="SELECT OWN PROVINCE + V TO RECRUIT · E END PHASE · 1/2/3 MAP MODES">选本国省份按 V 征兵 · E 结束阶段 · 1/2/3 切换图层</div>
         <div id="liveRegion" class="visually-hidden" aria-live="polite"></div>
       </main>
     </div>
 
     <script src="../balance-model.js?v=20260904-v040"></script>
     <script src="map-data.js?v=20260904-g"></script>
-    <script src="map-model.js?v=20260904-g"></script>
-    <script src="map-lab.js?v=20260904-g"></script>
+    <script src="map-model.js?v=20260904-h"></script>
+    <script src="map-lab.js?v=20260904-h"></script>
   </body>
 </html>
