@@ -39,7 +39,13 @@ context.window.addEventListener = () => {};
 context.window.history = context.history;
 context.window.location = context.location;
 
-for (const filename of ["endings.js", "balance-model.js", "game.js"]) {
+for (const filename of [
+  "endings.js",
+  "balance-model.js",
+  "map-lab/map-data.js",
+  "map-lab/map-model.js",
+  "game.js"
+]) {
   vm.runInContext(fs.readFileSync(path.join(projectRoot, filename), "utf8"), context, { filename });
 }
 

@@ -38,6 +38,8 @@ context.window.location = context.location;
 
 vm.runInContext(fs.readFileSync(path.join(projectRoot, "endings.js"), "utf8"), context, { filename: "endings.js" });
 vm.runInContext(fs.readFileSync(path.join(projectRoot, "balance-model.js"), "utf8"), context, { filename: "balance-model.js" });
+vm.runInContext(fs.readFileSync(path.join(projectRoot, "map-lab/map-data.js"), "utf8"), context, { filename: "map-data.js" });
+vm.runInContext(fs.readFileSync(path.join(projectRoot, "map-lab/map-model.js"), "utf8"), context, { filename: "map-model.js" });
 vm.runInContext(fs.readFileSync(path.join(projectRoot, "game.js"), "utf8"), context, { filename: "game.js" });
 
 const report = vm.runInContext(`(() => {
@@ -59,15 +61,69 @@ const report = vm.runInContext(`(() => {
     }
     return visited.size;
   };
+  const controllerSignature = (mapState) => mapState.regions
+    .map((region) => region.id + ":" + (region.controllerId || "none"))
+    .sort()
+    .join("|");
+  const checkTerritoryPartition = (mapState, label) => {
+    const ids = mapState.regions.map((region) => region.id);
+    check(ids.length === 64 && new Set(ids).size === 64, label + " must cover all 64 provinces exactly once");
+    check(ids.every((id) => STRATEGIC_GEOGRAPHY.provinceById[id]), label + " must only contain fixed-map province ids");
+    check(mapState.regions.every((region) => POLITICAL_ENTITY_IDS.includes(region.controllerId)), label + " must assign every province to a political entity");
+    const territoryCounts = POLITICAL_ENTITY_IDS.map((entityId) => {
+      const controlled = mapState.regions.filter((region) => region.controllerId === entityId).map((region) => region.id);
+      check(STRATEGIC_MAP_MODEL.isConnectedSubset(controlled, STRATEGIC_GEOGRAPHY.neighbors), label + " must keep " + entityId + " contiguous");
+      return controlled.length;
+    });
+    check(territoryCounts.join(",") === "13,13,13,13,12", label + " must split provinces 13/13/13/13/12 in political-entity order");
+  };
+  const armyRosterPaths = (value, prefix = "") => {
+    if (!value || typeof value !== "object") return [];
+    return Object.entries(value).flatMap(([key, child]) => {
+      const path = prefix ? prefix + "." + key : key;
+      if (key === "armies" && Array.isArray(child)) return [path];
+      return armyRosterPaths(child, path);
+    });
+  };
 
   const firstMap = generateMapBlueprint(314159);
   const sameMap = generateMapBlueprint(314159);
   const secondMap = generateMapBlueprint(271828);
-  check(MAP_REGIONS.length === 25, "map must contain 25 regions");
-  check(firstMap.roads.length >= 24, "map must contain a spanning road network");
+  check(MAP_REGIONS.length === 64, "the formal game must use all 64 fixed provinces");
+  check(STRATEGIC_GEOGRAPHY.signature === "342bf330", "the formal game must use the reviewed fixed geography revision");
+  check(STRATEGIC_GEOGRAPHY.sharedEdges.length === 167, "the fixed geography must retain exactly 167 adjacencies");
+  check(firstMap.roads.length === 167, "the formal blueprint must expose every fixed adjacency");
   check(connectedRegionCount(firstMap) === MAP_REGIONS.length, "all regions must be reachable by road");
   check(JSON.stringify(firstMap) === JSON.stringify(sameMap), "the same seed must reproduce the same map");
-  check(JSON.stringify(firstMap) !== JSON.stringify(secondMap), "different seeds must change the map");
+  check(JSON.stringify(firstMap) === JSON.stringify(secondMap), "different seeds must not change fixed geography");
+
+  const defaultOpeningMap = createInitialMapState({}, {
+    seed: 314159,
+    realmName: "默认起点测试国",
+    difficulty: "normal",
+    startingRegionId: "cb05"
+  });
+  const secondOpeningMap = createInitialMapState({}, {
+    seed: 271828,
+    realmName: "异种子测试国",
+    difficulty: "normal",
+    startingRegionId: "cb05"
+  });
+  const alternateOpeningMap = createInitialMapState({}, {
+    seed: 314159,
+    realmName: "异起点测试国",
+    difficulty: "normal",
+    startingRegionId: "ld05"
+  });
+  checkTerritoryPartition(defaultOpeningMap, "default opening");
+  checkTerritoryPartition(secondOpeningMap, "second-seed opening");
+  checkTerritoryPartition(alternateOpeningMap, "alternate-capital opening");
+  check(controllerSignature(defaultOpeningMap) !== controllerSignature(secondOpeningMap), "different seeds must be able to change political controllers");
+  check(defaultOpeningMap.startingRegionId === "cb05", "the default formal starting province must be cb05");
+  check(defaultOpeningMap.regions.find((region) => region.id === "cb05")?.controllerId === PLAYER_ENTITY_ID, "cb05 must belong to the player when chosen");
+  check(alternateOpeningMap.regions.find((region) => region.id === "ld05")?.controllerId === PLAYER_ENTITY_ID, "an alternate province must belong to the player when chosen");
+  check(defaultOpeningMap.regions.filter((region) => region.controllerId === PLAYER_ENTITY_ID).length === 13, "the player must open with 13 provinces");
+  check(alternateOpeningMap.regions.filter((region) => region.controllerId === PLAYER_ENTITY_ID).length === 13, "an alternate capital must also open with 13 provinces");
 
   state = createNewState(314159);
   state.realmName = "回归测试国";
@@ -79,8 +135,12 @@ const report = vm.runInContext(`(() => {
   });
   state.military = createInitialMilitaryState(snapshot(), { difficulty: state.difficulty });
   alignArmiesWithEntityTerritories();
-  check(entityRegions(PLAYER_ENTITY_ID).length === 5, "the chosen capital must generate five starting territories");
-  check(mapStateRegion("capital").controllerId === PLAYER_ENTITY_ID, "the chosen starting region must belong to the player");
+  check(entityRegions(PLAYER_ENTITY_ID).length === 13, "the chosen capital must generate thirteen connected starting provinces");
+  check(mapStateRegion("cb05").controllerId === PLAYER_ENTITY_ID, "the chosen starting province must belong to the player");
+  check(armyRosterPaths(state).join(",") === "military.armies", "formal state must contain exactly one army roster at military.armies");
+  const openingTerritoryEffects = territoryDevelopmentEffects();
+  const legacyFiveTerritoryEffects = BALANCE_MODEL.territoryDevelopmentEffects(5);
+  check(JSON.stringify(openingTerritoryEffects) === JSON.stringify(legacyFiveTerritoryEffects), "thirteen opening provinces must retain the old five-territory balance baseline");
   const levyRegion = mapStateRegion(primaryPlayerArmy().regionId);
   state.selectedRegionId = levyRegion.id;
   state.selectedArmyId = primaryPlayerArmy().id;
@@ -97,6 +157,8 @@ const report = vm.runInContext(`(() => {
   state.military = normalizeMilitaryState(state.military, state);
   check(Boolean(armyById(fieldArmy.id)), "custom field armies must survive save normalization");
   const inheritedSnapshot = createTerritoryInheritanceSnapshot();
+  check(!Object.prototype.hasOwnProperty.call(inheritedSnapshot, "layout"), "civilization inheritance must not persist fixed map layout");
+  check(!Object.prototype.hasOwnProperty.call(inheritedSnapshot, "roads"), "civilization inheritance must not persist fixed map roads");
   check(
     inheritedSnapshot.regions.every((region) => !Object.prototype.hasOwnProperty.call(region, "fortification")),
     "civilization inheritance must preserve borders without military fortifications"
@@ -191,20 +253,79 @@ const report = vm.runInContext(`(() => {
   check(disasterRates.normal < disasterRates.hard, "hard difficulty must increase disaster frequency");
   check(disasterRates.hard < disasterRates.ultimate, "ultimate difficulty must have the highest disaster frequency");
 
-  const migrated = createInitialMapState({
-    seed: 1058,
-    regions: [{ id: "capital", owner: MAP_OWNER_PLAYER, fortification: 66 }]
-  }, { seed: 1058, realmName: "旧存档", difficulty: "normal" });
-  check(migrated.regions.length === 25, "old saves must expand to the v0.3.3 region set");
-  check(migrated.roads.length >= 24, "old saves must receive a connected seeded road network");
-
-  const alternateStart = createInitialMapState({}, {
-    seed: 314159,
-    realmName: "选地测试国",
-    difficulty: "normal",
-    startingRegionId: "lastLight"
+  const legacyBase = createNewState(1058);
+  const legacyHistory = [{
+    civilization: 2,
+    turns: 19,
+    startTurn: 7,
+    collapseCause: "旧日测试风暴",
+    finalSnapshot: { sc: 3100, be: 2900, la: 400, pop: 18000, eco: 81000, stability: 31 }
+  }];
+  const legacyRegionIds = Object.keys(LEGACY_REGION_ID_MAP);
+  const legacySave = {
+    ...legacyBase,
+    saveVersion: 10,
+    setupComplete: true,
+    setupStage: "complete",
+    realmName: "旧存档测试国",
+    startingRegionId: "capital",
+    selectedRegionId: "capital",
+    sc: 4321.25,
+    be: 3456.75,
+    pop: 54321,
+    eco: 123456,
+    history: legacyHistory,
+    log: [{ type: "progress", title: "旧档事件", text: "这条既有记录必须保留。" }],
+    map: {
+      seed: 1058,
+      difficulty: "normal",
+      startingRegionId: "capital",
+      entities: legacyBase.map.entities,
+      layout: { capital: { points: [{ x: 0, y: 0 }] } },
+      roads: [{ id: "legacy-road", a: "capital", b: "westernMarch" }],
+      regions: legacyRegionIds.map((id, index) => ({
+        id,
+        owner: index < 5 ? MAP_OWNER_PLAYER : MAP_OWNER_NEUTRAL,
+        controllerId: index < 5 ? PLAYER_ENTITY_ID : NEUTRAL_ENTITY_ID,
+        fortification: 40 + index
+      }))
+    }
+  };
+  localStorage.setItem(STORE_KEY, JSON.stringify(legacySave));
+  const migrated = loadState();
+  check(Boolean(migrated), "a v10 save must migrate instead of being discarded");
+  check(migrated.saveVersion === SAVE_VERSION, "a v10 save must upgrade to the current save version");
+  check(migrated.sc === legacySave.sc && migrated.be === legacySave.be, "save migration must preserve SC and BE exactly");
+  check(migrated.pop === legacySave.pop && migrated.eco === legacySave.eco, "save migration must preserve population and economy exactly");
+  check(
+    migrated.history.length === 1 &&
+      migrated.history[0].collapseCause === legacyHistory[0].collapseCause &&
+      migrated.history[0].turns === legacyHistory[0].turns &&
+      migrated.history[0].startTurn === legacyHistory[0].startTurn &&
+      JSON.stringify(migrated.history[0].finalSnapshot) === JSON.stringify(legacyHistory[0].finalSnapshot),
+    "save migration must preserve civilization history"
+  );
+  check(migrated.startingRegionId === "cb05", "the legacy capital id must migrate to cb05");
+  checkTerritoryPartition(migrated.map, "migrated v10 map");
+  check(!Object.prototype.hasOwnProperty.call(migrated.map, "layout"), "migrated strategic state must rebuild rather than retain legacy layout");
+  check(!Object.prototype.hasOwnProperty.call(migrated.map, "roads"), "migrated strategic state must derive rather than retain legacy roads");
+  const upgradeLogEntries = (source) => source.log.filter((entry) => {
+    const copy = (entry?.title || "") + " " + (entry?.text || "");
+    return /战略地图/u.test(copy) && /(?:64|六十四)/u.test(copy);
   });
-  check(alternateStart.regions.find((region) => region.id === "lastLight")?.controllerId === PLAYER_ENTITY_ID, "the player must be able to choose another capital");
+  check(upgradeLogEntries(migrated).length === 1, "v10 migration must append exactly one 64-province strategic-map upgrade log");
+  check(armyRosterPaths(migrated).join(",") === "military.armies", "migrated formal state must retain only one army roster");
+
+  state = migrated;
+  saveState();
+  const persisted = JSON.parse(localStorage.getItem(STORE_KEY));
+  check(!Object.prototype.hasOwnProperty.call(persisted.map, "layout"), "saved state must not persist fixed province layout");
+  check(!Object.prototype.hasOwnProperty.call(persisted.map, "roads"), "saved state must not persist fixed roads");
+  check(armyRosterPaths(persisted).join(",") === "military.armies", "serialized formal state must contain exactly one army roster");
+  const reloadedMigration = loadState();
+  check(upgradeLogEntries(reloadedMigration).length === 1, "loading an upgraded save again must not duplicate the migration log");
+  check(reloadedMigration.sc === legacySave.sc && reloadedMigration.be === legacySave.be, "a second load must retain migrated knowledge metrics");
+  check(reloadedMigration.pop === legacySave.pop && reloadedMigration.eco === legacySave.eco, "a second load must retain migrated population and economy");
 
   return {
     regions: MAP_REGIONS.length,

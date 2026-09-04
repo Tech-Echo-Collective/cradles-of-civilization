@@ -50,6 +50,8 @@ context.window.location = context.location;
 
 vm.runInContext(fs.readFileSync(path.join(projectRoot, "endings.js"), "utf8"), context, { filename: "endings.js" });
 vm.runInContext(fs.readFileSync(path.join(projectRoot, "balance-model.js"), "utf8"), context, { filename: "balance-model.js" });
+vm.runInContext(fs.readFileSync(path.join(projectRoot, "map-lab/map-data.js"), "utf8"), context, { filename: "map-data.js" });
+vm.runInContext(fs.readFileSync(path.join(projectRoot, "map-lab/map-model.js"), "utf8"), context, { filename: "map-model.js" });
 vm.runInContext(fs.readFileSync(path.join(projectRoot, "game.js"), "utf8"), context, { filename: "game.js" });
 
 vm.runInContext(`

@@ -36,7 +36,7 @@ writeFileSync(
     "运行方式：",
     "1. 解压整个文件夹。",
     "2. 双击 index.html。",
-    "3. 不要只单独发送 index.html；assets 文件夹、ending.html、localization.js、game.js、balance-model.js、endings.js、styles.css 需要保持原有相对位置。",
+    "3. 不要只单独发送 index.html；assets、map-lab 文件夹以及全部网页文件都需要保持原有相对位置。正式游戏会从 map-lab 读取固定 64 省地理。",
     "4. 想单独体验新版地图交互，可打开 map-lab/index.html；地图实验室不会读写正式游戏存档。",
     "",
     "存档说明：",

@@ -18,9 +18,13 @@ const context = vm.createContext({
     history: { replaceState() {} }
   }
 });
+context.location = context.window.location;
+context.history = context.window.history;
+context.window = context;
 context.globalThis = context;
 
 const read = (file) => fs.readFileSync(path.join(projectRoot, file), "utf8");
+vm.runInContext(read("map-lab/map-data.js"), context, { filename: "map-data.js" });
 vm.runInContext(read("localization.js"), context, { filename: "localization.js" });
 vm.runInContext(read("endings.js"), context, { filename: "endings.js" });
 
@@ -28,6 +32,12 @@ const i18n = context.CRADLES_I18N;
 i18n.init();
 assert.equal(i18n.getLanguage(), "en", "?lang=en must select English");
 assert.equal(memoryStore.get("three-sun-chronicle:language:v1"), "en", "language preference must persist separately");
+context.CRADLES_MAP_LAB_DATA.provinces.forEach((province) => {
+  assert.equal(i18n.translate(province.nameZh), province.nameEn, `province ${province.id} must use its canonical English name`);
+});
+context.CRADLES_MAP_LAB_DATA.strategicRegions.forEach((region) => {
+  assert.equal(i18n.translate(region.nameZh), region.nameEn, `strategic region ${region.id} must use its canonical English name`);
+});
 
 const hasHan = (value) => /[\u3400-\u9fff]/u.test(String(value || ""));
 const assertTranslated = (source, label = source) => {
@@ -77,12 +87,15 @@ const dynamicSamples = [
   "长生军开始执行“均衡发展”。",
   "第一军团在中央盆地进入防御姿态。",
   "第一军团沿道路进驻北境冰原。",
+  "第一军团沿道路进驻霜鸦原。",
   "败军撤往北境冰原。",
   "中央盆地血战",
   "中央盆地，长生军，地块防御 66",
   "第一军团｜长生军｜兵力 6,200｜战斗力 III（58）",
   "Seed 1058｜普通｜AI 标准｜可见 8/25｜本国 5｜中立 10｜敌国 10｜边境拉锯",
+  "Seed 1058｜普通｜AI 标准｜可见 22/64｜本国 13｜中立 26｜敌国 25｜边境拉锯",
   "盆地｜攻 +2｜防 +2｜基础工事 66｜将生成五块连通初始疆域",
+  "盆地｜攻 +2｜防 +2｜基础工事 59｜将围绕首都生成 13 块连通初始疆域",
   "远征军本次连续控制 3 块领土。",
   "日冕王庭和长生军的军队在中央盆地相遇。最终长生军取得了胜利，败军撤往北境冰原。 进攻方阵亡 1,200（24%），守军阵亡 900（31%）。 灰烬邦联灭亡，其军事单位全部解散。",
   "第 3 号文明毁灭，等待重启文明",

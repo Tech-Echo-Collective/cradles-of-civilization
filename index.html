@@ -37,7 +37,7 @@
               <input id="seedInput" name="seed" inputmode="numeric" pattern="[0-9]*" placeholder="输入种子，例如 1058">
               <button id="newGameButton" type="button">随机世界</button>
             </div>
-            <p>同一种子会生成相同的地块、道路与随机序列。</p>
+            <p>大陆地理固定；同一种子会重现势力分布与随机序列。</p>
           </div>
         </form>
         <section class="setup-step" id="difficultyStep" hidden>
@@ -552,9 +552,11 @@
       </section>
     </main>
 
-    <script src="localization.js?v=20260904-v040"></script>
+    <script src="map-lab/map-data.js?v=20260904-strategy64"></script>
+    <script src="localization.js?v=20260904-strategy64"></script>
     <script src="endings.js?v=20260904-v040"></script>
     <script src="balance-model.js?v=20260904-v040"></script>
-    <script src="game.js?v=20260904-v040"></script>
+    <script src="map-lab/map-model.js?v=20260904-strategy64"></script>
+    <script src="game.js?v=20260904-strategy64"></script>
   </body>
 </html>

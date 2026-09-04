@@ -367,6 +367,7 @@
     "人类从历史中学到的唯一教训，": "The only lesson humanity learns from history is",
     "就是人类从未从历史中学到任何教训。": "that humanity has never learned anything from history.",
     "同一种子会生成相同的地块、道路与随机序列。": "The same seed generates the same regions, roads, and random sequence.",
+    "大陆地理固定；同一种子会重现势力分布与随机序列。": "Continental geography is fixed; the same seed reproduces political borders and the random sequence.",
     "敌军与灾变较弱，边境反应较慢": "Weaker enemies and disasters, with slower pressure at the frontier",
     "标准军力、灾变与边境压力": "Standard military strength, disasters, and frontier pressure",
     "敌军更强，灾变和进攻更频繁": "Stronger enemies, with more frequent disasters and attacks",
@@ -889,11 +890,23 @@
     "EERF 线性保存增幅": "EERF linear preservation bonus",
     "文明苏醒": "Civilization Awakens",
     "开始文明演化": " begins its civilizational evolution",
+    "战略地图升级": "Strategic Map Upgrade",
+    "旧战略层已迁移到固定的 64 省大陆。文明数值、EERF 与文明编年史全部保留；旧 25 格疆域和驻军按当前种子重新生成。": "The old strategic layer has been migrated to the fixed 64-province continent. Civilization metrics, EERF, and the chronicle are preserved; the old 25-region borders and armies are regenerated from the current seed.",
     "载入存档": "Save Loaded",
     "存档恢复": "Save Restored"
   };
 
-  const EXACT_PAIRS = Object.freeze({ ...CORE_PAIRS, ...WEB_PAIRS });
+  const mapData = global.CRADLES_MAP_LAB_DATA;
+  const MAP_PAIRS = Object.freeze(Object.fromEntries([
+    ...(mapData?.provinces || []).map((province) => [province.nameZh, province.nameEn]),
+    ...(mapData?.strategicRegions || []).map((region) => [region.nameZh, region.nameEn]),
+    ...(mapData?.realms || []).flatMap((realm) => [
+      [realm.nameZh, realm.nameEn],
+      [realm.shortZh, realm.shortEn]
+    ]),
+    ...Object.values(mapData?.terrainTypes || {}).map((terrain) => [terrain.nameZh, terrain.nameEn])
+  ].filter(([source, target]) => source && target)));
+  const EXACT_PAIRS = Object.freeze({ ...CORE_PAIRS, ...WEB_PAIRS, ...MAP_PAIRS });
   const SEGMENT_PAIRS = Object.entries(EXACT_PAIRS)
     .filter(([source]) => source.length > 1 && !source.includes("\\"))
     .sort(([left], [right]) => right.length - left.length);
@@ -1078,6 +1091,9 @@
     }
     if ((match = value.match(/^(.+)｜攻\s+([^｜]+)｜防\s+([^｜]+)｜基础工事\s+([^｜]+)｜将生成五块连通初始疆域$/u))) {
       return `${en(match[1])} | ATK ${match[2].trim()} | DEF ${match[3].trim()} | Base fortification ${match[4].trim()} | Five connected starting regions will be generated`;
+    }
+    if ((match = value.match(/^(.+)｜攻\s+([^｜]+)｜防\s+([^｜]+)｜基础工事\s+([^｜]+)｜将围绕首都生成\s+([^ ]+)\s+块连通初始疆域$/u))) {
+      return `${en(match[1])} | ATK ${match[2].trim()} | DEF ${match[3].trim()} | Base fortification ${match[4].trim()} | Generates ${match[5].trim()} connected starting provinces around this capital`;
     }
     if ((match = value.match(/^(.+)，(.+)，地块防御\s+(.+)$/u))) {
       return `${en(match[1])}, ${en(match[2])}, region defense ${match[3]}`;
