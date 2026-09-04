@@ -197,6 +197,35 @@ input {
   font: inherit;
 }
 
+.site-return-link {
+  position: fixed;
+  top: 12px;
+  right: 14px;
+  z-index: 1000;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 11px;
+  color: #c8d5e5;
+  background: rgba(5, 10, 17, 0.9);
+  border: 1px solid rgba(84, 216, 255, 0.22);
+  border-radius: 5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  backdrop-filter: blur(8px);
+}
+
+.site-return-link:hover,
+.site-return-link:focus-visible {
+  color: #ffffff;
+  background: #102434;
+  border-color: var(--science);
+  outline: none;
+}
+
 .shell {
   width: min(1360px, calc(100vw - 32px));
   margin: 0 auto;
