@@ -4,15 +4,33 @@
 
 原创企划 / Original concept: Noah Walker.
 
-当前版本：`v0.3.5`（HTML）
+当前开发主线：`v0.4.0-alpha.5`（HTML，中英双语，包含地图与军事）
+
+分支分工：`master` 用于 HTML 游戏开发、测试和打包；[`godot-port`](https://github.com/Tech-Echo-Collective/cradles-of-civilization/tree/godot-port) 保留 Godot 原生移植工程。后续网页修改提交到 `master`。
+
+在线试玩：[techecho.org/games/cradles-of-civilization/](https://techecho.org/games/cradles-of-civilization/)
+
+官网使用 [`Tech-Echo-Website` 中的网页副本](https://github.com/Tech-Echo-Collective/Tech-Echo-Website/tree/main/public/games/cradles-of-civilization)，发布官网时需另行同步；本仓库 `master` 是 HTML 源码主线。
+
+正式 HTML 已接入 CK3-lite 地图视图：固定三体大陆、64 个省份、10 个战略区和 167 条合法邻接，支持政治/地形/军事三种图层、拖动缩放，以及可切换的轻微斜视纯 SVG 立体地形。选择军队与相邻省份后，仍在右侧地块面板下达防御或进攻命令；年份、征兵、战斗、AI、战争迷雾与存档全部沿用正式游戏规则，不存在第二套回合。
+
+独立地图实验室仍位于 `map-lab/`，用于试验更直接的移动、战斗、伤亡、占领、撤退与征兵交互；它不读写正式存档。
+
+Godot 原生试玩版在 `godot-port` 分支保留为 `v0.4.0-alpha.3`（中英双语，暂不含地图与军事），当前暂停打包。
+
+无地图内容与文案基准：`v0.2`（最后一个尚未加入地图/军事的正式版本）
 
 ## 运行
 
-直接用浏览器打开 `index.html`。
+网页版可直接用浏览器打开 `index.html`，右上角可切换中文/English；`?lang=en` 可直接打开英文版。
+
+正式游戏的地图在完成建国后直接显示。地图实验室可另行打开 `map-lab/index.html`；也可以用本地静态服务器访问 `/map-lab/`。
 
 ## 打包分享
 
-运行 `npm run package` 会生成 `dist/cradles-of-civilization/` 和 `dist/cradles-of-civilization.zip`。把 zip 发给朋友即可；对方解压后双击 `index.html` 就能玩。存档保存在各自浏览器本机，不会跟着 zip 传播。
+`npm run package` 生成当前 HTML 版 ZIP，并包含中英双语运行文件；网页版存档保存在各自浏览器本机，不会跟着 ZIP 传播。
+
+Godot 的运行和原生导出说明见 [`godot-port` 分支的 README](https://github.com/Tech-Echo-Collective/cradles-of-civilization/blob/godot-port/godot/README.md)。
 
 ## 基础规则
 
@@ -22,7 +40,7 @@
 - `ECO` 是经济资本，会被事件、行动成本和部分彩蛋影响；低位经济会出现少量社会自救缓冲，但财政仍可能归零。
 - `LA` 是文学艺术，最高为 `20000`；它主要作为 EERF 的线性保存增幅，满值时可让灾后保存达到毁灭轮 `SC/BE` 的约一半、正向趋势的八成。
 - `POP/ECO/LA/秩序` 也会显示趋势值，但这些趋势只记录最近一年真实变化，不额外改变底层演化模型。
-- v0.3.5 使用 `25` 个相邻区域；区域边界和非全连接道路会随 seed 确定性生成，同 seed 可复现，军队不能跨越未连接地区。
+- v0.3.5 曾使用 `25` 个随机区域；当前正式游戏已迁移到固定的 `64` 省大陆和 `167` 条邻接关系。seed 只重排五方连通疆域，玩家选择的省份始终成为首都。旧存档会保留文明数值、EERF 和编年史，并一次性重建战略版图与驻军。
 - 世界包含玩家国、两个中立政权和两个敌对政权。每个政治实体都有独立的领土、军力、发展、技术与国家策略面板；AI 会根据和平、战争、领土和技术情况自行调整策略，玩家可随时选择自己的策略。
 - 开始新世界时先命名国度，再选择简单、普通、困难或终极困难，并单独设置克制、标准、好战或全面战争四档 AI 侵略性；难度调整敌军与中立军基础强度，侵略性调整出兵频率、玩家目标偏好和攻击加成。
 - 点击可见军队可查看其兵力、进攻、防守和驻地。玩家军团每年可部署一次，点击部署后立即结算：进入己方地区视为防守，进入中立或敌方地区视为进攻；攻击中立国家会使该政治实体整体转为敌对。
@@ -72,7 +90,7 @@
 
 ## 平衡复算
 
-运行 `npm run model` 会直接调用独立数学模型，输出地形胜率、双方伤亡率、领土边际收益和 J 连胜期望；它不加载前端。运行 `npm run balance -- 80 720 normal all standard` 可调用实际游戏引擎做抽样复核。运行 `npm test` 检查种子地图复现、道路连通、伤亡边界、撤退、征兵合并、灭国清军和版图继承。
+运行 `npm run model` 会直接调用独立数学模型，输出地形胜率、双方伤亡率、领土边际收益和 J 连胜期望；它不加载前端。运行 `npm run balance -- 80 720 normal all standard` 可调用实际游戏引擎做抽样复核。运行 `npm test` 检查固定 64 省地理、五方连通分区、旧存档迁移、中英双语、伤亡边界、撤退、征兵合并、灭国清军和版图继承。
 
 ## 操作辅助
 

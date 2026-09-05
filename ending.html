@@ -6,9 +6,13 @@
     <meta name="author" content="Noah Walker">
     <meta name="copyright" content="Original concept by Noah Walker">
     <title>文明摇篮：终局</title>
-    <link rel="stylesheet" href="styles.css?v=20260713-v035">
+    <link rel="stylesheet" href="styles.css?v=20260905-ending-polish">
   </head>
   <body class="ending-body">
+    <div class="site-tools">
+      <button id="languageToggle" class="language-toggle" type="button" data-i18n-skip aria-label="切换到英文">EN</button>
+      <a class="site-return-link" href="https://techecho.org/" aria-label="返回 Tech Echo 官网 / Return to Tech Echo">← Tech Echo</a>
+    </div>
     <main class="ending-shell" aria-label="文明摇篮终局">
       <section class="ending-scene">
         <h1 id="endingTitle">终局</h1>
@@ -56,10 +60,14 @@
       </section>
     </main>
 
-    <script src="endings.js?v=20260713-v035"></script>
+    <script src="map-lab/map-data.js?v=20260904-strategy64"></script>
+    <script src="localization.js?v=20260905-ending-polish"></script>
+    <script src="endings.js?v=20260905-ending-polish"></script>
     <script>
       "use strict";
 
+      const I18N = window.CRADLES_I18N;
+      I18N.init();
       const GAME_STORE_KEY = "three-sun-chronicle:v1";
       const ENDING_STORE_KEY = "three-sun-chronicle:ending:v1";
       const endingTitle = document.querySelector("#endingTitle");
@@ -72,6 +80,8 @@
       const restartButton = document.querySelector("#restartButton");
       const endingSeedForm = document.querySelector("#endingSeedForm");
       const endingSeedInput = document.querySelector("#endingSeedInput");
+      const languageToggle = document.querySelector("#languageToggle");
+      const T = (chinese, english) => I18N.t(chinese, english);
 
       function readStoredEnding() {
         try {
@@ -91,37 +101,59 @@
         }
       }
 
-      const storedEnding = readStoredEnding();
-      const queryEnding = new URLSearchParams(window.location.search).get("ending");
-      const endingId = queryEnding || storedEnding?.id || "A";
-      document.body.dataset.ending = endingId;
-      const ending = window.THREE_SUN_ENDINGS?.[endingId] || {
-        name: `${endingId}结局`,
-        paragraphs: ["终局资料缺失。"],
-        quote: ""
+      const endingCatalog = window.THREE_SUN_ENDINGS || {};
+      const storedEndingCandidate = readStoredEnding();
+      const storedEndingId = String(storedEndingCandidate?.id || "").toUpperCase();
+      const storedEnding = endingCatalog[storedEndingId] ? storedEndingCandidate : null;
+      const queryEnding = String(new URLSearchParams(window.location.search).get("ending") || "").toUpperCase();
+      const endingId = endingCatalog[queryEnding] ? queryEnding : (storedEnding ? storedEndingId : null);
+      document.body.dataset.ending = endingId || "none";
+      const ending = endingId ? endingCatalog[endingId] : {
+        name: "尚无结局记录",
+        nameEn: "No Ending Recorded",
+        paragraphs: ["这一页会在文明抵达终局后显示结果。返回新世界，开始一轮新的演化。"],
+        paragraphsEn: ["Your civilization’s final chapter will appear here when you reach an ending. Start a new world to begin its story."],
+        quote: "",
+        quoteEn: ""
       };
+      const endingNameParts = String(ending.name || "").split("/");
+      const endingNameZh = endingNameParts[0] || "尚无结局记录";
+      const endingNameEn = ending.nameEn || endingNameParts.slice(1).join("/") || "No Ending Recorded";
+      const endingName = I18N.isEnglish() ? endingNameEn : endingNameZh;
+      const endingTitleLines = I18N.isEnglish()
+        ? [endingNameEn]
+        : endingNameZh === endingNameEn
+          ? [endingNameZh]
+          : [endingNameZh, endingNameEn];
+      const endingParagraphs = I18N.isEnglish() ? ending.paragraphsEn : ending.paragraphs;
+      const endingQuote = I18N.isEnglish() ? ending.quoteEn : ending.quote;
 
-      document.title = `文明摇篮：${ending.name}`;
+      document.title = T(
+        `文明摇篮：${endingTitleLines.join(" / ")}`,
+        `Cradles of Civilization: ${endingTitleLines.join(" / ")}`
+      );
       endingTitle.innerHTML = "";
-      ending.name.split("/").forEach((line) => {
+      endingTitleLines.forEach((line) => {
         const titleLine = document.createElement("span");
         titleLine.className = "ending-title-line";
+        titleLine.dataset.i18nSkip = "";
         titleLine.textContent = line;
         endingTitle.append(titleLine);
       });
       endingCopy.innerHTML = "";
 
-      ending.paragraphs.forEach((line) => {
+      endingParagraphs.forEach((line) => {
         const paragraph = document.createElement("p");
         paragraph.textContent = line;
         endingCopy.append(paragraph);
       });
 
-      if (ending.quote) {
+      if (endingQuote) {
         const quote = document.createElement("p");
         quote.className = "ending-quote";
         const italic = document.createElement("em");
-        const [quoteText, ...attributionParts] = ending.quote.split("——");
+        const separator = I18N.isEnglish() ? " —" : "——";
+        const [quoteText, ...attributionParts] = endingQuote.split(separator);
         const quoteLine = document.createElement("span");
         quoteLine.className = "quote-line";
         quoteLine.textContent = quoteText;
@@ -129,7 +161,7 @@
         if (attributionParts.length) {
           const attribution = document.createElement("span");
           attribution.className = "quote-attribution";
-          attribution.textContent = `——${attributionParts.join("——")}`;
+          attribution.textContent = `${I18N.isEnglish() ? "— " : "——"}${attributionParts.join(separator)}`;
           italic.append(attribution);
         }
         quote.append(italic);
@@ -137,10 +169,28 @@
       }
 
       function formatNumber(value) {
-        return new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 0 }).format(Number(value) || 0);
+        return new Intl.NumberFormat(I18N.locale(), { maximumFractionDigits: 0 }).format(Number(value) || 0);
       }
 
       function renderRecap() {
+        if (!storedEnding) {
+          const label = T("状态", "Status");
+          const value = endingId
+            ? T("通过链接查看结局；未载入本局复盘", "You are previewing an ending. No run recap is available.")
+            : T("尚无结局记录", "No ending recorded yet.");
+          endingRecapList.innerHTML = "";
+          const row = document.createElement("div");
+          const term = document.createElement("dt");
+          const description = document.createElement("dd");
+          term.textContent = label;
+          description.textContent = value;
+          row.append(term, description);
+          endingRecapList.append(row);
+          copyChallengeButton.disabled = true;
+          dataReviewButton.disabled = true;
+          return;
+        }
+
         const snapshot = storedEnding?.snapshot || {};
         const peak = storedEnding?.peakSnapshot || snapshot;
         const endingStats = storedEnding?.endingStats || {};
@@ -149,20 +199,43 @@
         const unique = endingStats.endings
           ? Object.values(endingStats.endings).filter((count) => count > 0).length
           : 0;
-        const rows = [
-          ["种子", storedEnding?.seed ?? "未知"],
-          ["执政官", storedEnding?.governorLabel || "未记录"],
-          ["战局", `${difficultyLabels[storedEnding?.difficulty] || "普通"} / AI ${aggressionLabels[storedEnding?.aiAggression || storedEnding?.mapArchive?.aiAggression] || "标准"}`],
-          ["文明", storedEnding?.civilization ? `第 ${formatNumber(storedEnding.civilization)} 号` : "未知"],
-          ["年份", storedEnding?.turn ? `${formatNumber(storedEnding.turn)} 年` : "未知"],
-          ["触发", storedEnding?.trigger || ending.name],
+        const difficulty = difficultyLabels[storedEnding?.difficulty] || "普通";
+        const aggression = aggressionLabels[storedEnding?.aiAggression || storedEnding?.mapArchive?.aiAggression] || "标准";
+        const rows = I18N.isEnglish() ? [
+          ["Seed", storedEnding.seed ?? "Unknown"],
+          ["Governor", I18N.translate(storedEnding.governorLabel || "未记录")],
+          ["Campaign Settings", `${I18N.translate(difficulty)} / AI aggression: ${I18N.translate(aggression)}`],
+          ["Civilization", storedEnding.civilization ? `Civilization ${formatNumber(storedEnding.civilization)}` : "Unknown"],
+          ["Year", storedEnding.turn ? `${formatNumber(storedEnding.turn)} years` : "Unknown"],
+          ["Triggered By", I18N.translate(storedEnding.trigger || endingName)],
+          ["Ending Statistics", endingStats.total ? `${formatNumber(unique)} distinct endings / ${formatNumber(endingStats.total)} total completions` : "No endings recorded yet"],
+          ["Final Stats", `SC ${formatNumber(snapshot.sc)} / BE ${formatNumber(snapshot.be)} / LA ${formatNumber(snapshot.la)} / POP ${formatNumber(snapshot.pop)} / ECO ${formatNumber(snapshot.eco)} / ORDER ${formatNumber(snapshot.stability)}`],
+          ["Peak Stats", `SC ${formatNumber(peak.sc)} / BE ${formatNumber(peak.be)} / LA ${formatNumber(peak.la)} / POP ${formatNumber(peak.pop)} / ECO ${formatNumber(peak.eco)} / EERF ${formatNumber(peak.eerf)}`],
+          ["Territory", storedEnding.mapArchive ? `${I18N.translate(storedEnding.mapArchive.status)} | Your realm: ${formatNumber(storedEnding.mapArchive.counts?.player)} / Neutral: ${formatNumber(storedEnding.mapArchive.counts?.neutral)} / Rivals: ${formatNumber(storedEnding.mapArchive.counts?.rival)}` : "No territory data recorded"],
+          ["Military Strength", storedEnding.military ? `Troops: ${formatNumber(storedEnding.military.force)} / Attack: ${formatNumber(storedEnding.military.attack)} / Defense: ${formatNumber(storedEnding.military.defense)}` : "No military data recorded"]
+        ] : [
+          ["种子", storedEnding.seed ?? "未知"],
+          ["执政官", storedEnding.governorLabel || "未记录"],
+          ["战局", `${difficulty} / AI ${aggression}`],
+          ["文明", storedEnding.civilization ? `第 ${formatNumber(storedEnding.civilization)} 号` : "未知"],
+          ["年份", storedEnding.turn ? `${formatNumber(storedEnding.turn)} 年` : "未知"],
+          ["触发", storedEnding.trigger || endingName],
           ["终局统计", endingStats.total ? `已达成 ${formatNumber(unique)} 种 / 总计 ${formatNumber(endingStats.total)} 次` : "尚未记录"],
           ["终值", `SC ${formatNumber(snapshot.sc)} / BE ${formatNumber(snapshot.be)} / LA ${formatNumber(snapshot.la)} / POP ${formatNumber(snapshot.pop)} / ECO ${formatNumber(snapshot.eco)} / 秩序 ${formatNumber(snapshot.stability)}`],
           ["峰值", `SC ${formatNumber(peak.sc)} / BE ${formatNumber(peak.be)} / LA ${formatNumber(peak.la)} / POP ${formatNumber(peak.pop)} / ECO ${formatNumber(peak.eco)} / EERF ${formatNumber(peak.eerf)}`],
-          ["地图", storedEnding?.mapArchive ? `${storedEnding.mapArchive.status}｜本国 ${formatNumber(storedEnding.mapArchive.counts?.player)} / 中立 ${formatNumber(storedEnding.mapArchive.counts?.neutral)} / 敌国 ${formatNumber(storedEnding.mapArchive.counts?.rival)}` : "尚无地图数据"],
-          ["军力", storedEnding?.military ? `军力 ${formatNumber(storedEnding.military.force)} / 进攻 ${formatNumber(storedEnding.military.attack)} / 防守 ${formatNumber(storedEnding.military.defense)}` : "尚无军事数据"]
+          ["地图", storedEnding.mapArchive ? `${storedEnding.mapArchive.status}｜本国 ${formatNumber(storedEnding.mapArchive.counts?.player)} / 中立 ${formatNumber(storedEnding.mapArchive.counts?.neutral)} / 敌国 ${formatNumber(storedEnding.mapArchive.counts?.rival)}` : "尚无地图数据"],
+          ["军力", storedEnding.military ? `军力 ${formatNumber(storedEnding.military.force)} / 进攻 ${formatNumber(storedEnding.military.attack)} / 防守 ${formatNumber(storedEnding.military.defense)}` : "尚无军事数据"]
         ];
-        endingRecapList.innerHTML = rows.map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`).join("");
+        endingRecapList.innerHTML = "";
+        rows.forEach(([label, value]) => {
+          const row = document.createElement("div");
+          const term = document.createElement("dt");
+          const description = document.createElement("dd");
+          term.textContent = label;
+          description.textContent = value;
+          row.append(term, description);
+          endingRecapList.append(row);
+        });
         copyChallengeButton.disabled = !storedEnding?.seed;
         dataReviewButton.disabled = !storedEnding?.metricArchive?.length;
       }
@@ -172,6 +245,7 @@
         if (storedEnding?.seed) {
           url.searchParams.set("seed", storedEnding.seed);
         }
+        url.searchParams.set("lang", I18N.isEnglish() ? "en" : "zh");
         return url.href;
       }
 
@@ -179,17 +253,18 @@
         const link = challengeUrl();
         try {
           await navigator.clipboard.writeText(link);
-          copyChallengeButton.textContent = "已复制";
+          copyChallengeButton.textContent = T("已复制", "Copied");
         } catch {
           copyChallengeButton.textContent = link;
         }
         window.setTimeout(() => {
-          copyChallengeButton.textContent = "复制挑战链接";
+          copyChallengeButton.textContent = T("复制挑战链接", "Copy Challenge Link");
         }, 1600);
       }
 
       renderRecap();
       initDataReview();
+      I18N.localizeDocument(document);
 
       function initDataReview() {
         const archive = Array.isArray(storedEnding?.metricArchive) ? storedEnding.metricArchive : [];
@@ -197,7 +272,9 @@
         archive.forEach((entry, index) => {
           const option = document.createElement("option");
           option.value = String(index);
-          option.textContent = `第 ${formatNumber(entry.civilization)} 号文明${entry.collapseCause ? `｜${entry.collapseCause}` : ""}`;
+          option.textContent = I18N.isEnglish()
+            ? `Civilization ${formatNumber(entry.civilization)}${entry.collapseCause ? ` | ${I18N.translate(entry.collapseCause)}` : ""}`
+            : `第 ${formatNumber(entry.civilization)} 号文明${entry.collapseCause ? `｜${entry.collapseCause}` : ""}`;
           civilizationDataSelect.append(option);
         });
         renderEndingCharts();
@@ -205,7 +282,9 @@
 
       function toggleDataReview() {
         endingDataReview.hidden = !endingDataReview.hidden;
-        dataReviewButton.textContent = endingDataReview.hidden ? "查看文明数据" : "收起文明数据";
+        dataReviewButton.textContent = endingDataReview.hidden
+          ? T("查看文明数据", "View Civilization Data")
+          : T("收起文明数据", "Hide Civilization Data");
         if (!endingDataReview.hidden) renderEndingCharts();
       }
 
@@ -249,7 +328,7 @@
           context.fillStyle = "#8ea2b8";
           context.font = "700 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
           context.textAlign = "center";
-          context.fillText("无足够样本", width / 2, height / 2);
+          context.fillText(T("无足够样本", "Not enough data yet"), width / 2, height / 2);
           return;
         }
         keys.forEach((key, index) => drawEndingSeries(context, samples, key, plot, index, keys.length));
@@ -320,7 +399,9 @@
 
       function restartGame() {
         clearGame();
-        window.location.href = new URL("index.html", window.location.href).href;
+        const url = new URL("index.html", window.location.href);
+        url.searchParams.set("lang", I18N.isEnglish() ? "en" : "zh");
+        window.location.href = url.href;
       }
 
       function restartGameWithSeed(event) {
@@ -334,6 +415,7 @@
         clearGame();
         const url = new URL("index.html", window.location.href);
         url.searchParams.set("seed", seedText);
+        url.searchParams.set("lang", I18N.isEnglish() ? "en" : "zh");
         window.location.href = url.href;
       }
 
@@ -353,6 +435,10 @@
       }
 
       restartButton.addEventListener("click", restartGame);
+      languageToggle.addEventListener("click", () => {
+        I18N.toggle();
+        window.location.reload();
+      });
       copyChallengeButton.addEventListener("click", copyChallengeLink);
       dataReviewButton.addEventListener("click", toggleDataReview);
       civilizationDataSelect.addEventListener("change", renderEndingCharts);

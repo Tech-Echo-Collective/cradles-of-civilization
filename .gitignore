@@ -1,2 +1,5 @@
 dist/
 node_modules/
+# Native project and local import caches belong to the godot-port branch.
+/godot/
+.DS_Store
