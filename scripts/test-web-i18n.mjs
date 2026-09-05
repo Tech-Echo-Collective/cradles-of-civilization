@@ -64,13 +64,208 @@ for (const file of ["index.html", "ending.html"]) {
 const endingPageSource = read("ending.html");
 assert.doesNotMatch(endingPageSource, /storedEnding\?\.id \|\| "A"/u, "opening the ending page without a record must not claim ending A");
 assert.match(endingPageSource, /nameEn: "No Ending Recorded"/u, "the empty ending page needs a neutral English state");
-assert.match(endingPageSource, /I18N\.isEnglish\(\)\s*\? \[endingNameEn, endingNameZh\]\s*:\s*\[endingNameZh, endingNameEn\]/u, "ending headings must preserve their bilingual two-line identity in both languages");
 assert.match(endingPageSource, /titleLine\.dataset\.i18nSkip = ""/u, "the bilingual ending heading must not be collapsed by document translation");
-for (const asset of ["styles.css", "localization.js", "endings.js"]) {
-  assert.match(endingPageSource, new RegExp(`${asset.replace(".", "\\.")}\\?v=20260905-ending-bilingual`, "u"), `${asset} must use the synchronized ending release token`);
-}
+const endingAssetVersions = ["styles.css", "localization.js", "endings.js"].map((asset) => {
+  const version = endingPageSource.match(new RegExp(`${asset.replace(".", "\\.")}\\?v=([^"']+)`, "u"))?.[1];
+  assert.ok(version, `${asset} must have a cache version`);
+  return version;
+});
+assert.equal(new Set(endingAssetVersions).size, 1, "ending assets must use a synchronized release token");
 assert.match(endingPageSource, /`Civilization \$\{formatNumber\(entry\.civilization\)\}/u, "ending archive options need explicit English wording");
-assert.match(endingPageSource, /endings reached \/ \$\{formatNumber\(endingStats\.total\)\} total/u, "ending statistics need explicit English wording");
+assert.match(endingPageSource, /distinct endings \/ \$\{formatNumber\(endingStats\.total\)\} total completions/u, "ending statistics need explicit English wording");
+
+class EndingTestElement {
+  constructor(tagName = "div") {
+    this.tagName = tagName.toUpperCase();
+    this.dataset = {};
+    this.children = [];
+    this.attributes = new Map();
+    this.className = "";
+    this.hidden = false;
+    this.disabled = false;
+    this.value = "";
+    this.title = "";
+    this._textContent = "";
+    this.classList = {
+      add: (...names) => {
+        const classes = new Set(this.className.split(/\s+/u).filter(Boolean));
+        names.forEach((name) => classes.add(name));
+        this.className = Array.from(classes).join(" ");
+      },
+      remove: (...names) => {
+        const removed = new Set(names);
+        this.className = this.className.split(/\s+/u).filter((name) => name && !removed.has(name)).join(" ");
+      }
+    };
+  }
+
+  get textContent() {
+    return this._textContent + this.children.map((child) => child.textContent).join("");
+  }
+
+  set textContent(value) {
+    this._textContent = String(value ?? "");
+    this.children = [];
+  }
+
+  set innerHTML(value) {
+    assert.equal(value, "", "the ending renderer should only clear test elements through innerHTML");
+    this._textContent = "";
+    this.children = [];
+  }
+
+  append(...children) {
+    children.forEach((child) => {
+      child.parentElement = this;
+      this.children.push(child);
+    });
+  }
+
+  addEventListener() {}
+
+  setAttribute(name, value) {
+    this.attributes.set(name, String(value));
+  }
+
+  getAttribute(name) {
+    return this.attributes.get(name) ?? null;
+  }
+}
+
+const endingScriptTags = Array.from(endingPageSource.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/giu));
+const endingExternalScripts = endingScriptTags
+  .map((match) => match[1].match(/\bsrc=["']([^"']+)["']/iu)?.[1]?.split("?")[0] || null)
+  .filter(Boolean);
+const inlineEndingScripts = endingScriptTags
+  .filter((match) => !/\bsrc\s*=/iu.test(match[1]))
+  .map((match) => match[2].trim())
+  .filter(Boolean);
+assert.deepEqual(endingExternalScripts, ["map-lab/map-data.js", "localization.js", "endings.js"], "ending scripts must load map names before localization and ending copy");
+assert.equal(inlineEndingScripts.length, 1, "ending.html must expose one executable inline renderer");
+const endingRendererSource = inlineEndingScripts[0];
+
+function renderEndingPage(language, endingId = null, storedEnding = null) {
+  const elementIds = [
+    "endingTitle",
+    "endingCopy",
+    "endingRecapList",
+    "copyChallengeButton",
+    "dataReviewButton",
+    "endingDataReview",
+    "civilizationDataSelect",
+    "restartButton",
+    "endingSeedForm",
+    "endingSeedInput",
+    "languageToggle"
+  ];
+  const elements = Object.fromEntries(elementIds.map((id) => [id, new EndingTestElement()]));
+  elements.endingDataReview.hidden = true;
+  const documentElement = new EndingTestElement("html");
+  const body = new EndingTestElement("body");
+  const document = {
+    body,
+    documentElement,
+    title: "",
+    createElement(tagName) { return new EndingTestElement(tagName); },
+    querySelector(selector) {
+      return selector.startsWith("#") ? elements[selector.slice(1)] || null : null;
+    },
+    querySelectorAll() { return []; },
+    createTreeWalker() {
+      return { currentNode: null, nextNode() { return false; } };
+    }
+  };
+  const url = new URL("https://techecho.org/games/cradles-of-civilization/ending.html");
+  if (endingId) url.searchParams.set("ending", endingId);
+  url.searchParams.set("lang", language);
+  const pageStore = new Map();
+  if (storedEnding) pageStore.set("three-sun-chronicle:ending:v1", JSON.stringify(storedEnding));
+  const location = { href: url.href, search: url.search, reload() {} };
+  const pageContext = vm.createContext({
+    URL,
+    URLSearchParams,
+    Intl,
+    NodeFilter: { SHOW_TEXT: 4 },
+    document,
+    location,
+    history: { replaceState() {} },
+    localStorage: {
+      getItem(key) { return pageStore.get(key) ?? null; },
+      setItem(key, value) { pageStore.set(key, String(value)); },
+      removeItem(key) { pageStore.delete(key); }
+    },
+    navigator: { clipboard: { async writeText() {} } },
+    setTimeout() { return 0; },
+    clearTimeout() {},
+    requestAnimationFrame() { return 0; },
+    cancelAnimationFrame() {},
+    devicePixelRatio: 1
+  });
+  pageContext.window = pageContext;
+  pageContext.globalThis = pageContext;
+  pageContext.addEventListener = () => {};
+  endingExternalScripts.forEach((script) => {
+    vm.runInContext(read(script), pageContext, { filename: script });
+  });
+  vm.runInContext(endingRendererSource, pageContext, { filename: "ending.html:inline-renderer" });
+  return { body, document, documentElement, elements, endingCatalog: pageContext.THREE_SUN_ENDINGS };
+}
+
+function renderedEndingQuote(endingCopy, language) {
+  const quote = endingCopy.children.find((child) => child.className === "ending-quote");
+  if (!quote) return "";
+  const parts = quote.children[0]?.children.map((child) => child.textContent) || [];
+  return language === "en" && parts.length > 1 ? `${parts[0]} ${parts.slice(1).join("")}` : parts.join("");
+}
+
+for (const language of ["zh", "en"]) {
+  for (const endingId of [..."ABCDEFGHIJKL"]) {
+    const rendered = renderEndingPage(language, endingId);
+    const ending = rendered.endingCatalog[endingId];
+    const nameZh = ending.name.split("/")[0];
+    const expectedTitleLines = language === "en" ? [ending.nameEn] : [nameZh, ending.nameEn];
+    const expectedParagraphs = Array.from(language === "en" ? ending.paragraphsEn : ending.paragraphs);
+    const catalogQuote = language === "en" ? ending.quoteEn : ending.quote;
+    const expectedQuote = language === "en" ? catalogQuote.replace(" —", " — ") : catalogQuote;
+    const titleLines = rendered.elements.endingTitle.children.map((line) => line.textContent);
+    const paragraphs = rendered.elements.endingCopy.children
+      .filter((child) => child.className !== "ending-quote")
+      .map((paragraph) => paragraph.textContent);
+
+    assert.equal(rendered.body.dataset.ending, endingId, `${language} ending ${endingId} must select the requested theme`);
+    assert.equal(rendered.documentElement.lang, language === "en" ? "en" : "zh-CN", `${language} ending ${endingId} must set the document language`);
+    assert.deepEqual(titleLines, expectedTitleLines, `${language} ending ${endingId} has the wrong title lines`);
+    if (language === "en") assert.ok(!hasHan(rendered.document.title), `English ending ${endingId} must not retain Chinese in the browser title`);
+    assert.deepEqual(paragraphs, expectedParagraphs, `${language} ending ${endingId} has the wrong body copy`);
+    assert.equal(renderedEndingQuote(rendered.elements.endingCopy, language), expectedQuote, `${language} ending ${endingId} has the wrong quotation`);
+  }
+}
+
+for (const language of ["zh", "en"]) {
+  const rendered = renderEndingPage(language);
+  const expectedTitleLines = language === "en" ? ["No Ending Recorded"] : ["尚无结局记录", "No Ending Recorded"];
+  const expectedParagraph = language === "en"
+    ? "Your civilization’s final chapter will appear here when you reach an ending. Start a new world to begin its story."
+    : "这一页会在文明抵达终局后显示结果。返回新世界，开始一轮新的演化。";
+  assert.equal(rendered.body.dataset.ending, "none", `${language} empty ending page must not invent an ending`);
+  assert.deepEqual(rendered.elements.endingTitle.children.map((line) => line.textContent), expectedTitleLines, `${language} empty ending page has the wrong title`);
+  assert.deepEqual(rendered.elements.endingCopy.children.map((line) => line.textContent), [expectedParagraph], `${language} empty ending page has the wrong copy`);
+}
+
+const storedEndingFixture = {
+  id: "A",
+  trigger: "霜鸦原血战",
+  difficulty: "normal",
+  aiAggression: "standard",
+  endingStats: {},
+  snapshot: {},
+  peakSnapshot: {},
+  metricArchive: []
+};
+const renderedStoredEnding = renderEndingPage("en", "A", storedEndingFixture);
+const triggerRow = renderedStoredEnding.elements.endingRecapList.children.find((row) => row.children[0]?.textContent === "Triggered By");
+assert.equal(triggerRow?.children[1]?.textContent, "Bloodbath at Frostcrow Plain", "English ending recap must translate fixed province names in dynamic triggers");
+assert.ok(!hasHan(renderedStoredEnding.elements.endingRecapList.textContent), "English ending recap must not retain Han characters for canonical game copy");
 
 const formalStyles = read("styles.css");
 for (const endingId of [..."ABCDEFGHIJKL"]) {
