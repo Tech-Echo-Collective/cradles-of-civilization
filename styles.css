@@ -3212,3 +3212,1081 @@ h2 {
     font-size: 0.76rem;
   }
 }
+
+/* The map-first workspace reuses the original palette and leaves ending pages untouched. */
+.map-first-shell {
+  width: calc(100% - 24px);
+  max-width: 2200px;
+  padding: 54px 0 12px;
+}
+
+.map-first-shell,
+.map-first-shell button,
+.map-first-shell input,
+.map-first-shell select {
+  font-family: "Times New Roman", "Kaiti SC", "STKaiti", "KaiTi", serif;
+}
+
+.unified-setup {
+  min-height: calc(100svh - 66px);
+  grid-template-columns: minmax(180px, 0.55fr) minmax(0, 2fr);
+  grid-template-rows: 1fr auto;
+  gap: 24px;
+  padding: clamp(20px, 3vw, 48px);
+}
+
+.unified-setup .setup-brand h1 {
+  font-size: clamp(2.6rem, 4vw, 4.8rem);
+}
+
+.unified-setup .setup-quote {
+  font-size: 0.94rem;
+}
+
+.world-setup-form {
+  align-self: stretch;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: center;
+  gap: 22px;
+  padding: clamp(16px, 2vw, 28px);
+}
+
+.world-setup-form .setup-section {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.world-setup-form .setup-input-row {
+  grid-template-columns: 1fr;
+}
+
+.world-setup-form .setup-governors,
+.world-setup-form .setup-enter {
+  grid-column: 1 / -1;
+}
+
+.world-setup-form .setup-governors {
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.world-setup-form .governor-options {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.world-setup-form .governor-options img {
+  height: clamp(90px, 9vw, 132px);
+}
+
+.world-setup-form .governor-options strong {
+  min-height: 2.7em;
+  font-size: 0.86rem;
+}
+
+.world-setup-form .governor-copy {
+  display: grid;
+  gap: 8px;
+  min-height: 0;
+  overflow: visible;
+}
+
+.world-setup-form .governor-options small {
+  position: static;
+  overflow: visible;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  opacity: 1;
+}
+
+.world-setup-form .governor-options button:hover .governor-caption,
+.world-setup-form .governor-options button:focus-visible .governor-caption {
+  opacity: 1;
+}
+
+.world-setup-form .governor-options .governor-skill {
+  color: #cae7e5;
+  padding-top: 7px;
+  border-top: 1px solid var(--line);
+}
+
+.world-setup-form .setup-enter {
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.world-setup-form .setup-enter p {
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.world-setup-form #enterWorldButton {
+  flex-shrink: 0;
+  min-width: 132px;
+  color: #071017;
+  background: var(--science);
+  border-color: var(--science);
+}
+
+.map-first-game {
+  height: calc(100dvh - 66px);
+  min-height: 660px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+}
+
+.map-first-game .world-topbar {
+  display: grid;
+  grid-template-columns: 180px 142px minmax(0, 1fr);
+  min-height: 0;
+  gap: 14px;
+  padding: 10px 12px;
+  border-radius: 4px;
+}
+
+.world-brand,
+.world-topbar .turn-board,
+.world-topbar .world-resources {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.world-brand h1 {
+  font-size: clamp(1.55rem, 2.1vw, 2rem);
+  line-height: 1.12;
+}
+
+.world-brand .kicker {
+  font-size: 0.65rem;
+  line-height: 1.3;
+  letter-spacing: 0.045em;
+}
+
+.world-brand .realm-identity {
+  font-size: 0.72rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.world-topbar .turn-board {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.world-topbar .turn-board div {
+  min-height: 54px;
+  min-width: 0;
+  padding: 7px 4px;
+  text-align: center;
+  border-radius: 2px;
+}
+
+.world-topbar .turn-board span {
+  font-size: 0.64rem;
+}
+
+.world-topbar .turn-board strong {
+  font-size: 0.96rem;
+  overflow-wrap: anywhere;
+}
+
+.map-first-game .world-resources {
+  display: block;
+  padding: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+}
+
+.world-resources .stats-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.world-resources .stat-card {
+  min-width: 0;
+  min-height: 100px;
+  gap: 5px;
+  padding: 7px 8px;
+  border-radius: 2px;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.world-resources .stat-head {
+  display: grid;
+  gap: 4px;
+}
+
+.world-resources .stat-head span {
+  min-height: 1.2em;
+  font-size: 0.7rem;
+  line-height: 1.2;
+}
+
+.world-resources .stat-head strong {
+  min-width: 0;
+  font-size: 1.3rem;
+  text-align: left;
+}
+
+.world-resources .meter {
+  height: 4px;
+}
+
+.world-resources .stat-card p {
+  min-height: 0;
+  font-size: 0.7rem;
+  line-height: 1.25;
+}
+
+.world-resources .stat-trend {
+  flex-wrap: wrap;
+  min-height: 0;
+  gap: 2px 4px;
+  padding: 0;
+  background: none;
+  border: 0;
+}
+
+.world-resources .stat-trend strong,
+.world-resources .stat-trend span {
+  font-size: 0.65rem;
+}
+
+.world-layout {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) clamp(320px, 27vw, 410px);
+  min-height: 0;
+  gap: 8px;
+}
+
+.workspace-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+  gap: 4px;
+  padding: 7px;
+  background: linear-gradient(180deg, #111a25, #090e15);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.workspace-seal {
+  display: grid;
+  place-items: center;
+  height: 46px;
+  margin-bottom: 4px;
+  color: var(--belief);
+  border-bottom: 1px solid var(--line);
+  font-size: 2.15rem;
+}
+
+.workspace-tab {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 5px;
+  min-height: 66px;
+  min-width: 0;
+  padding: 8px 2px;
+  color: var(--muted);
+  background: rgba(6, 11, 17, 0.6);
+  border: 1px solid transparent;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.workspace-tab > span {
+  color: var(--belief);
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.workspace-tab strong {
+  max-width: 100%;
+  font-size: 0.83rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.workspace-tab:hover,
+.workspace-tab:focus-visible,
+.workspace-tab[aria-pressed="true"] {
+  color: var(--ink);
+  background: #17283a;
+  border-color: rgba(84, 216, 255, 0.38);
+}
+
+.workspace-tab[aria-pressed="true"] {
+  box-shadow: inset 3px 0 var(--science);
+}
+
+.workspace-tab:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.workspace-tab:focus-visible,
+.workspace-inspector button:focus-visible {
+  outline: 2px solid var(--science);
+  outline-offset: 2px;
+}
+
+.world-stage {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.map-first-game .map-panel {
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px;
+  border-radius: 4px;
+}
+
+.map-first-game .map-head {
+  align-items: center;
+  gap: 8px;
+}
+
+.map-first-game .map-head h2 {
+  font-size: 0.78rem;
+}
+
+.map-first-game .map-head p {
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.map-first-game .map-legend span {
+  min-height: 22px;
+  padding: 0 5px;
+  font-size: 0.65rem;
+}
+
+.map-first-game .map-layout {
+  display: block;
+  min-height: 0;
+}
+
+.map-first-game .world-map {
+  height: 100%;
+  min-height: 0;
+  aspect-ratio: auto;
+  border-radius: 3px;
+}
+
+.map-first-game .strategic-map-modes button {
+  min-height: 34px;
+}
+
+.map-first-game #mapReliefToggle,
+.map-first-game .strategic-map-zoom-controls button {
+  width: 34px;
+  height: 34px;
+}
+
+.map-first-game .strategic-map-zoom-controls {
+  grid-template-columns: repeat(3, 34px);
+}
+
+.map-first-game .strategic-map-hint {
+  left: 6px;
+  bottom: 6px;
+  max-width: calc(100% - 12px);
+  font-size: 0.62rem;
+  line-height: 1.4;
+}
+
+.workspace-inspector {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) var(--terminal);
+  background: linear-gradient(180deg, #111a25, #090e15);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.workspace-inspector-head {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  background: rgba(8, 14, 21, 0.9);
+  border-bottom: 1px solid var(--line);
+}
+
+.workspace-inspector .governor-identity {
+  min-width: 0;
+}
+
+.workspace-inspector .governor-identity img {
+  width: 66px;
+  height: 74px;
+}
+
+.workspace-inspector .governor-identity strong {
+  font-size: 1.05rem;
+  line-height: 1.4;
+}
+
+.workspace-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workspace-inspector .workspace-tools button {
+  justify-self: start;
+  min-height: 32px;
+  padding: 0 10px;
+  color: #d4e6f0;
+  background: #0b1420;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.workspace-inspector .workspace-tools button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.map-first-game.is-founding .strategic-army-node,
+.map-first-game.is-founding .strategic-army-marker {
+  display: none;
+}
+
+.map-first-game .turn-board strong,
+.map-first-game .stat-head strong,
+.map-first-game .stat-trend strong,
+.map-first-game .entity-detail-list dd,
+.map-first-game .military-panel dd {
+  font-family: "Times New Roman", "Kaiti SC", "STKaiti", "KaiTi", serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.workspace-panel {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.workspace-panel-heading {
+  display: grid;
+  gap: 4px;
+}
+
+.workspace-panel-heading > span {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.workspace-panel-heading > h2 {
+  color: #d9f7ff;
+  font-size: 1.25rem;
+}
+
+.workspace-intro,
+.territory-selection-hint {
+  color: #aebbd0;
+  font-size: 0.83rem;
+  line-height: 1.6;
+}
+
+.workspace-inspector .map-sidebar {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.workspace-inspector .military-panel {
+  grid-column: auto;
+}
+
+.workspace-inspector .entity-detail-list dd,
+.workspace-inspector .military-panel dd {
+  max-width: 70%;
+  text-align: right;
+  font-size: 0.87rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.workspace-inspector .entity-detail-list div,
+.workspace-inspector .military-panel dl div {
+  align-items: baseline;
+}
+
+.workspace-inspector .territory-setup-step {
+  display: grid;
+  margin: 14px;
+  padding: 18px 14px;
+  border-left-color: var(--belief);
+}
+
+.workspace-inspector .territory-setup-head {
+  display: grid;
+  gap: 12px;
+}
+
+.workspace-inspector .territory-setup-head p {
+  font-size: 0.87rem;
+  line-height: 1.7;
+  text-align: left;
+}
+
+.workspace-inspector .territory-setup-step .setup-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.workspace-inspector .control-group > h2 {
+  padding-bottom: 10px;
+  font-family: inherit;
+  font-size: 1.2rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.workspace-inspector .controls {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 8px;
+}
+
+.workspace-inspector .action-button {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: start;
+  gap: 12px;
+  min-width: 0;
+  min-height: 174px;
+  padding: 14px 10px 12px;
+  border-radius: 3px;
+}
+
+.workspace-inspector .button-mark {
+  flex-basis: auto;
+  width: 38px;
+  height: 38px;
+}
+
+.workspace-inspector .action-copy {
+  flex: 1 1 auto;
+  align-content: start;
+  gap: 8px;
+}
+
+.workspace-inspector .action-copy strong {
+  font-size: 0.96rem;
+  line-height: 1.4;
+}
+
+.workspace-inspector .action-copy small {
+  font-size: 0.76rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.workspace-inspector .disabled-reason {
+  flex: 0 0 auto;
+  padding: 0;
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.workspace-inspector .lower-grid {
+  grid-template-columns: 1fr;
+}
+
+.workspace-inspector .log-panel,
+.workspace-inspector .system-panel {
+  min-height: 0;
+  padding: 10px;
+  box-shadow: none;
+}
+
+.workspace-inspector #logList,
+.workspace-inspector .archive-panel ol {
+  max-height: none;
+  overflow: visible;
+}
+
+.workspace-inspector .log-filters {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.world-footer {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  max-height: 250px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.world-footer .special-banner {
+  grid-template-columns: minmax(90px, 0.3fr) minmax(0, 1fr);
+  min-height: 0;
+  padding: 10px 12px;
+  gap: 8px 14px;
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+.workspace-crisis-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  color: var(--belief);
+  background: #151921;
+  border: 1px solid var(--belief);
+  border-radius: 4px;
+}
+
+.workspace-crisis-notice p {
+  flex: 1 1 210px;
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.workspace-crisis-notice button {
+  color: var(--belief);
+  border: 1px solid var(--belief);
+  padding: 8px 10px;
+}
+
+.world-footer .special-banner .delta-row {
+  grid-column: 1 / -1;
+  justify-content: start;
+  min-width: 0;
+}
+
+.world-footer .special-banner p {
+  font-size: 0.83rem;
+  line-height: 1.6;
+}
+
+.world-footer .special-banner strong {
+  font-size: 0.95rem;
+}
+
+.world-footer .command-deck {
+  min-height: 0;
+  padding: 7px;
+  gap: 0;
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+.world-footer .command-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.world-footer .terminal-readout {
+  min-height: 80px;
+  gap: 10px;
+  padding: 9px 40px 20px 10px;
+  border-radius: 3px;
+}
+
+.world-footer .terminal-head {
+  display: block;
+}
+
+.world-footer .terminal-head > span,
+.world-footer .system-lines {
+  display: none;
+}
+
+.world-footer .terminal-head strong {
+  display: block;
+  font-size: 0.78rem;
+  text-align: left;
+  line-height: 1.3;
+}
+
+.world-footer .terminal-readout p {
+  font-family: inherit;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.world-footer .terminal-action .disabled-reason {
+  right: 8px;
+  bottom: 5px;
+  font-size: 0.65rem;
+}
+
+.numerical-overview-panel {
+  display: grid;
+  grid-template-rows: auto minmax(240px, 1fr) auto auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  gap: 12px;
+  padding: 16px;
+  color: #b9d7e9;
+  background: radial-gradient(ellipse at center, #142432, #080e15 70%);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.workspace-chart-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.workspace-chart-head h2 {
+  color: var(--ink);
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+.workspace-chart-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.workspace-chart-tabs button {
+  min-height: 36px;
+  padding: 7px 10px;
+  color: #b9d7e9;
+  background: #0b1420;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.workspace-chart-tabs button[aria-pressed="true"] {
+  color: var(--science);
+  border-color: var(--science);
+  background: #152735;
+}
+
+.workspace-chart-frame {
+  position: relative;
+  min-width: 0;
+  min-height: 240px;
+}
+
+#workspaceMetricsChart {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.workspace-chart-legend,
+.workspace-chart-legend > span {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  font-size: 1rem;
+}
+
+.workspace-chart-legend > span {
+  gap: 8px;
+}
+
+.workspace-chart-legend i {
+  width: 24px;
+  border-top: 2px solid;
+}
+
+.workspace-chart-note {
+  margin: 0;
+  color: #a5b6c8;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 1280px) {
+  .map-first-game .world-topbar {
+    grid-template-columns: minmax(170px, 1fr) minmax(142px, 0.7fr);
+    gap: 8px 16px;
+  }
+
+  .world-topbar .world-brand {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+  }
+
+  .world-brand .kicker {
+    display: none;
+  }
+
+  .world-brand .realm-identity {
+    margin-top: 0;
+  }
+
+  .world-topbar .turn-board {
+    justify-self: end;
+    width: 210px;
+  }
+
+  .world-topbar .turn-board div {
+    min-height: 0;
+    padding: 4px;
+  }
+
+  .world-topbar .world-resources {
+    grid-column: 1 / -1;
+  }
+
+  .world-resources .stat-card {
+    min-height: 0;
+  }
+
+  .world-resources .stat-head {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .world-layout {
+    grid-template-columns: 64px minmax(0, 1fr) 320px;
+    gap: 6px;
+  }
+
+  .workspace-nav {
+    padding: 5px;
+  }
+
+  .workspace-tab strong {
+    font-size: 0.76rem;
+  }
+
+  .map-first-game .map-legend {
+    display: none;
+  }
+
+  .map-first-game .strategic-map-toolbar {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+}
+
+@media (max-width: 980px) {
+  .unified-setup {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    grid-template-areas: "brand" "stage" "quote";
+    gap: 20px;
+  }
+
+  .unified-setup .setup-brand {
+    text-align: center;
+  }
+
+  .map-first-game {
+    height: auto;
+    min-height: calc(100svh - 66px);
+    grid-template-rows: auto auto;
+  }
+
+  .world-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    gap: 8px;
+  }
+
+  .workspace-nav {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 5px;
+    padding: 5px;
+  }
+
+  .workspace-seal {
+    display: none;
+  }
+
+  .workspace-tab {
+    min-height: 56px;
+    padding: 5px;
+  }
+
+  .workspace-tab[aria-pressed="true"] {
+    box-shadow: inset 0 -3px var(--science);
+  }
+
+  .workspace-tab > span {
+    font-size: 1.15rem;
+  }
+
+  .world-stage {
+    min-height: 570px;
+    height: clamp(570px, 82svh, 800px);
+  }
+
+  .workspace-inspector {
+    overflow: visible;
+  }
+
+  .workspace-inspector-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .workspace-inspector .governor-identity img {
+    width: 46px;
+    height: 50px;
+  }
+
+  .workspace-inspector .map-sidebar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .workspace-inspector .controls {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .workspace-inspector .lower-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+@media (max-width: 620px) {
+  .map-first-shell {
+    width: calc(100% - 12px);
+  }
+
+  .unified-setup {
+    padding: 20px 10px;
+  }
+
+  .world-setup-form {
+    grid-template-columns: 1fr;
+    padding: 14px 10px;
+  }
+
+  .world-setup-form .governor-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .world-setup-form .setup-enter {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .map-first-game .world-topbar {
+    padding: 8px;
+    grid-template-columns: 1fr;
+  }
+
+  .world-topbar .turn-board {
+    justify-self: stretch;
+    width: 100%;
+  }
+
+  .world-topbar .turn-board div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4px;
+    padding: 4px 7px;
+  }
+
+  .world-topbar .turn-board strong {
+    margin-top: 0;
+  }
+
+  .world-resources .stats-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .world-resources .stat-head {
+    flex-wrap: wrap;
+  }
+
+  .world-resources .stat-head strong {
+    font-size: 1.15rem;
+  }
+
+  .workspace-nav {
+    grid-template-columns: repeat(6, minmax(54px, 1fr));
+    overflow-x: auto;
+  }
+
+  .map-first-game .map-panel {
+    padding: 7px;
+  }
+
+  .map-first-game .strategic-map-toolbar {
+    display: grid;
+    gap: 6px;
+  }
+
+  .map-first-game .strategic-map-view-tools {
+    justify-content: space-between;
+  }
+
+  .world-footer {
+    max-height: 250px;
+  }
+
+  .world-footer .special-banner {
+    grid-template-columns: 1fr;
+  }
+
+  .world-footer .terminal-readout {
+    min-height: 104px;
+    padding-right: 30px;
+  }
+
+  .world-footer .terminal-action .shortcut-badge {
+    top: 5px;
+    right: 4px;
+    min-width: 20px;
+    padding: 0 3px;
+    font-size: 0.6rem;
+  }
+
+  .workspace-inspector-head,
+  .workspace-inspector .map-sidebar,
+  .workspace-inspector .lower-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-inspector .controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workspace-panel {
+    padding: 12px;
+  }
+
+  .numerical-overview-panel {
+    padding: 12px;
+  }
+}

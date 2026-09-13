@@ -52,6 +52,7 @@ vm.runInContext(fs.readFileSync(path.join(projectRoot, "endings.js"), "utf8"), c
 vm.runInContext(fs.readFileSync(path.join(projectRoot, "balance-model.js"), "utf8"), context, { filename: "balance-model.js" });
 vm.runInContext(fs.readFileSync(path.join(projectRoot, "map-lab/map-data.js"), "utf8"), context, { filename: "map-data.js" });
 vm.runInContext(fs.readFileSync(path.join(projectRoot, "map-lab/map-model.js"), "utf8"), context, { filename: "map-model.js" });
+vm.runInContext(fs.readFileSync(path.join(projectRoot, "map-lab/map-generator.js"), "utf8"), context, { filename: "map-generator.js" });
 vm.runInContext(fs.readFileSync(path.join(projectRoot, "game.js"), "utf8"), context, { filename: "game.js" });
 
 vm.runInContext(`

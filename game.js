@@ -1,12 +1,13 @@
 "use strict";
 
 const BALANCE_MODEL = globalThis.CRADLES_BALANCE;
-const STRATEGIC_MAP_DATA = globalThis.CRADLES_MAP_LAB_DATA;
+const LEGACY_STRATEGIC_MAP_DATA = globalThis.CRADLES_MAP_LAB_DATA;
+let STRATEGIC_MAP_DATA = LEGACY_STRATEGIC_MAP_DATA;
 const STRATEGIC_MAP_MODEL = globalThis.CRADLES_MAP_LAB_MODEL;
 if (!STRATEGIC_MAP_DATA || !STRATEGIC_MAP_MODEL) {
   throw new Error("The fixed strategic map data must load before game.js.");
 }
-const STRATEGIC_GEOGRAPHY = STRATEGIC_MAP_MODEL.buildGeography(STRATEGIC_MAP_DATA);
+let STRATEGIC_GEOGRAPHY = STRATEGIC_MAP_MODEL.buildGeography(STRATEGIC_MAP_DATA);
 const I18N = globalThis.CRADLES_I18N || {
   init() {},
   isEnglish() { return false; },
@@ -26,6 +27,7 @@ const ECO_METER_CAP = 300000;
 const EERF_MAX_LEVEL = 5;
 const BASE_RESTART_POP = 2600;
 const MIN_SUSTAINABLE_POP = 1200;
+const ORDINARY_EVENT_POPULATION_LOSS_RATE = 0.12;
 const SAVE_VERSION = 11;
 const STORE_KEY = "three-sun-chronicle:v1";
 const ENDING_STORE_KEY = "three-sun-chronicle:ending:v1";
@@ -159,7 +161,9 @@ const DIFFICULTIES = {
 };
 const LEGACY_MAP_REGION_COUNT = 25;
 const DEFAULT_STARTING_PROVINCE_ID = STRATEGIC_MAP_DATA.initialSelection || "cb05";
-const MAP_REGIONS = Object.freeze(STRATEGIC_MAP_DATA.provinces.map((province) => Object.freeze({
+let MAP_REGIONS = mapDefinitionsFor(STRATEGIC_MAP_DATA);
+function mapDefinitionsFor(data) {
+  return Object.freeze(data.provinces.map((province) => Object.freeze({
   id: province.id,
   name: province.nameZh,
   nameEn: province.nameEn,
@@ -167,7 +171,8 @@ const MAP_REGIONS = Object.freeze(STRATEGIC_MAP_DATA.provinces.map((province) =>
   strength: province.base.fortification,
   terrain: province.terrain,
   core: province.id === DEFAULT_STARTING_PROVINCE_ID
-})));
+  })));
+}
 const MAP_REGION_ID_SET = new Set(MAP_REGIONS.map((region) => region.id));
 const MAP_DISTANCE_CACHE = new Map();
 const LEGACY_REGION_ID_MAP = Object.freeze({
@@ -399,6 +404,7 @@ const ACTIONS = {
   economy: {
     label: "刺激经济",
     type: "progress",
+    protectPopulationFloor: true,
     delta(state) {
       return {
         sc: -8,
@@ -590,13 +596,30 @@ const ACTION_SHORTCUT_LABELS = ACTION_SHORTCUTS.reduce((labels, shortcut) => {
 
 const UTILITY_SHORTCUTS = [
   { key: "l", shiftKey: true, buttonId: "clearLogButton", label: "Shift+L", run: clearChronicle },
-  { key: "n", shiftKey: true, buttonId: "newGameButton", label: "Shift+N", run: randomizeOrStartNewWorld }
+  { key: "n", shiftKey: true, buttonId: "newGameButton", workspaceButtonId: "workspaceNewWorldButton", label: "Shift+N", run: randomizeOrStartNewWorld }
 ];
 
 const dom = {};
 let state = null;
 let autoRunHandle = 0;
 let currentLogFilter = "all";
+let currentWorkspaceTab = "overview";
+let currentWorkspaceChart = "knowledge";
+const WORKSPACE_CHART_GROUPS = {
+  knowledge: { keys: ["sc", "be", "la"], ceiling: CAP },
+  economy: { keys: ["eco"] },
+  population: { keys: ["pop"] },
+  order: { keys: ["stability"], ceiling: 100 }
+};
+const WORKSPACE_CHART_SERIES = {
+  sc: { label: "SC", color: "#54d8ff", dash: [] },
+  be: { label: "BE", color: "#ffd166", dash: [8, 4] },
+  la: { label: "LA", color: "#f4a7d8", dash: [2, 4] },
+  eco: { label: "ECO", color: "#c5ef7f", dash: [] },
+  pop: { label: "POP", color: "#74e0a8", dash: [] },
+  stability: { label: "秩序", color: "#e2e8f0", dash: [] }
+};
+const WORKSPACE_TABS = new Set(["overview", "development", "governance", "military", "facilities", "records"]);
 const strategicMapView = {
   built: false,
   preferencesLoaded: false,
@@ -645,8 +668,11 @@ function normalizeSeed(value) {
   return seed > 0 ? seed : 1;
 }
 
-function createNewState(seedValue = Date.now()) {
+function createNewState(seedValue = Date.now(), geometry = null) {
   const seed = normalizeSeed(seedValue);
+  const geometryVersion = geometry ? geometry.geometryVersion || null : globalThis.CRADLES_MAP_GENERATOR?.VERSION || null;
+  const geometrySeed = normalizeSeed(geometry?.geometrySeed || seed);
+  installWorldGeography(geometryVersion, geometrySeed);
   const endingStats = loadEndingStats();
   const initialSnapshot = {
     sc: 240,
@@ -659,9 +685,11 @@ function createNewState(seedValue = Date.now()) {
   return {
     saveVersion: SAVE_VERSION,
     seed,
+    geometryVersion,
+    geometrySeed,
     rngState: seed,
     setupComplete: false,
-    setupStage: "name",
+    setupStage: "settings",
     realmName: "",
     difficulty: "normal",
     aiAggression: "standard",
@@ -996,6 +1024,9 @@ function generateInitialRegionControllers(seedValue, startingRegionId) {
     const balanced = entityIds.every((entityId, index) => controlledByEntity[entityId].length === targets[index]);
     if (complete && balanced) return assignments;
   }
+  if (STRATEGIC_MAP_DATA.generatorVersion && globalThis.CRADLES_MAP_GENERATOR?.partitionControllers) {
+    return globalThis.CRADLES_MAP_GENERATOR.partitionControllers(STRATEGIC_GEOGRAPHY, seedValue, start, entityIds);
+  }
   throw new Error("Unable to generate five connected strategic territories.");
 }
 
@@ -1043,7 +1074,33 @@ function roundMapCoordinate(value) {
   return Math.round(value * 100) / 100;
 }
 
-const FIXED_MAP_BLUEPRINT = generateMapBlueprint(STRATEGIC_MAP_DATA.geometryRevision);
+let ACTIVE_MAP_BLUEPRINT = generateMapBlueprint(STRATEGIC_MAP_DATA.geometryRevision);
+
+function installWorldGeography(version, seed) {
+  const generator = globalThis.CRADLES_MAP_GENERATOR;
+  if (version && version !== generator?.VERSION) throw new Error(`Unsupported map generation version: ${version}`);
+  const revision = version ? `${version}-${seed}` : LEGACY_STRATEGIC_MAP_DATA.geometryRevision;
+  if (STRATEGIC_MAP_DATA.geometryRevision === revision) return;
+  STRATEGIC_MAP_DATA = version ? generator.generate(LEGACY_STRATEGIC_MAP_DATA, seed, version) : LEGACY_STRATEGIC_MAP_DATA;
+  STRATEGIC_GEOGRAPHY = STRATEGIC_MAP_MODEL.buildGeography(STRATEGIC_MAP_DATA);
+  MAP_REGIONS = mapDefinitionsFor(STRATEGIC_MAP_DATA);
+  MAP_DISTANCE_CACHE.clear();
+  ACTIVE_MAP_BLUEPRINT = generateMapBlueprint(revision);
+  resetStrategicMapGeometry();
+}
+
+function resetStrategicMapGeometry() {
+  strategicMapView.realmClipNodes.forEach((node) => node.remove());
+  ["provinceNodes", "reliefNodes", "provinceLabelNodes", "realmClipNodes", "realmLabelNodes", "capitalNodes", "armyNodes", "pointers"].forEach((key) => strategicMapView[key].clear());
+  strategicMapView.realmBorderNodes = [];
+  strategicMapView.roadNodes = [];
+  strategicMapView.built = false;
+  strategicMapView.hoveredRegionId = null;
+  strategicMapView.dragState = null;
+  strategicMapView.pinchState = null;
+  strategicMapView.suppressClick = false;
+  ["strategicOceanDetailLayer", "strategicProvinceReliefLayer", "strategicProvinceLayer", "strategicTerrainTextureLayer", "strategicRouteLayer", "strategicRiverLayer", "strategicRegionBorderLayer", "strategicRealmBorderLayer", "strategicCapitalLayer", "strategicRealmLabelLayer", "strategicRegionLabelLayer", "strategicProvinceLabelLayer", "strategicArmyLayer"].forEach((key) => dom[key]?.replaceChildren());
+}
 
 function createInitialMapState(source = {}, options = {}) {
   const safe = source && typeof source === "object" ? source : {};
@@ -1104,7 +1161,7 @@ function createInitialMapState(source = {}, options = {}) {
   };
 }
 
-function createInitialArmies(current = {}, difficulty = "normal") {
+function createInitialArmies(current = {}, difficulty = "normal", startingRegionId = DEFAULT_STARTING_PROVINCE_ID) {
   const config = difficultyConfig(difficulty);
   const sourceArmies = Array.isArray(current.armies) ? current.armies : [];
   const hasStoredRoster = Array.isArray(current.armies);
@@ -1114,7 +1171,7 @@ function createInitialArmies(current = {}, difficulty = "normal") {
       id: PLAYER_ARMY_ID,
       name: "第一军团",
       entityId: PLAYER_ENTITY_ID,
-      regionId: DEFAULT_STARTING_PROVINCE_ID,
+      regionId: normalizeStartingRegionId(startingRegionId),
       force: Math.round(rawPlayerForce * config.playerForce),
       attackBonus: 4,
       defenseBonus: 6
@@ -1196,7 +1253,7 @@ function normalizeArmyRecord(stored = {}, fallback) {
 
 function createInitialMilitaryState(current = {}, options = {}) {
   const difficulty = normalizeDifficulty(options.difficulty || current.difficulty || "normal");
-  const armies = createInitialArmies(current, difficulty);
+  const armies = createInitialArmies(current, difficulty, options.startingRegionId);
   const playerForce = armies
     .filter((army) => army.entityId === PLAYER_ENTITY_ID)
     .reduce((sum, army) => sum + army.force, 0);
@@ -1373,12 +1430,12 @@ function canObserveMilitaryAt(regionId) {
 
 function activeMapRoads(mapState = state?.map) {
   void mapState;
-  return FIXED_MAP_BLUEPRINT.roads;
+  return ACTIVE_MAP_BLUEPRINT.roads;
 }
 
 function mapLayoutRegion(regionId, mapState = state?.map) {
   void mapState;
-  return FIXED_MAP_BLUEPRINT.regions[regionId] || null;
+  return ACTIVE_MAP_BLUEPRINT.regions[regionId] || null;
 }
 
 function armies() {
@@ -1644,7 +1701,7 @@ function init() {
   alignArmiesWithEntityTerritories();
   eliminateDefeatedEntities();
   bindEvents();
-  if (maybeFinishGame({ kind: "load", trigger: "载入存档" })) return;
+  if (state.setupComplete && maybeFinishGame({ kind: "load", trigger: "载入存档" })) return;
   updateEnding();
   render();
   scheduleAutoRunIfNeeded();
@@ -1686,13 +1743,18 @@ function cacheDom() {
   dom.aggressionButtons = Array.from(document.querySelectorAll("[data-aggression]"));
   dom.governorButtons = Array.from(document.querySelectorAll("[data-governor]"));
   dom.mapModeButtons = Array.from(document.querySelectorAll("[data-map-mode]"));
-  dom.backToNameButton = document.querySelector("#backToNameButton");
-  dom.continueToGovernorButton = document.querySelector("#continueToGovernorButton");
-  dom.backToDifficultyButton = document.querySelector("#backToDifficultyButton");
-  dom.continueToTerritoryButton = document.querySelector("#continueToTerritoryButton");
-  dom.backToGovernorButton = document.querySelector("#backToGovernorButton");
+  dom.backToSetupButton = document.querySelector("#backToSetupButton");
+  dom.workspaceTabs = Array.from(document.querySelectorAll("[data-workspace-tab]"));
+  dom.workspacePanels = Array.from(document.querySelectorAll("[data-workspace-panel]"));
+  dom.workspaceInspector = document.querySelector("#workspaceInspector");
+  dom.numericalOverviewPanel = document.querySelector("#numericalOverviewPanel");
+  dom.workspaceMetricsChart = document.querySelector("#workspaceMetricsChart");
+  dom.workspaceChartLegend = document.querySelector("#workspaceChartLegend");
+  dom.workspaceChartButtons = Array.from(document.querySelectorAll("[data-workspace-chart]"));
+  dom.workspaceNewWorldButton = document.querySelector("#workspaceNewWorldButton");
+  dom.workspaceCrisisNotice = document.querySelector("#workspaceCrisisNotice");
+  dom.openRecoveryButton = document.querySelector("#openRecoveryButton");
   dom.startCivilizationButton = document.querySelector("#startCivilizationButton");
-  dom.startRegionMap = document.querySelector("#startRegionMap");
   dom.startRegionName = document.querySelector("#startRegionName");
   dom.startRegionDescription = document.querySelector("#startRegionDescription");
   dom.realmIdentity = document.querySelector("#realmIdentity");
@@ -1832,7 +1894,10 @@ function syncActionButtonCopy() {
 }
 
 function syncUtilityButtonCopy() {
-  UTILITY_SHORTCUTS.forEach((shortcut) => {
+  const shortcuts = UTILITY_SHORTCUTS.flatMap((shortcut) => shortcut.workspaceButtonId
+    ? [shortcut, { ...shortcut, buttonId: shortcut.workspaceButtonId }]
+    : [shortcut]);
+  shortcuts.forEach((shortcut) => {
     const button = document.querySelector(`#${shortcut.buttonId}`);
     if (!button) return;
 
@@ -1846,7 +1911,7 @@ function syncUtilityButtonCopy() {
     button.append(label);
     syncShortcutBadge(button, shortcut.label, "inline-shortcut");
 
-    const accessibleName = `${baseLabel}，快捷键 ${shortcut.label}`;
+    const accessibleName = I18N.translate(`${sourceLabel}，快捷键 ${shortcut.label}`);
     button.title = accessibleName;
     button.setAttribute("aria-label", accessibleName);
     button.setAttribute("aria-keyshortcuts", shortcut.label);
@@ -1884,14 +1949,20 @@ function bindEvents() {
   dom.mapModeButtons.forEach((button) => {
     button.addEventListener("click", () => selectMapMode(button.dataset.mapMode));
   });
-  dom.backToNameButton?.addEventListener("click", returnToRealmName);
-  dom.continueToGovernorButton?.addEventListener("click", continueToGovernor);
-  dom.backToDifficultyButton?.addEventListener("click", returnToDifficulty);
-  dom.continueToTerritoryButton?.addEventListener("click", continueToTerritory);
-  dom.backToGovernorButton?.addEventListener("click", returnToGovernor);
+  dom.backToSetupButton?.addEventListener("click", returnToRealmName);
+  dom.workspaceTabs?.forEach((button) => {
+    button.addEventListener("click", () => {
+      if (setWorkspaceTab(button.dataset.workspaceTab) && window.matchMedia?.("(max-width: 980px)").matches) {
+        dom.workspaceInspector?.scrollIntoView({ block: "start", behavior: "smooth" });
+      }
+    });
+  });
+  dom.workspaceNewWorldButton?.addEventListener("click", startNewGame);
+  dom.workspaceChartButtons?.forEach((button) => {
+    button.addEventListener("click", () => setWorkspaceChart(button.dataset.workspaceChart));
+  });
+  dom.openRecoveryButton?.addEventListener("click", openFiscalRecovery);
   dom.startCivilizationButton?.addEventListener("click", completeWorldSetup);
-  dom.startRegionMap?.addEventListener("click", handleStartRegionInteraction);
-  dom.startRegionMap?.addEventListener("keydown", handleStartRegionKeyboardInteraction);
   dom.worldMap?.addEventListener("click", handleMapInteraction);
   dom.worldMap?.addEventListener("keydown", handleMapKeyboardInteraction);
   dom.strategicMapModeButtons.forEach((button) => {
@@ -1925,6 +1996,11 @@ function bindEvents() {
 
   window.addEventListener("keydown", handleShortcut);
   window.addEventListener("resize", scheduleStrategicMapCameraRefresh);
+  window.addEventListener("resize", renderWorkspaceChart);
+  if (dom.workspaceMetricsChart && typeof ResizeObserver === "function") {
+    dom.workspaceChartObserver = new ResizeObserver(renderWorkspaceChart);
+    dom.workspaceChartObserver.observe(dom.workspaceMetricsChart);
+  }
 }
 
 function syncLocalizationContext() {
@@ -1935,6 +2011,7 @@ function syncLocalizationContext() {
 }
 
 function toggleLanguage() {
+  captureSetupDraft();
   I18N.toggle();
   syncLocalizationContext();
   syncActionButtonCopy();
@@ -1943,7 +2020,7 @@ function toggleLanguage() {
 }
 
 function scheduleAutoRunIfNeeded() {
-  if (!state || state.finished || state.awaitingCivilizationRestart || !state.autoRunUntilCollapse) {
+  if (!state?.setupComplete || state.finished || state.awaitingCivilizationRestart || !state.autoRunUntilCollapse) {
     cancelAutoRun();
     return;
   }
@@ -1951,7 +2028,7 @@ function scheduleAutoRunIfNeeded() {
   if (autoRunHandle) return;
   autoRunHandle = window.setTimeout(() => {
     autoRunHandle = 0;
-    if (!state || state.finished || state.awaitingCivilizationRestart || !state.autoRunUntilCollapse) return;
+    if (!state?.setupComplete || state.finished || state.awaitingCivilizationRestart || !state.autoRunUntilCollapse) return;
     advanceRound(DIVIDE_AUTO_ACTION);
   }, DIVIDE_AUTO_DELAY_MS);
 }
@@ -1977,6 +2054,8 @@ function handleShortcut(event) {
   if (!button || button.disabled) return;
 
   event.preventDefault();
+  const panel = button.closest?.("[data-workspace-panel]");
+  if (panel) setWorkspaceTab(panel.dataset.workspacePanel);
   flashShortcutButton(button);
   advanceRound(shortcut.actionId);
 }
@@ -1987,7 +2066,8 @@ function handleUtilityShortcut(event, key) {
   });
   if (!shortcut) return false;
 
-  const button = document.querySelector(`#${shortcut.buttonId}`);
+  const buttonId = shortcut.workspaceButtonId && dom.setupPanel?.hidden ? shortcut.workspaceButtonId : shortcut.buttonId;
+  const button = document.querySelector(`#${buttonId}`);
   if (!button || button.disabled) return false;
 
   event.preventDefault();
@@ -2007,11 +2087,13 @@ function randomizeOrStartNewWorld() {
     return;
   }
 
-  const draftName = String(dom.realmNameInput?.value || state?.realmName || "").trim().slice(0, 24);
+  captureSetupDraft();
+  const settings = setupOptions();
   cancelAutoRun();
   clearStoredEnding();
   state = createNewState(Date.now());
-  state.realmName = draftName;
+  Object.assign(state, settings);
+  currentWorkspaceTab = "overview";
   saveState();
   render();
 }
@@ -2020,6 +2102,7 @@ function startNewGameWithSeed(seedValue) {
   cancelAutoRun();
   clearStoredEnding();
   state = createNewState(seedValue);
+  currentWorkspaceTab = "overview";
   if (dom.seedInput) dom.seedInput.value = "";
   saveState();
   render();
@@ -2027,6 +2110,7 @@ function startNewGameWithSeed(seedValue) {
 
 function confirmRealmName(event) {
   event?.preventDefault();
+  if (state?.setupComplete) return;
   const realmName = String(dom.realmNameInput?.value || "").trim().slice(0, 24);
   if (!realmName) {
     dom.realmNameInput?.focus();
@@ -2034,49 +2118,61 @@ function confirmRealmName(event) {
   }
 
   const requestedSeed = dom.seedInput?.value.trim() || state.seed;
+  const settings = setupOptions();
   const nextState = createNewState(requestedSeed);
+  Object.assign(nextState, settings);
   nextState.realmName = realmName;
-  nextState.setupStage = "difficulty";
+  nextState.setupStage = "territory";
   state = nextState;
-  if (state.map?.entities?.[PLAYER_ENTITY_ID]) {
-    state.map.entities[PLAYER_ENTITY_ID].name = realmName;
-  }
+  currentWorkspaceTab = "overview";
+  rebuildFoundingPreview();
   saveState();
-  renderSetup();
+  render();
+  dom.gamePanel?.scrollIntoView({ block: "start" });
+}
+
+function setupOptions() {
+  return {
+    realmName: state?.realmName || "",
+    difficulty: normalizeDifficulty(state?.difficulty),
+    aiAggression: normalizeAiAggression(state?.aiAggression),
+    governorId: normalizeGovernorId(state?.governorId),
+    startingRegionId: normalizeStartingRegionId(state?.startingRegionId),
+    mapUiExpanded: state?.mapUiExpanded !== false
+  };
+}
+
+function captureSetupDraft() {
+  if (!state || state.setupComplete || state.setupStage === "territory") return;
+  state.realmName = String(dom.realmNameInput?.value ?? state.realmName).trim().slice(0, 24);
+  state.setupSeedDraft = String(dom.seedInput?.value ?? state.setupSeedDraft ?? state.seed);
 }
 
 function selectDifficulty(value) {
+  if (state.setupComplete) return;
+  captureSetupDraft();
   state.difficulty = normalizeDifficulty(value);
   saveState();
   renderSetup();
 }
 
 function selectAiAggression(value) {
+  if (state.setupComplete) return;
+  captureSetupDraft();
   state.aiAggression = normalizeAiAggression(value);
   saveState();
   renderSetup();
 }
 
-function continueToGovernor() {
-  state.setupStage = "governor";
-  saveState();
-  renderSetup();
-}
-
 function selectGovernor(value) {
+  if (state.setupComplete) return;
+  captureSetupDraft();
   state.governorId = normalizeGovernorId(value);
   saveState();
   renderSetup();
 }
 
-function returnToDifficulty() {
-  state.setupStage = "difficulty";
-  saveState();
-  renderSetup();
-}
-
-function continueToTerritory() {
-  state.setupStage = "territory";
+function rebuildFoundingPreview() {
   state.startingRegionId = normalizeStartingRegionId(state.startingRegionId);
   state.map = createInitialMapState({}, {
     seed: state.seed,
@@ -2084,57 +2180,43 @@ function continueToTerritory() {
     difficulty: state.difficulty,
     startingRegionId: state.startingRegionId
   });
-  saveState();
-  renderSetup();
-}
-
-function returnToGovernor() {
-  state.setupStage = "governor";
-  saveState();
-  renderSetup();
+  state.military = createInitialMilitaryState(snapshot(), {
+    difficulty: state.difficulty,
+    startingRegionId: state.startingRegionId
+  });
+  state.selectedArmyId = PLAYER_ARMY_ID;
+  state.selectedRegionId = state.startingRegionId;
+  state.selectedEntityId = PLAYER_ENTITY_ID;
+  alignArmiesWithEntityTerritories();
 }
 
 function selectMapMode(value) {
+  if (state.setupComplete) return;
+  captureSetupDraft();
   state.mapUiExpanded = value !== "collapsed";
   saveState();
   renderSetup();
 }
 
-function handleStartRegionInteraction(event) {
-  const region = event.target.closest("[data-start-region]");
-  if (!region) return;
-  selectStartingRegion(region.dataset.startRegion);
-}
-
-function handleStartRegionKeyboardInteraction(event) {
-  if (!["Enter", " "].includes(event.key)) return;
-  const region = event.target.closest?.("[data-start-region]");
-  if (!region) return;
-  event.preventDefault();
-  selectStartingRegion(region.dataset.startRegion);
-}
-
 function selectStartingRegion(regionId) {
+  if (state.setupComplete || state.setupStage !== "territory" || !MAP_REGION_ID_SET.has(regionId)) return false;
   state.startingRegionId = normalizeStartingRegionId(regionId);
-  state.selectedRegionId = state.startingRegionId;
-  state.map = createInitialMapState({}, {
-    seed: state.seed,
-    realmName: state.realmName,
-    difficulty: state.difficulty,
-    startingRegionId: state.startingRegionId
-  });
+  rebuildFoundingPreview();
   saveState();
-  renderSetup();
+  render();
+  return true;
 }
 
 function returnToRealmName() {
-  state.setupStage = "name";
+  if (state.setupComplete) return;
+  state.setupStage = "settings";
   saveState();
-  renderSetup();
+  render();
   dom.realmNameInput?.focus();
 }
 
 function completeWorldSetup() {
+  if (state.setupComplete || state.setupStage !== "territory") return;
   const realmName = String(state.realmName || dom.realmNameInput?.value || "").trim().slice(0, 24);
   if (!realmName) {
     returnToRealmName();
@@ -2149,6 +2231,7 @@ function completeWorldSetup() {
   state.mapUiExpanded = state.mapUiExpanded !== false;
   state.setupComplete = true;
   state.setupStage = "complete";
+  delete state.setupSeedDraft;
   state.map = createInitialMapState(
     {
       realmName: state.realmName,
@@ -2163,7 +2246,10 @@ function completeWorldSetup() {
       startingRegionId: state.startingRegionId
     }
   );
-  state.military = createInitialMilitaryState(snapshot(), { difficulty: state.difficulty });
+  state.military = createInitialMilitaryState(snapshot(), {
+    difficulty: state.difficulty,
+    startingRegionId: state.startingRegionId
+  });
   state.selectedArmyId = PLAYER_ARMY_ID;
   state.selectedEntityId = PLAYER_ENTITY_ID;
   state.selectedRegionId = state.startingRegionId;
@@ -2195,15 +2281,170 @@ function toggleMapExpansion() {
 }
 
 function renderMapExpansionMode() {
-  const expanded = state?.mapUiExpanded !== false;
+  const founding = !state.setupComplete && state.setupStage === "territory";
+  const expanded = state?.mapUiExpanded !== false || founding;
   dom.mapExpansionSections?.forEach((section) => {
     section.hidden = !expanded;
   });
   if (dom.mapExpansionToggle) {
+    dom.mapExpansionToggle.disabled = !state.setupComplete || state.finished || state.awaitingCivilizationRestart;
     dom.mapExpansionToggle.setAttribute("aria-pressed", expanded ? "true" : "false");
     dom.mapExpansionToggle.textContent = expanded ? "战略拓展：展开" : "战略拓展：折叠";
     dom.mapExpansionToggle.title = expanded ? "收起地图、军事与相关决议" : "展开战略地图与军事系统";
   }
+}
+
+function setWorkspaceTab(tab) {
+  if (!state?.setupComplete || !WORKSPACE_TABS.has(tab)) return false;
+  if (tab === "military" && state.mapUiExpanded === false) return false;
+  const changed = currentWorkspaceTab !== tab;
+  currentWorkspaceTab = tab;
+  if (changed && dom.workspaceInspector) dom.workspaceInspector.scrollTop = 0;
+  renderWorkspaceView();
+  I18N.localizeDocument(document);
+  return true;
+}
+
+function renderWorkspaceView() {
+  const founding = !state?.setupComplete && state?.setupStage === "territory";
+  if (dom.workspaceCrisisNotice) dom.workspaceCrisisNotice.hidden = Boolean(actionDisabledReason(ACTIONS.recovery));
+  if (currentWorkspaceTab === "military" && state.mapUiExpanded === false) currentWorkspaceTab = "development";
+  dom.gamePanel?.classList.toggle("is-founding", founding);
+  dom.gamePanel?.classList.toggle("is-numerical", state.setupComplete && state.mapUiExpanded === false);
+  if (dom.territoryStep) dom.territoryStep.hidden = !founding;
+  if (dom.numericalOverviewPanel) dom.numericalOverviewPanel.hidden = !state.setupComplete || state.mapUiExpanded !== false;
+  renderWorkspaceChart();
+  dom.workspaceTabs?.forEach((button) => {
+    button.disabled = !state.setupComplete;
+    button.setAttribute("aria-pressed", button.dataset.workspaceTab === currentWorkspaceTab ? "true" : "false");
+  });
+  dom.workspacePanels?.forEach((panel) => {
+    panel.hidden = !state.setupComplete || panel.dataset.workspacePanel !== currentWorkspaceTab;
+  });
+}
+
+function setWorkspaceChart(groupId) {
+  if (!Object.hasOwn(WORKSPACE_CHART_GROUPS, groupId)) return false;
+  currentWorkspaceChart = groupId;
+  renderWorkspaceChart();
+  return true;
+}
+
+function workspaceChartCeiling(samples, group) {
+  if (group.ceiling) return group.ceiling;
+  const peak = Math.max(100, ...samples.flatMap((sample) => group.keys.map((key) => sample[key])));
+  const magnitude = 10 ** Math.floor(Math.log10(peak));
+  return ([1, 2, 5, 10].find((step) => step * magnitude >= peak) || 10) * magnitude;
+}
+
+function workspaceChartValue(value) {
+  if (value >= 1000000) return `${Number((value / 1000000).toFixed(1))}M`;
+  if (value >= 1000) return `${Number((value / 1000).toFixed(1))}K`;
+  return formatNumber(Math.round(value));
+}
+
+function renderWorkspaceChart() {
+  if (!state?.setupComplete || state.mapUiExpanded !== false || !dom.workspaceMetricsChart) return;
+  const samples = normalizedMetricSamples();
+  const group = WORKSPACE_CHART_GROUPS[currentWorkspaceChart];
+  const last = samples[samples.length - 1];
+  const ceiling = workspaceChartCeiling(samples, group);
+  const canvas = dom.workspaceMetricsChart;
+  dom.workspaceChartButtons?.forEach((button) => {
+    button.setAttribute("aria-pressed", button.dataset.workspaceChart === currentWorkspaceChart ? "true" : "false");
+  });
+  if (dom.workspaceChartLegend) {
+    dom.workspaceChartLegend.replaceChildren();
+    group.keys.forEach((key) => {
+      const series = WORKSPACE_CHART_SERIES[key];
+      const item = document.createElement("span");
+      const swatch = document.createElement("i");
+      swatch.setAttribute("aria-hidden", "true");
+      swatch.style.borderTopColor = series.color;
+      swatch.style.borderTopStyle = key === "be" ? "dashed" : key === "la" ? "dotted" : "solid";
+      const label = document.createElement("span");
+      label.textContent = `${I18N.translate(series.label)} ${formatNumber(last[key])}`;
+      item.append(swatch, label);
+      dom.workspaceChartLegend.append(item);
+    });
+  }
+  const summary = group.keys.map((key) => `${I18N.translate(WORKSPACE_CHART_SERIES[key].label)} ${formatNumber(last[key])}`).join(" · ");
+  canvas.setAttribute("aria-label", I18N.isEnglish()
+    ? `Civilization trends, years ${samples[0].turn}–${last.turn}. Latest: ${summary}`
+    : `文明指标折线图，第 ${samples[0].turn}—${last.turn} 年。最新：${summary}`);
+  // The hidden map mode performs no drawing; a single bounded canvas needs no animation loop.
+  const context = canvas.getContext?.("2d");
+  if (!context) return;
+  const rect = canvas.getBoundingClientRect();
+  const width = Math.max(240, Math.round(rect.width || 960));
+  const height = Math.max(240, Math.round(rect.height || 520));
+  const ratio = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.round(width * ratio);
+  canvas.height = Math.round(height * ratio);
+  context.setTransform(ratio, 0, 0, ratio, 0, 0);
+  context.clearRect(0, 0, width, height);
+  const plot = { left: 58, right: width - 24, top: 24, bottom: height - 42 };
+  const minTurn = samples[0].turn;
+  const maxTurn = Math.max(minTurn, last.turn);
+  const xFor = (turn) => minTurn === maxTurn
+    ? (plot.left + plot.right) / 2
+    : plot.left + (plot.right - plot.left) * (turn - minTurn) / (maxTurn - minTurn);
+  const yFor = (value) => plot.bottom - (plot.bottom - plot.top) * clamp(value / ceiling, 0, 1);
+  context.font = '14px "Times New Roman", "Kaiti SC", "STKaiti", "KaiTi", serif';
+  context.lineWidth = 1;
+  context.setLineDash([]);
+  context.textAlign = "right";
+  for (let tick = 0; tick <= 4; tick += 1) {
+    const value = ceiling * tick / 4;
+    const y = yFor(value);
+    context.strokeStyle = "rgba(84, 216, 255, 0.14)";
+    context.beginPath();
+    context.moveTo(plot.left, y);
+    context.lineTo(plot.right, y);
+    context.stroke();
+    context.fillStyle = "#a5b6c8";
+    context.fillText(workspaceChartValue(value), plot.left - 8, y + 4);
+  }
+  const ticks = Math.min(4, maxTurn - minTurn);
+  context.textAlign = "center";
+  for (let tick = 0; tick <= ticks; tick += 1) {
+    const turn = ticks ? Math.round(minTurn + (maxTurn - minTurn) * tick / ticks) : minTurn;
+    context.fillText(I18N.isEnglish() ? `Y${turn}` : `${turn} 年`, xFor(turn), plot.bottom + 26);
+  }
+  group.keys.forEach((key) => {
+    const series = WORKSPACE_CHART_SERIES[key];
+    context.strokeStyle = series.color;
+    context.fillStyle = series.color;
+    context.lineWidth = 2;
+    context.setLineDash(series.dash);
+    context.beginPath();
+    samples.forEach((sample, index) => {
+      const x = xFor(sample.turn);
+      const y = yFor(sample[key]);
+      if (!index || sample.civilization !== samples[index - 1].civilization) context.moveTo(x, y);
+      else context.lineTo(x, y);
+    });
+    context.stroke();
+    context.setLineDash([]);
+    samples.forEach((sample, index) => {
+      context.beginPath();
+      context.arc(xFor(sample.turn), yFor(sample[key]), index === samples.length - 1 ? 3.5 : 2.3, 0, Math.PI * 2);
+      context.fill();
+    });
+  });
+  if (samples.length === 1) {
+    context.fillStyle = "#a5b6c8";
+    context.textAlign = "center";
+    context.fillText(I18N.translate("推进一年，即可看到第一段变化。"), (plot.left + plot.right) / 2, plot.top + 22);
+  }
+}
+
+function openFiscalRecovery() {
+  if (actionDisabledReason(ACTIONS.recovery) || !setWorkspaceTab("facilities")) return false;
+  const button = dom.actionButtons.find((candidate) => candidate.dataset.action === "recovery");
+  button?.focus({ preventScroll: true });
+  button?.scrollIntoView({ block: "nearest" });
+  return true;
 }
 
 function clearChronicle() {
@@ -2310,6 +2551,7 @@ function flashShortcutButton(button) {
 }
 
 function advanceRound(actionId) {
+  if (!state?.setupComplete) return;
   if (state.finished) {
     cancelAutoRun();
     goToEndingPage(state.finalEnding?.id || "A");
@@ -2370,7 +2612,7 @@ function advanceRound(actionId) {
 
   applyDelta(drift, { freezeKnowledge: crisisAtRoundStart, protectPopulationFloor: true });
   if (maybeFinishGame({ kind: "drift", trigger: event.title, rand })) return;
-  applyDelta(event.delta, { freezeKnowledge: crisisAtRoundStart, protectPopulationFloor: true });
+  applyDelta(event.delta, { freezeKnowledge: crisisAtRoundStart, protectPopulationFloor: true, ordinaryEvent: true });
   if (maybeFinishGame({ kind: "event", trigger: event.title, rand })) return;
 
   const specialEvent = specialEventFor(spec, rng);
@@ -3336,21 +3578,27 @@ function handleMapKeyboardInteraction(event) {
 function selectMapArmy(armyId) {
   const army = armyById(armyId);
   if (!army) return false;
+  if (!state.setupComplete) return selectStartingRegion(army.regionId);
   state.selectedArmyId = army.id;
   state.selectedRegionId = army.regionId || state.selectedRegionId;
   saveState();
   renderMap();
   renderActionButtons();
+  setWorkspaceTab("overview");
+  if (dom.workspaceInspector) dom.workspaceInspector.scrollTop = 0;
   announceStrategicMap(`${I18N.translate(army.name)}，${localizedMapRegionName(mapRegionById(army.regionId), army.regionId)}`);
   return true;
 }
 
 function selectMapRegion(regionId) {
   if (!mapStateRegion(regionId)) return false;
+  if (!state.setupComplete) return selectStartingRegion(regionId);
   state.selectedRegionId = regionId;
   saveState();
   renderMap();
   renderActionButtons();
+  setWorkspaceTab("overview");
+  if (dom.workspaceInspector) dom.workspaceInspector.scrollTop = 0;
   const definition = mapRegionById(regionId);
   announceStrategicMap(`${localizedMapRegionName(definition, regionId)}，${I18N.translate(mapOwnerLabel(mapStateRegion(regionId)))}`);
   return true;
@@ -3369,6 +3617,7 @@ function handleEntityCardClick(event) {
 }
 
 function changeSelectedEntityStrategy(event) {
+  if (!state.setupComplete || state.finished || state.awaitingCivilizationRestart || state.mapUiExpanded === false) return;
   const entity = selectedPoliticalEntity();
   if (!entity || entity.id !== PLAYER_ENTITY_ID || entity.eliminated) return;
   entity.strategy = normalizePoliticalStrategy(event.target.value);
@@ -3505,7 +3754,7 @@ function resolveRegionBattle(attacker, target, rand, attackBonus = 0) {
       100
     );
     if (!result.attackerWon && attacker.entityId === PLAYER_ENTITY_ID) state.stability = clamp(state.stability - 4, 0, 100);
-    if (result.attackerWon && previousController === PLAYER_ENTITY_ID) state.stability = clamp(state.stability - (definition?.core ? 12 : 5), 0, 100);
+    if (result.attackerWon && previousController === PLAYER_ENTITY_ID) state.stability = clamp(state.stability - (target.id === state.startingRegionId ? 12 : 5), 0, 100);
   }
 
   removeDestroyedArmies();
@@ -4650,6 +4899,7 @@ function prepareActionDelta(action, rawDelta, crisisAtRoundStart = false) {
   if (typeof delta.pop === "number") {
     if (delta.pop > 0) delta.pop *= populationGrowth;
     delta.pop *= controlEfficiency;
+    if (action.protectPopulationFloor) delta.pop = protectedPopulationDelta(delta.pop);
   }
 
   if (actionPopulationWouldBreakFloor(action, delta.pop)) {
@@ -4702,7 +4952,7 @@ function projectedActionPopulationDelta(rawDelta = {}) {
 }
 
 function actionPopulationWouldBreakFloor(action, popDelta) {
-  if (!action || action.canRunWithZeroPopulation || typeof popDelta !== "number" || popDelta >= 0) {
+  if (!action || action.canRunWithZeroPopulation || action.protectPopulationFloor || typeof popDelta !== "number" || popDelta >= 0) {
     return false;
   }
 
@@ -4884,7 +5134,10 @@ function restartCivilizationFromPending() {
     difficulty: state.difficulty,
     startingRegionId: state.startingRegionId
   });
-  state.military = createInitialMilitaryState(snapshot(), { difficulty: state.difficulty });
+  state.military = createInitialMilitaryState(snapshot(), {
+    difficulty: state.difficulty,
+    startingRegionId: state.startingRegionId
+  });
   state.selectedArmyId = PLAYER_ARMY_ID;
   state.selectedEntityId = PLAYER_ENTITY_ID;
   alignArmiesWithEntityTerritories();
@@ -4989,6 +5242,9 @@ function applyDelta(delta, options = {}) {
   if (effectiveDelta.be > 0) effectiveDelta.be *= governor.beliefGrowth || 1;
   if (effectiveDelta.pop > 0) effectiveDelta.pop *= governor.populationGrowth || 1;
   if (effectiveDelta.eco > 0) effectiveDelta.eco *= governor.economyGrowth || 1;
+  if (options.ordinaryEvent) {
+    effectiveDelta.pop = cappedOrdinaryEventPopulationDelta(Number(effectiveDelta.pop || 0));
+  }
   if (options.protectPopulationFloor) {
     effectiveDelta.pop = protectedPopulationDelta(Number(effectiveDelta.pop || 0));
   }
@@ -5014,6 +5270,13 @@ function markCivilizationMilestones(snapshotValue = snapshot()) {
   if (snapshotValue.la >= J_MEMORY_LA_THRESHOLD) {
     state.currentCivilization.hadLaCap = true;
   }
+}
+
+function cappedOrdinaryEventPopulationDelta(popDelta, population = state.pop) {
+  if (!Number.isFinite(popDelta) || popDelta >= 0) return popDelta || 0;
+  // Ordinary annual events scale to the people exposed; hard collapses and hidden events bypass this cap.
+  const lossLimit = Math.floor(Math.max(0, finiteOr(population, 0)) * ORDINARY_EVENT_POPULATION_LOSS_RATE);
+  return Math.max(popDelta, -lossLimit);
 }
 
 function protectedPopulationDelta(popDelta) {
@@ -5634,8 +5897,10 @@ function eraIndexFor(value, eras) {
 function renderSetup(deferLocalization = false) {
   syncLocalizationContext();
   const setupComplete = Boolean(state?.setupComplete);
-  if (dom.setupPanel) dom.setupPanel.hidden = setupComplete;
-  if (dom.gamePanel) dom.gamePanel.hidden = !setupComplete;
+  const stage = setupComplete ? "complete" : state?.setupStage === "territory" ? "territory" : "settings";
+  if (dom.setupPanel) dom.setupPanel.hidden = stage !== "settings";
+  if (dom.gamePanel) dom.gamePanel.hidden = stage === "settings";
+  if (dom.territoryStep) dom.territoryStep.hidden = stage !== "territory";
   if (dom.realmIdentity) {
     dom.realmIdentity.textContent = `${state?.realmName || DEFAULT_REALM_NAME}｜${difficultyConfig(state?.difficulty).label}｜AI ${aiAggressionConfig(state?.aiAggression).label}`;
   }
@@ -5650,19 +5915,15 @@ function renderSetup(deferLocalization = false) {
     return;
   }
 
-  const stage = ["difficulty", "governor", "territory"].includes(state?.setupStage)
-    ? state.setupStage
-    : "name";
-  if (dom.realmNameForm) dom.realmNameForm.hidden = stage !== "name";
-  if (dom.setupQuote) dom.setupQuote.hidden = stage !== "name";
-  if (dom.difficultyStep) dom.difficultyStep.hidden = stage !== "difficulty";
-  if (dom.governorStep) dom.governorStep.hidden = stage !== "governor";
-  if (dom.territoryStep) dom.territoryStep.hidden = stage !== "territory";
+  if (dom.realmNameForm) dom.realmNameForm.hidden = false;
+  if (dom.setupQuote) dom.setupQuote.hidden = false;
+  if (dom.difficultyStep) dom.difficultyStep.hidden = false;
+  if (dom.governorStep) dom.governorStep.hidden = false;
   if (dom.realmNameInput && document.activeElement !== dom.realmNameInput) {
     dom.realmNameInput.value = state?.realmName || "";
   }
   if (dom.seedInput && document.activeElement !== dom.seedInput) {
-    dom.seedInput.value = String(state?.seed || "");
+    dom.seedInput.value = String(state?.setupSeedDraft ?? state?.seed ?? "");
   }
   if (dom.setupRealmPreview) dom.setupRealmPreview.textContent = state?.realmName || DEFAULT_REALM_NAME;
   dom.difficultyButtons.forEach((button) => {
@@ -5692,7 +5953,6 @@ function renderSetup(deferLocalization = false) {
 }
 
 function renderStartingRegionPicker() {
-  if (!dom.startRegionMap) return;
   const selectedId = normalizeStartingRegionId(state.startingRegionId);
   const selectedDefinition = mapRegionById(selectedId);
   const selectedState = mapStateRegion(selectedId);
@@ -5705,35 +5965,11 @@ function renderStartingRegionPicker() {
       : `${terrain?.label || terrainLabel(selectedDefinition?.terrain)}｜攻 ${formatSignedNumber(terrain?.attack || 0)}｜防 ${formatSignedNumber(terrain?.defense || 0)}｜基础工事 ${formatNumber(selectedState?.fortification || selectedDefinition?.strength || 0)}｜将围绕首都生成 ${formatNumber(territoryCount)} 块连通初始疆域`;
   }
 
-  dom.startRegionMap.innerHTML = "";
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("class", "start-region-svg");
-  svg.setAttribute("viewBox", "0 0 100 100");
-  svg.setAttribute("preserveAspectRatio", "none");
-  MAP_REGIONS.forEach((definition) => {
-    const layout = mapLayoutRegion(definition.id);
-    if (!layout) return;
-    const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    group.setAttribute("class", `start-region${definition.id === selectedId ? " is-selected" : ""}`);
-    group.setAttribute("data-start-region", definition.id);
-    group.setAttribute("role", "button");
-    group.setAttribute("tabindex", "0");
-    group.setAttribute("aria-label", `${localizedMapRegionName(definition)}，${terrainLabel(definition.terrain)}`);
-    const polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
-    polygon.setAttribute("points", layout.points.map((point) => `${point.x},${point.y}`).join(" "));
-    const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    label.setAttribute("x", layout.centerX);
-    label.setAttribute("y", layout.centerY + 0.8);
-    label.textContent = localizedMapRegionName(definition);
-    group.append(polygon, label);
-    svg.append(group);
-  });
-  dom.startRegionMap.append(svg);
 }
 
 function render() {
   renderSetup(true);
-  if (!state.setupComplete) {
+  if (!state.setupComplete && state.setupStage !== "territory") {
     I18N.localizeDocument(document);
     return;
   }
@@ -5770,7 +6006,9 @@ function render() {
   renderLog();
   renderArchive();
   renderSpecialNotice();
+  renderWorkspaceView();
   I18N.localizeDocument(document);
+  scheduleStrategicMapCameraRefresh();
 }
 
 function renderActionButtons() {
@@ -6312,6 +6550,7 @@ function rebuildStrategicArmyNodes(activeArmy, visibleRegions) {
   if (!dom.strategicArmyLayer) return;
   dom.strategicArmyLayer.replaceChildren();
   strategicMapView.armyNodes.clear();
+  if (!state.setupComplete) return;
   const visibleArmies = armies().filter((army) => {
     return army.force > 0 && (army.entityId === PLAYER_ENTITY_ID || visibleRegions.has(army.regionId));
   });
@@ -6683,17 +6922,17 @@ function scheduleStrategicMapCameraRefresh() {
 }
 
 function renderMap() {
-  if (!dom.worldMap || state.mapUiExpanded === false) return;
+  if (!dom.worldMap || (state.mapUiExpanded === false && state.setupComplete)) return;
   ensureMilitaryMapState();
   const counts = mapOwnerCounts();
-  const visibleRegions = visibleMilitaryRegionIds();
+  const visibleRegions = state.setupComplete ? visibleMilitaryRegionIds() : new Set(MAP_REGIONS.map((region) => region.id));
   let activeArmy = selectedArmy();
   if (activeArmy?.entityId !== PLAYER_ENTITY_ID && !visibleRegions.has(activeArmy?.regionId)) {
     activeArmy = primaryPlayerArmy();
     state.selectedArmyId = activeArmy?.id || null;
   }
   const activeArmyStats = armyCombatStats(activeArmy);
-  const availableRegionIds = activeArmy?.entityId === PLAYER_ENTITY_ID && activeArmy.lastMovedTurn < state.turn
+  const availableRegionIds = state.setupComplete && activeArmy?.entityId === PLAYER_ENTITY_ID && activeArmy.lastMovedTurn < state.turn
     ? new Set(roadNeighbors(activeArmy.regionId))
     : new Set();
 
@@ -6797,6 +7036,10 @@ function renderRegionIntel() {
 }
 
 function deploymentDisabledReason(army, target) {
+  if (!state.setupComplete) return "请先确认文明发源地";
+  if (state.finished) return "游戏已经结束";
+  if (state.awaitingCivilizationRestart) return "等待重启文明";
+  if (state.mapUiExpanded === false) return "战略拓展已折叠";
   if (!army || army.entityId !== PLAYER_ENTITY_ID) return "仅可部署本国军队";
   if (army.force <= 0) return "军队已经失去战斗力";
   if (army.lastMovedTurn >= state.turn) return "军队本年已经部署";
@@ -6840,7 +7083,7 @@ function renderPoliticalEntityPanel() {
   if (dom.entityTechnologyValue) dom.entityTechnologyValue.textContent = formatNumber(selected.technology);
   if (dom.entityStrategySelect) {
     dom.entityStrategySelect.value = normalizePoliticalStrategy(selected.strategy);
-    dom.entityStrategySelect.disabled = selected.id !== PLAYER_ENTITY_ID || selected.eliminated;
+    dom.entityStrategySelect.disabled = !state.setupComplete || state.finished || state.awaitingCivilizationRestart || selected.id !== PLAYER_ENTITY_ID || selected.eliminated;
   }
   if (dom.entityStrategyText) {
     const config = politicalStrategyConfig(selected.strategy);
@@ -7148,6 +7391,7 @@ function renderDefinitionRows(list, rows) {
 
 function actionDisabledReason(action) {
   if (!action) return "未知行动";
+  if (!state.setupComplete) return "请先确认文明发源地";
   if (state.finished) return "游戏已经结束";
   if (action.mapExpansionOnly && state.mapUiExpanded === false) return "战略拓展已折叠";
 
@@ -7388,7 +7632,7 @@ function loadState() {
     const requiresStrategicMapUpgrade = finiteOr(parsed.saveVersion, 0) < SAVE_VERSION ||
       !hasCurrentStrategicMapState(parsed.map);
     const migrated = {
-      ...createNewState(),
+      ...createNewState(parsed.seed, { geometryVersion: parsed.geometryVersion, geometrySeed: parsed.geometrySeed }),
       ...parsed,
       saveVersion: SAVE_VERSION,
       seed: normalizeSeed(parsed.seed),
@@ -7409,9 +7653,7 @@ function loadState() {
     migrated.setupComplete = typeof parsed.setupComplete === "boolean" ? parsed.setupComplete : true;
     migrated.setupStage = migrated.setupComplete
       ? "complete"
-      : ["difficulty", "governor", "territory"].includes(parsed.setupStage)
-        ? parsed.setupStage
-        : "name";
+      : parsed.setupStage === "territory" ? "territory" : "settings";
     migrated.realmName = String(
       parsed.realmName || parsed.map?.entities?.[PLAYER_ENTITY_ID]?.name || DEFAULT_REALM_NAME
     ).trim().slice(0, 24) || DEFAULT_REALM_NAME;

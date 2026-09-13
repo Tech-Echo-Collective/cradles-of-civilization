@@ -6,15 +6,15 @@
     <meta name="author" content="Noah Walker">
     <meta name="copyright" content="Original concept by Noah Walker">
     <title>文明摇篮：文明文字模拟</title>
-    <link rel="stylesheet" href="styles.css?v=20260905-actions-visible">
+    <link rel="stylesheet" href="styles.css?v=20260913-population-relief">
   </head>
   <body>
     <div class="site-tools">
       <button id="languageToggle" class="language-toggle" type="button" data-i18n-skip aria-label="切换到英文">EN</button>
       <a class="site-return-link" href="https://techecho.org/" aria-label="返回 Tech Echo 官网 / Return to Tech Echo">← Tech Echo</a>
     </div>
-    <main class="shell">
-      <section class="setup-panel" id="setupPanel" aria-label="建立国度">
+    <main class="shell map-first-shell">
+      <section class="setup-panel unified-setup" id="setupPanel" aria-label="建立国度">
         <header class="setup-brand">
           <p class="kicker">Cradles Of Civilization</p>
           <h1>文明摇篮</h1>
@@ -24,121 +24,99 @@
           <strong>人类从历史中学到的唯一教训，<br>就是人类从未从历史中学到任何教训。</strong>
           <cite>——格奥尔格·威廉·弗里德里希·黑格尔，1837年</cite>
         </blockquote>
-        <form class="setup-step" id="realmNameForm">
-          <span class="setup-index">01 / 国度命名</span>
-          <label for="realmNameInput">你的国度</label>
-          <div class="setup-input-row">
-            <input id="realmNameInput" name="realmName" type="text" maxlength="24" autocomplete="off" placeholder="输入国名" required>
-            <button type="submit">确认国名</button>
-          </div>
-          <div class="setup-seed-control">
-            <label for="seedInput">世界种子</label>
-            <div>
-              <input id="seedInput" name="seed" inputmode="numeric" pattern="[0-9]*" placeholder="输入种子，例如 1058">
-              <button id="newGameButton" type="button">随机世界</button>
+        <form class="setup-step world-setup-form" id="realmNameForm">
+          <section class="setup-section setup-basics" aria-label="世界设定">
+            <span class="setup-index">世界设定</span>
+            <label for="realmNameInput">你的国度</label>
+            <div class="setup-input-row">
+              <input id="realmNameInput" name="realmName" type="text" maxlength="24" autocomplete="off" placeholder="输入国名" required>
             </div>
-            <p>大陆地理固定；同一种子会重现势力分布与随机序列。</p>
+            <div class="setup-seed-control">
+              <label for="seedInput">世界种子</label>
+              <div>
+                <input id="seedInput" name="seed" inputmode="numeric" pattern="[0-9]*" placeholder="输入种子，例如 1058">
+                <button id="newGameButton" type="button">随机世界</button>
+              </div>
+              <p>同一种子会重现大陆、省份、势力分布与随机序列。</p>
+            </div>
+            <div class="map-mode-setup">
+              <h3>战略拓展</h3>
+              <div class="map-mode-options" role="group" aria-label="选择战略拓展模式">
+                <button type="button" data-map-mode="expanded" aria-pressed="true">启用地图</button>
+                <button type="button" data-map-mode="collapsed">纯数值模式</button>
+              </div>
+            </div>
+          </section>
+          <section class="setup-section" id="difficultyStep">
+            <span class="setup-index">难度选择</span>
+            <h2 class="visually-hidden" id="setupRealmPreview">无名国度</h2>
+            <div class="difficulty-options" role="group" aria-label="选择难度">
+              <button type="button" data-difficulty="easy"><strong>简单</strong><small>敌军与灾变较弱，边境反应较慢</small></button>
+              <button type="button" data-difficulty="normal" aria-pressed="true"><strong>普通</strong><small>标准军力、灾变与边境压力</small></button>
+              <button type="button" data-difficulty="hard"><strong>困难</strong><small>敌军更强，灾变和进攻更频繁</small></button>
+              <button type="button" data-difficulty="ultimate"><strong>终极困难</strong><small>战争与灾变全面强化，容错极低</small></button>
+            </div>
+            <div class="aggression-setup">
+              <h3>AI 侵略性</h3>
+              <div class="aggression-options" role="group" aria-label="选择 AI 侵略性">
+                <button type="button" data-aggression="restrained">克制</button>
+                <button type="button" data-aggression="standard" aria-pressed="true">标准</button>
+                <button type="button" data-aggression="aggressive">好战</button>
+                <button type="button" data-aggression="total">全面战争</button>
+              </div>
+            </div>
+          </section>
+          <section class="setup-section setup-governors" id="governorStep">
+            <span class="setup-index">执政官</span>
+            <h2>选择初始执政官</h2>
+            <div class="governor-options" role="group" aria-label="选择执政官">
+              <button type="button" data-governor="east-asian-man" aria-pressed="true">
+                <img src="assets/governor-east-asian-man.png" alt="执政官 I 像">
+                <strong>杨卫平</strong>
+                <span class="governor-copy">
+                  <small class="governor-caption">汉人血统。<br>他坚信空谈误国，实干兴邦。<br>他也坚信：历来强盗要侵入，最终必送命。</small>
+                  <small class="governor-skill">民生防线｜人口正增长 +8%；防御 +6。</small>
+                </span>
+              </button>
+              <button type="button" data-governor="white-woman">
+                <img src="assets/governor-white-woman.png" alt="执政官 II 像">
+                <strong>克莱尔·英格丽德·麦克劳德</strong>
+                <span class="governor-copy">
+                  <small class="governor-caption">维京-凯尔特血统。<br>当然，她可以是一位优秀的执政官。<br>但她更想成为一位女武神。</small>
+                  <small class="governor-skill">女武神｜神学正增长 +8%；攻击 +6。</small>
+                </span>
+              </button>
+              <button type="button" data-governor="black-man">
+                <img src="assets/governor-black-man.png" alt="执政官 III 像">
+                <strong>拉特尔·“公羊”·塞万提斯三世</strong>
+                <span class="governor-copy">
+                  <small class="governor-caption">拉美-非洲混血。<br>他有自己的梦想，比如有一天，殖民者能停止掠夺他的家乡。<br>当然，只是个梦想。</small>
+                  <small class="governor-skill">公羊之梦｜经济正增长 +10%；强化有利地形并减轻地形惩罚。</small>
+                </span>
+              </button>
+              <button type="button" data-governor="listener">
+                <img src="assets/governor-trisolaran-listener.png" alt="三体监听员像">
+                <strong>三体监听员</strong>
+                <span class="governor-copy">
+                  <small class="governor-caption">三体世界的监听员。<br>你已经是身经百战见得多了。<br>你觉得三体世界不好，现在，你来建设它。</small>
+                  <small class="governor-skill">监听者｜取消战争迷雾，显示全图军事动向。</small>
+                </span>
+              </button>
+            </div>
+          </section>
+          <div class="setup-actions setup-enter">
+            <p>确认设定后进入世界，在主地图上选择文明发源地。</p>
+            <button id="enterWorldButton" type="submit">进入世界</button>
           </div>
         </form>
-        <section class="setup-step" id="difficultyStep" hidden>
-          <span class="setup-index">02 / 难度选择</span>
-          <h2 id="setupRealmPreview">无名国度</h2>
-          <div class="difficulty-options" role="group" aria-label="选择难度">
-            <button type="button" data-difficulty="easy"><strong>简单</strong><small>敌军与灾变较弱，边境反应较慢</small></button>
-            <button type="button" data-difficulty="normal" aria-pressed="true"><strong>普通</strong><small>标准军力、灾变与边境压力</small></button>
-            <button type="button" data-difficulty="hard"><strong>困难</strong><small>敌军更强，灾变和进攻更频繁</small></button>
-            <button type="button" data-difficulty="ultimate"><strong>终极困难</strong><small>战争与灾变全面强化，容错极低</small></button>
-          </div>
-          <div class="aggression-setup">
-            <h3>AI 侵略性</h3>
-            <div class="aggression-options" role="group" aria-label="选择 AI 侵略性">
-              <button type="button" data-aggression="restrained">克制</button>
-              <button type="button" data-aggression="standard" aria-pressed="true">标准</button>
-              <button type="button" data-aggression="aggressive">好战</button>
-              <button type="button" data-aggression="total">全面战争</button>
-            </div>
-          </div>
-          <div class="setup-actions">
-            <button id="backToNameButton" type="button">返回命名</button>
-            <button id="continueToGovernorButton" type="button">选择执政官</button>
-          </div>
-        </section>
-        <section class="setup-step" id="governorStep" hidden>
-          <span class="setup-index">03 / 执政官</span>
-          <h2>选择初始执政官</h2>
-          <div class="governor-options" role="group" aria-label="选择执政官">
-            <button type="button" data-governor="east-asian-man" aria-pressed="true">
-              <img src="assets/governor-east-asian-man.png" alt="执政官 I 像">
-              <strong>杨卫平</strong>
-              <span class="governor-copy">
-                <small class="governor-caption">汉人血统。<br>他坚信空谈误国，实干兴邦。<br>他也坚信：历来强盗要侵入，最终必送命。</small>
-                <small class="governor-skill">民生防线｜人口正增长 +8%；防御 +6。</small>
-              </span>
-            </button>
-            <button type="button" data-governor="white-woman">
-              <img src="assets/governor-white-woman.png" alt="执政官 II 像">
-              <strong>克莱尔·英格丽德·麦克劳德</strong>
-              <span class="governor-copy">
-                <small class="governor-caption">维京-凯尔特血统。<br>当然，她可以是一位优秀的执政官。<br>但她更想成为一位女武神。</small>
-                <small class="governor-skill">女武神｜神学正增长 +8%；攻击 +6。</small>
-              </span>
-            </button>
-            <button type="button" data-governor="black-man">
-              <img src="assets/governor-black-man.png" alt="执政官 III 像">
-              <strong>拉特尔·“公羊”·塞万提斯三世</strong>
-              <span class="governor-copy">
-                <small class="governor-caption">拉美-非洲混血。<br>他有自己的梦想，比如有一天，殖民者能停止掠夺他的家乡。<br>当然，只是个梦想。</small>
-                <small class="governor-skill">公羊之梦｜经济正增长 +10%；强化有利地形并减轻地形惩罚。</small>
-              </span>
-            </button>
-            <button type="button" data-governor="listener">
-              <img src="assets/governor-trisolaran-listener.png" alt="三体监听员像">
-              <strong>三体监听员</strong>
-              <span class="governor-copy">
-                <small class="governor-caption">三体世界的监听员。<br>你已经是身经百战见得多了。<br>你觉得三体世界不好，现在，你来建设它。</small>
-                <small class="governor-skill">监听者｜取消战争迷雾，显示全图军事动向。</small>
-              </span>
-            </button>
-          </div>
-          <div class="setup-actions">
-            <button id="backToDifficultyButton" type="button">返回难度</button>
-            <button id="continueToTerritoryButton" type="button">选择起始地块</button>
-          </div>
-        </section>
-        <section class="setup-step territory-setup-step" id="territoryStep" hidden>
-          <span class="setup-index">04 / 文明发源地</span>
-          <div class="territory-setup-head">
-            <h2 id="startRegionName">中央盆地</h2>
-            <p id="startRegionDescription">选择一块区域作为首都，初始疆域将在其周围生成。</p>
-          </div>
-          <div class="start-region-map" id="startRegionMap" aria-label="选择起始地块"></div>
-          <div class="map-mode-setup">
-            <h3>战略拓展</h3>
-            <div class="map-mode-options" role="group" aria-label="选择战略拓展模式">
-              <button type="button" data-map-mode="expanded" aria-pressed="true">启用地图</button>
-              <button type="button" data-map-mode="collapsed">纯数值模式</button>
-            </div>
-          </div>
-          <div class="setup-actions">
-            <button id="backToGovernorButton" type="button">返回执政官</button>
-            <button id="startCivilizationButton" type="button">开始演化</button>
-          </div>
-        </section>
       </section>
 
-      <section class="game-panel" id="gamePanel" aria-label="文明摇篮文字游戏" hidden>
-        <header class="topbar">
-          <div>
+      <section class="game-panel map-first-game" id="gamePanel" aria-label="文明摇篮文字游戏" hidden>
+        <header class="topbar world-topbar">
+          <div class="world-brand">
             <p class="kicker">Cradles Of Civilization</p>
             <h1>文明摇篮</h1>
             <p class="realm-identity" id="realmIdentity">无名国度｜普通</p>
-          </div>
-          <div class="governor-identity" aria-label="当前执政官">
-            <img id="activeGovernorPortrait" src="assets/governor-east-asian-man.png" alt="当前执政官像">
-            <div>
-              <span>执政官</span>
-              <strong id="activeGovernorName">执政官 I</strong>
-            </div>
           </div>
           <div class="turn-board" aria-label="文明状态">
             <div>
@@ -154,50 +132,7 @@
               <strong id="randValue">----</strong>
             </div>
           </div>
-        </header>
-
-        <section class="command-deck" aria-label="执政终端">
-          <div class="command-grid">
-            <button class="terminal-readout terminal-action primary-readout" type="button" data-action="restartCivilization">
-              <div class="terminal-head">
-                <span>GOVERNANCE FEED</span>
-                <strong>三恒星危机管制台 / 重启文明</strong>
-              </div>
-              <p id="weatherLabel">等待第一年观测</p>
-              <span class="disabled-reason" aria-hidden="true"></span>
-            </button>
-            <button class="terminal-readout terminal-action ending-readout" type="button" data-action="settleEnding">
-              <div class="terminal-head">
-                <span>ENDING VECTOR</span>
-                <strong>终局判定 / 脱离苦海</strong>
-              </div>
-              <p id="endingLabel">文明尚未抵达终局</p>
-              <span class="disabled-reason" aria-hidden="true"></span>
-            </button>
-          </div>
-          <div class="system-lines" aria-hidden="true">
-            <span>STAR PRESSURE</span>
-            <span>CIVIL ORDER</span>
-            <span>EERF SEEDBANK</span>
-            <span>RAND STREAM</span>
-          </div>
-        </section>
-
-        <section class="special-banner" id="specialBanner" aria-live="polite">
-          <div>
-            <span>特殊事件</span>
-            <strong id="specialTitle">----</strong>
-          </div>
-          <p id="specialText"></p>
-          <div class="delta-row" id="specialDelta"></div>
-        </section>
-
-        <section class="dashboard-panel" aria-label="文明状态仪表">
-          <div class="dashboard-head">
-            <h2>状态仪表</h2>
-            <button id="mapExpansionToggle" class="map-expansion-toggle" type="button" aria-pressed="true">战略拓展：展开</button>
-          </div>
-          <div>
+          <section class="dashboard-panel world-resources" aria-label="文明状态仪表">
             <section class="stats-grid" aria-label="核心变量">
               <article class="stat-card sc-card">
                 <div class="stat-head">
@@ -254,377 +189,485 @@
                 <div class="stat-trend"><strong id="laTrendValue">+0/年</strong><span id="laTrendStage">平稳</span></div>
               </article>
             </section>
-          </div>
-        </section>
+          </section>
+        </header>
 
-        <section class="map-panel" data-map-expansion aria-label="三恒星战略地图">
-          <div class="map-head">
-            <div>
-              <h2>战略地图</h2>
-              <p id="mapStatus">边境观测尚未开始</p>
-            </div>
-            <div class="map-legend" aria-label="地图图例">
-              <span class="legend-player">本国</span>
-              <span class="legend-neutral">中立</span>
-              <span class="legend-rival">敌国</span>
-            </div>
+        <div class="world-layout">
+          <nav class="workspace-nav" aria-label="文明事务">
+            <div class="workspace-seal" aria-hidden="true">✧</div>
+            <button class="workspace-tab" type="button" data-workspace-tab="overview" aria-controls="workspace-overview" aria-pressed="true"><span aria-hidden="true">◎</span><strong>概览</strong></button>
+            <button class="workspace-tab" type="button" data-workspace-tab="development" aria-controls="workspace-development" aria-pressed="false"><span aria-hidden="true">⌘</span><strong>发展</strong></button>
+            <button class="workspace-tab" type="button" data-workspace-tab="governance" aria-controls="workspace-governance" aria-pressed="false"><span aria-hidden="true">⚖</span><strong>治理</strong></button>
+            <button class="workspace-tab" type="button" data-workspace-tab="military" aria-controls="workspace-military" aria-pressed="false" data-map-expansion><span aria-hidden="true">⚔</span><strong>军事</strong></button>
+            <button class="workspace-tab" type="button" data-workspace-tab="facilities" aria-controls="workspace-facilities" aria-pressed="false"><span aria-hidden="true">▥</span><strong>设施</strong></button>
+            <button class="workspace-tab" type="button" data-workspace-tab="records" aria-controls="workspace-records" aria-pressed="false"><span aria-hidden="true">▤</span><strong>记录</strong></button>
+          </nav>
+
+          <div class="world-stage">
+            <section class="map-panel" data-map-expansion aria-label="三恒星战略地图">
+              <div class="map-head">
+                <div>
+                  <h2>战略地图</h2>
+                  <p id="mapStatus">边境观测尚未开始</p>
+                </div>
+                <div class="map-legend" aria-label="地图图例">
+                  <span class="legend-player">本国</span>
+                  <span class="legend-neutral">中立</span>
+                  <span class="legend-rival">敌国</span>
+                </div>
+              </div>
+              <div class="strategic-map-toolbar">
+                <nav class="strategic-map-modes" aria-label="地图图层">
+                  <button type="button" data-strategic-map-mode="political" aria-pressed="true"><span aria-hidden="true">◈</span><strong>政治</strong></button>
+                  <button type="button" data-strategic-map-mode="terrain" aria-pressed="false"><span aria-hidden="true">▦</span><strong>地形</strong></button>
+                  <button type="button" data-strategic-map-mode="military" aria-pressed="false"><span aria-hidden="true">⚔</span><strong>军事</strong></button>
+                </nav>
+                <div class="strategic-map-view-tools" aria-label="地图视角">
+                  <button id="mapReliefToggle" type="button" aria-pressed="true" aria-label="切换到平面地图" data-i18n-skip>3D</button>
+                  <span id="mapZoomReadout" class="strategic-map-zoom-readout" aria-live="polite">1.00×</span>
+                  <div class="strategic-map-zoom-controls" aria-label="地图缩放">
+                    <button id="mapZoomOut" type="button" aria-label="缩小地图">−</button>
+                    <button id="mapZoomIn" type="button" aria-label="放大地图">+</button>
+                    <button id="mapCameraReset" type="button" aria-label="重置地图镜头">0</button>
+                  </div>
+                </div>
+              </div>
+              <div class="map-layout">
+                <div class="world-map" id="worldMap" data-strategic-map-mode="political" data-relief="3d" data-zoom-band="far">
+                  <svg id="strategicMapSvg" class="strategic-map-surface" viewBox="0 0 1200 760" preserveAspectRatio="xMidYMid meet" role="application" aria-label="三体世界战略地图">
+                    <defs id="strategicMapDefs">
+                      <linearGradient id="formalOceanGradient" x1="0" y1="0" x2="0.8" y2="1">
+                        <stop offset="0" stop-color="#182b32"></stop>
+                        <stop offset="0.48" stop-color="#102127"></stop>
+                        <stop offset="1" stop-color="#091417"></stop>
+                      </linearGradient>
+                      <radialGradient id="formalLandGradient" cx="0.48" cy="0.42" r="0.75">
+                        <stop offset="0" stop-color="#918a69"></stop>
+                        <stop offset="0.62" stop-color="#686955"></stop>
+                        <stop offset="1" stop-color="#454c43"></stop>
+                      </radialGradient>
+                      <pattern id="formalTundraHatch" width="17" height="17" patternUnits="userSpaceOnUse" patternTransform="rotate(24)">
+                        <line x1="0" y1="0" x2="0" y2="17" stroke="#e6f4f4" stroke-opacity="0.16" stroke-width="4"></line>
+                      </pattern>
+                      <pattern id="formalWasteHatch" width="22" height="22" patternUnits="userSpaceOnUse">
+                        <circle cx="5" cy="7" r="1.7" fill="#f0c89d" fill-opacity="0.16"></circle>
+                        <circle cx="16" cy="15" r="1.1" fill="#2d211d" fill-opacity="0.2"></circle>
+                      </pattern>
+                      <clipPath id="formalLandClip"><path id="formalLandClipPath"></path></clipPath>
+                      <symbol id="formalCapitalSymbol" viewBox="-12 -12 24 24">
+                        <path d="M 0 -10 L 2.8 -3.4 L 9.6 -3.1 L 4.2 1.2 L 5.9 8.2 L 0 4.4 L -5.9 8.2 L -4.2 1.2 L -9.6 -3.1 L -2.8 -3.4 Z"></path>
+                      </symbol>
+                      <symbol id="formalMountainSymbol" viewBox="-18 -12 36 24">
+                        <path d="M -17 10 L -6 -8 L 0 1 L 6 -11 L 17 10 Z"></path>
+                        <path d="M -8 -4 L -6 -8 L -2 -2 M 3 -5 L 6 -11 L 10 -4"></path>
+                      </symbol>
+                    </defs>
+                    <rect class="strategic-ocean-plane" x="-300" y="-220" width="1800" height="1200"></rect>
+                    <g id="strategicOceanDetailLayer" class="strategic-ocean-detail-layer"></g>
+                    <g id="strategicWorldLayer" class="strategic-world-layer">
+                      <path id="strategicLandDepth" class="strategic-land-depth"></path>
+                      <path id="strategicLandBase" class="strategic-land-base"></path>
+                      <g id="strategicProvinceLayer" class="strategic-province-layer" clip-path="url(#formalLandClip)"></g>
+                      <g id="strategicProvinceReliefLayer" class="strategic-province-relief-layer" clip-path="url(#formalLandClip)" aria-hidden="true"></g>
+                      <g id="strategicTerrainTextureLayer" class="strategic-terrain-texture-layer" clip-path="url(#formalLandClip)"></g>
+                      <g id="strategicRouteLayer" class="strategic-route-layer" clip-path="url(#formalLandClip)"></g>
+                      <g id="strategicRiverLayer" class="strategic-river-layer" clip-path="url(#formalLandClip)"></g>
+                      <g id="strategicRegionBorderLayer" class="strategic-region-border-layer" clip-path="url(#formalLandClip)"></g>
+                      <g id="strategicRealmBorderLayer" class="strategic-realm-border-layer" clip-path="url(#formalLandClip)"></g>
+                      <path id="strategicCoastLine" class="strategic-coast-line"></path>
+                      <g id="strategicCapitalLayer" class="strategic-capital-layer" clip-path="url(#formalLandClip)"></g>
+                      <g id="strategicRealmLabelLayer" class="strategic-realm-label-layer" clip-path="url(#formalLandClip)"></g>
+                      <g id="strategicRegionLabelLayer" class="strategic-region-label-layer" clip-path="url(#formalLandClip)"></g>
+                      <g id="strategicProvinceLabelLayer" class="strategic-province-label-layer" clip-path="url(#formalLandClip)"></g>
+                      <g id="strategicArmyLayer" class="strategic-army-layer" clip-path="url(#formalLandClip)"></g>
+                    </g>
+                  </svg>
+                  <p class="strategic-map-hint">拖动平移 · Ctrl/⌘ + 滚轮或双指缩放 · 普通滚轮滚动页面 · 选择军队与相邻地块后在右侧下令</p>
+                  <div id="strategicMapTooltip" class="strategic-map-tooltip" role="tooltip" hidden></div>
+                  <div id="strategicMapLiveRegion" class="visually-hidden" aria-live="polite"></div>
+                </div>
+              </div>
+            </section>
+
+            <section class="numerical-overview-panel" id="numericalOverviewPanel" aria-label="文明数据" hidden>
+              <header class="workspace-chart-head">
+                <h2>文明数据</h2>
+                <div class="workspace-chart-tabs" role="group" aria-label="选择图表指标">
+                  <button type="button" data-workspace-chart="knowledge" aria-pressed="true">知识与记忆</button>
+                  <button type="button" data-workspace-chart="economy" aria-pressed="false">经济</button>
+                  <button type="button" data-workspace-chart="population" aria-pressed="false">人口</button>
+                  <button type="button" data-workspace-chart="order" aria-pressed="false">秩序</button>
+                </div>
+              </header>
+              <div class="workspace-chart-frame">
+                <canvas id="workspaceMetricsChart" width="960" height="520" role="img" aria-label="文明指标折线图" aria-describedby="workspaceChartLegend workspaceChartNote"></canvas>
+              </div>
+              <div class="workspace-chart-legend" id="workspaceChartLegend" data-i18n-skip></div>
+              <p class="workspace-chart-note" id="workspaceChartNote">最近 15 次观测 · 横轴为年份 · 文明更替处断线</p>
+            </section>
+
+            <footer class="world-footer">
+              <section class="workspace-crisis-notice" id="workspaceCrisisNotice" hidden>
+                <p role="status">经济危机：前往「设施」，使用「炉边谈话」重启财政。</p>
+                <button id="openRecoveryButton" type="button">前往设施 · 重启财政</button>
+              </section>
+              <section class="special-banner" id="specialBanner" aria-live="polite">
+                <div>
+                  <span>特殊事件</span>
+                  <strong id="specialTitle">----</strong>
+                </div>
+                <p id="specialText"></p>
+                <div class="delta-row" id="specialDelta"></div>
+              </section>
+
+              <section class="command-deck" aria-label="执政终端">
+                <div class="command-grid">
+                  <button class="terminal-readout terminal-action primary-readout" type="button" data-action="restartCivilization">
+                    <div class="terminal-head">
+                      <span>GOVERNANCE FEED</span>
+                      <strong>三恒星危机管制台 / 重启文明</strong>
+                    </div>
+                    <p id="weatherLabel">等待第一年观测</p>
+                    <span class="disabled-reason" aria-hidden="true"></span>
+                  </button>
+                  <button class="terminal-readout terminal-action ending-readout" type="button" data-action="settleEnding">
+                    <div class="terminal-head">
+                      <span>ENDING VECTOR</span>
+                      <strong>终局判定 / 脱离苦海</strong>
+                    </div>
+                    <p id="endingLabel">文明尚未抵达终局</p>
+                    <span class="disabled-reason" aria-hidden="true"></span>
+                  </button>
+                </div>
+                <div class="system-lines" aria-hidden="true">
+                  <span>STAR PRESSURE</span>
+                  <span>CIVIL ORDER</span>
+                  <span>EERF SEEDBANK</span>
+                  <span>RAND STREAM</span>
+                </div>
+              </section>
+
+            </footer>
           </div>
-          <div class="strategic-map-toolbar">
-            <nav class="strategic-map-modes" aria-label="地图图层">
-              <button type="button" data-strategic-map-mode="political" aria-pressed="true"><span aria-hidden="true">◈</span><strong>政治</strong></button>
-              <button type="button" data-strategic-map-mode="terrain" aria-pressed="false"><span aria-hidden="true">▦</span><strong>地形</strong></button>
-              <button type="button" data-strategic-map-mode="military" aria-pressed="false"><span aria-hidden="true">⚔</span><strong>军事</strong></button>
-            </nav>
-            <div class="strategic-map-view-tools" aria-label="地图视角">
-              <button id="mapReliefToggle" type="button" aria-pressed="true" aria-label="切换到平面地图" data-i18n-skip>3D</button>
-              <span id="mapZoomReadout" class="strategic-map-zoom-readout" aria-live="polite">1.00×</span>
-              <div class="strategic-map-zoom-controls" aria-label="地图缩放">
-                <button id="mapZoomOut" type="button" aria-label="缩小地图">−</button>
-                <button id="mapZoomIn" type="button" aria-label="放大地图">+</button>
-                <button id="mapCameraReset" type="button" aria-label="重置地图镜头">0</button>
+
+          <aside class="workspace-inspector" id="workspaceInspector" aria-label="文明事务面板">
+            <div class="workspace-inspector-head">
+              <div class="governor-identity" aria-label="当前执政官">
+                <img id="activeGovernorPortrait" src="assets/governor-east-asian-man.png" alt="当前执政官像">
+                <div>
+                  <span>执政官</span>
+                  <strong id="activeGovernorName">执政官 I</strong>
+                </div>
+              </div>
+              <div class="workspace-tools">
+                <button id="mapExpansionToggle" class="map-expansion-toggle" type="button" aria-pressed="true">战略拓展：展开</button>
+                <button id="workspaceNewWorldButton" type="button">新世界</button>
               </div>
             </div>
-          </div>
-          <div class="map-layout">
-            <div class="world-map" id="worldMap" data-strategic-map-mode="political" data-relief="3d" data-zoom-band="far">
-              <svg id="strategicMapSvg" class="strategic-map-surface" viewBox="0 0 1200 760" preserveAspectRatio="xMidYMid meet" role="application" aria-label="三体世界战略地图">
-                <defs id="strategicMapDefs">
-                  <linearGradient id="formalOceanGradient" x1="0" y1="0" x2="0.8" y2="1">
-                    <stop offset="0" stop-color="#182b32"></stop>
-                    <stop offset="0.48" stop-color="#102127"></stop>
-                    <stop offset="1" stop-color="#091417"></stop>
-                  </linearGradient>
-                  <radialGradient id="formalLandGradient" cx="0.48" cy="0.42" r="0.75">
-                    <stop offset="0" stop-color="#918a69"></stop>
-                    <stop offset="0.62" stop-color="#686955"></stop>
-                    <stop offset="1" stop-color="#454c43"></stop>
-                  </radialGradient>
-                  <pattern id="formalTundraHatch" width="17" height="17" patternUnits="userSpaceOnUse" patternTransform="rotate(24)">
-                    <line x1="0" y1="0" x2="0" y2="17" stroke="#e6f4f4" stroke-opacity="0.16" stroke-width="4"></line>
-                  </pattern>
-                  <pattern id="formalWasteHatch" width="22" height="22" patternUnits="userSpaceOnUse">
-                    <circle cx="5" cy="7" r="1.7" fill="#f0c89d" fill-opacity="0.16"></circle>
-                    <circle cx="16" cy="15" r="1.1" fill="#2d211d" fill-opacity="0.2"></circle>
-                  </pattern>
-                  <clipPath id="formalLandClip"><path id="formalLandClipPath"></path></clipPath>
-                  <symbol id="formalCapitalSymbol" viewBox="-12 -12 24 24">
-                    <path d="M 0 -10 L 2.8 -3.4 L 9.6 -3.1 L 4.2 1.2 L 5.9 8.2 L 0 4.4 L -5.9 8.2 L -4.2 1.2 L -9.6 -3.1 L -2.8 -3.4 Z"></path>
-                  </symbol>
-                  <symbol id="formalMountainSymbol" viewBox="-18 -12 36 24">
-                    <path d="M -17 10 L -6 -8 L 0 1 L 6 -11 L 17 10 Z"></path>
-                    <path d="M -8 -4 L -6 -8 L -2 -2 M 3 -5 L 6 -11 L 10 -4"></path>
-                  </symbol>
-                </defs>
-                <rect class="strategic-ocean-plane" x="-300" y="-220" width="1800" height="1200"></rect>
-                <g id="strategicOceanDetailLayer" class="strategic-ocean-detail-layer"></g>
-                <g id="strategicWorldLayer" class="strategic-world-layer">
-                  <path id="strategicLandDepth" class="strategic-land-depth"></path>
-                  <path id="strategicLandBase" class="strategic-land-base"></path>
-                  <g id="strategicProvinceLayer" class="strategic-province-layer" clip-path="url(#formalLandClip)"></g>
-                  <g id="strategicProvinceReliefLayer" class="strategic-province-relief-layer" clip-path="url(#formalLandClip)" aria-hidden="true"></g>
-                  <g id="strategicTerrainTextureLayer" class="strategic-terrain-texture-layer" clip-path="url(#formalLandClip)"></g>
-                  <g id="strategicRouteLayer" class="strategic-route-layer" clip-path="url(#formalLandClip)"></g>
-                  <g id="strategicRiverLayer" class="strategic-river-layer" clip-path="url(#formalLandClip)"></g>
-                  <g id="strategicRegionBorderLayer" class="strategic-region-border-layer" clip-path="url(#formalLandClip)"></g>
-                  <g id="strategicRealmBorderLayer" class="strategic-realm-border-layer" clip-path="url(#formalLandClip)"></g>
-                  <path id="strategicCoastLine" class="strategic-coast-line"></path>
-                  <g id="strategicCapitalLayer" class="strategic-capital-layer" clip-path="url(#formalLandClip)"></g>
-                  <g id="strategicRealmLabelLayer" class="strategic-realm-label-layer" clip-path="url(#formalLandClip)"></g>
-                  <g id="strategicRegionLabelLayer" class="strategic-region-label-layer" clip-path="url(#formalLandClip)"></g>
-                  <g id="strategicProvinceLabelLayer" class="strategic-province-label-layer" clip-path="url(#formalLandClip)"></g>
-                  <g id="strategicArmyLayer" class="strategic-army-layer" clip-path="url(#formalLandClip)"></g>
-                </g>
-              </svg>
-              <p class="strategic-map-hint">拖动平移 · Ctrl/⌘ + 滚轮或双指缩放 · 普通滚轮滚动页面 · 选择军队与相邻地块后在右侧下令</p>
-              <div id="strategicMapTooltip" class="strategic-map-tooltip" role="tooltip" hidden></div>
-              <div id="strategicMapLiveRegion" class="visually-hidden" aria-live="polite"></div>
-            </div>
-            <div class="map-sidebar">
-              <section class="region-intel-panel" aria-label="地块情报">
-                <div class="panel-mini-head">
-                  <span>地块情报</span>
-                  <strong id="selectedRegionName">中央盆地</strong>
+
+            <section class="setup-step territory-setup-step" id="territoryStep" hidden>
+              <span class="setup-index">文明发源地</span>
+              <div class="territory-setup-head">
+                <h2 id="startRegionName">中央盆地</h2>
+                <p id="startRegionDescription">选择一块区域作为首都，初始疆域将在其周围生成。</p>
+              </div>
+              <p class="territory-selection-hint">点击主地图选择起始地块，再确认建立文明。</p>
+              <div class="setup-actions">
+                <button id="backToSetupButton" type="button">返回设定</button>
+                <button id="startCivilizationButton" type="button">开始演化</button>
+              </div>
+            </section>
+
+            <section class="workspace-panel" id="workspace-overview" data-workspace-panel="overview">
+              <div class="workspace-panel-heading"><span>国度总览</span><h2>概览</h2></div>
+              <p class="workspace-intro">从左侧选择文明事务，在右侧下达决议；进入记录查看编年史、终局观测与文明档案。</p>
+              <div class="map-sidebar" data-map-expansion>
+                <section class="region-intel-panel" aria-label="地块情报">
+                  <div class="panel-mini-head">
+                    <span>地块情报</span>
+                    <strong id="selectedRegionName">中央盆地</strong>
+                  </div>
+                  <dl class="entity-detail-list">
+                    <div><dt>地形攻防</dt><dd id="selectedRegionTerrain">盆地｜攻 +2｜防 +2</dd></div>
+                    <div><dt>归属</dt><dd id="selectedRegionController">本国</dd></div>
+                    <div><dt>防御</dt><dd id="selectedRegionDefense">0</dd></div>
+                    <div><dt>道路</dt><dd id="selectedRegionRoads">0</dd></div>
+                    <div><dt>驻军</dt><dd id="selectedRegionArmies">无</dd></div>
+                  </dl>
+                  <button id="deployArmyButton" class="region-deploy-button" type="button">部署选中军队</button>
+                </section>
+                <section class="political-panel" aria-label="政治实体">
+                  <div class="panel-mini-head">
+                    <span>政治实体</span>
+                    <strong id="entityPanelName">长生军</strong>
+                  </div>
+                  <div class="entity-cards" id="entityCards"></div>
+                  <dl class="entity-detail-list">
+                    <div><dt>关系</dt><dd id="entityRelationValue">本国</dd></div>
+                    <div><dt>领土</dt><dd id="entityTerritoryValue">0</dd></div>
+                    <div><dt>军力</dt><dd id="entityForceValue">0</dd></div>
+                    <div><dt>发展</dt><dd id="entityDevelopmentValue">0</dd></div>
+                    <div><dt>技术</dt><dd id="entityTechnologyValue">0</dd></div>
+                  </dl>
+                  <label class="entity-strategy-control" for="entityStrategySelect">
+                    <span>国家策略</span>
+                    <select id="entityStrategySelect">
+                      <option value="balanced">均衡发展</option>
+                      <option value="science">技术优先</option>
+                      <option value="fortress">要塞国家</option>
+                      <option value="expansion">扩张主义</option>
+                      <option value="trade">商业网络</option>
+                      <option value="faith">正信共同体</option>
+                    </select>
+                  </label>
+                  <p id="entityStrategyText">稳定积累发展、技术与军备。</p>
+                </section>
+                <aside class="military-panel" aria-label="军事状态">
+                  <div class="selected-army-head">
+                    <span>选中军队</span>
+                    <strong id="selectedArmyName">第一军团</strong>
+                  </div>
+                  <dl>
+                    <div><dt>阵营</dt><dd id="selectedArmyOwner">本国</dd></div>
+                    <div><dt>驻地</dt><dd id="selectedArmyRegion">中央盆地</dd></div>
+                    <div><dt>兵力</dt><dd id="militaryForceValue">0</dd></div>
+                    <div><dt>进攻</dt><dd id="militaryAttackValue">0</dd></div>
+                    <div><dt>防守</dt><dd id="militaryDefenseValue">0</dd></div>
+                    <div><dt>科技加成</dt><dd id="militaryTechnologyValue">0</dd></div>
+                    <div><dt>战斗力</dt><dd id="militaryPowerValue">I</dd></div>
+                    <div><dt>战线</dt><dd id="frontierValue">0/0/0</dd></div>
+                  </dl>
+                  <p class="deployment-hint" id="deploymentHint">选择本国军队，再点击道路相连的地区进行部署。</p>
+                  <p id="mapFeed">没有战报。</p>
+                </aside>
+              </div>
+            </section>
+
+            <section class="control-group workspace-panel" id="workspace-development" data-workspace-panel="development" hidden>
+              <h2>基础操作</h2>
+              <div class="controls">
+                <button class="action-button" type="button" data-action="science">
+                  <span class="button-mark">SC</span>
+                  <span class="action-copy">
+                    <strong>建造研究所</strong>
+                    <small>我们必须知道；我们必将知道。<br> ——大卫·希尔伯特，1930年</small>
+                  </span>
+                  <span class="disabled-reason" aria-hidden="true"></span>
+                </button>
+                <button class="action-button" type="button" data-action="belief">
+                  <span class="button-mark">BE</span>
+                  <span class="action-copy">
+                    <strong>潜心苦修</strong>
+                    <small>万物非主，唯有真主。</small>
+                  </span>
+                  <span class="disabled-reason" aria-hidden="true"></span>
+                </button>
+                <button class="action-button" type="button" data-action="population">
+                  <span class="button-mark">POP</span>
+                  <span class="action-copy">
+                    <strong>扩建聚居地</strong>
+                    <small>居者有其屋，耕者有其田。安得广厦千万间，大庇天下寒士俱欢颜？</small>
+                  </span>
+                  <span class="disabled-reason" aria-hidden="true"></span>
+                </button>
+                <button class="action-button" type="button" data-action="economy">
+                  <span class="button-mark">EC</span>
+                  <span class="action-copy">
+                    <strong>刺激经济</strong>
+                    <small>牛奶会有的，面包也会有的。一切都会有的！<br> ——列宁，1917年</small>
+                  </span>
+                  <span class="disabled-reason" aria-hidden="true"></span>
+                </button>
+                <button class="action-button arts-action" type="button" data-action="arts">
+                  <span class="button-mark">LA</span>
+                  <span class="action-copy">
+                    <strong>扶持文艺</strong>
+                    <small>把字刻在石头上。</small>
+                  </span>
+                  <span class="disabled-reason" aria-hidden="true"></span>
+                </button>
+                <button class="action-button" type="button" data-action="hibernate">
+                  <span class="button-mark">HY</span>
+                  <span class="action-copy">
+                    <strong>脱水</strong>
+                    <small>脱水！脱水！！！</small>
+                  </span>
+                  <span class="disabled-reason" aria-hidden="true"></span>
+                </button>
+              </div>
+            </section>
+            <section class="control-group workspace-panel" id="workspace-governance" data-workspace-panel="governance" hidden>
+              <h2>战略干预</h2>
+              <div class="controls intervention-controls">
+                <button class="action-button" type="button" data-action="balance">
+                  <span class="button-mark">EQ</span>
+                  <span class="action-copy">
+                    <strong>均衡治理</strong>
+                    <small>政治是妥协的艺术。百花齐放，百家争鸣。我看没什么，起码挺热闹。</small>
+                  </span>
+                  <span class="disabled-reason" aria-hidden="true"></span>
+                </button>
+                <button class="action-button suppression-action" type="button" data-action="suppressBelief">
+                  <span class="button-mark">-BE</span>
+                  <span class="action-copy">
+                    <strong>打压神学</strong>
+                    <small>拆掉神坛，修成观测台。</small>
+                  </span>
+                  <span class="disabled-reason" aria-hidden="true"></span>
+                </button>
+                <button class="action-button order-action" type="button" data-action="order">
+                  <span class="button-mark">OR</span>
+                  <span class="action-copy">
+                    <strong>维持秩序</strong>
+                    <small>先让街灯亮起来，再争论谁拥有星空。</small>
+                  </span>
+                  <span class="disabled-reason" aria-hidden="true"></span>
+                </button>
+                <button class="action-button suppression-action" type="button" data-action="suppressScience">
+                  <span class="button-mark">-SC</span>
+                  <span class="action-copy">
+                    <strong>打压科学</strong>
+                    <small>收起望远镜，先听钟声。</small>
+                  </span>
+                  <span class="disabled-reason" aria-hidden="true"></span>
+                </button>
+              </div>
+            </section>
+            <section class="control-group workspace-panel" id="workspace-military" data-workspace-panel="military" data-map-expansion hidden>
+              <h2>军事与特殊政策</h2>
+              <div class="controls policy-controls">
+                <button class="action-button military-action" type="button" data-action="militaryCampaign">
+                  <span class="button-mark">ATK</span>
+                  <span class="action-copy">
+                    <strong>发动远征</strong>
+                    <small>高成本远征：随机沿道路连续征服至多三块领土，首败即止。</small>
+                  </span>
+                  <span class="disabled-reason" aria-hidden="true"></span>
+                </button>
+                <button class="action-button policy-action" type="button" data-action="levyHost">
+                  <span class="button-mark">LEV</span>
+                  <span class="action-copy">
+                    <strong>征兵</strong>
+                    <small>抽调青壮年扩军；全军覆没后可在选中的本国领土重建军团。</small>
+                  </span>
+                  <span class="disabled-reason" aria-hidden="true"></span>
+                </button>
+                <button class="action-button policy-action" type="button" data-action="secureFrontier">
+                  <span class="button-mark">DEF</span>
+                  <span class="action-copy">
+                    <strong>边疆戒严</strong>
+                    <small>把边境纳入战时管制。</small>
+                  </span>
+                  <span class="disabled-reason" aria-hidden="true"></span>
+                </button>
+                <button class="action-button policy-action" type="button" data-action="crownAuthority">
+                  <span class="button-mark">LAW</span>
+                  <span class="action-copy">
+                    <strong>强化王权</strong>
+                    <small>以中央权威整合军政命令。</small>
+                  </span>
+                  <span class="disabled-reason" aria-hidden="true"></span>
+                </button>
+                <button class="action-button military-action" type="button" data-action="trainLegion">
+                  <span class="button-mark">TRN</span>
+                  <span class="action-copy">
+                    <strong>整训军团</strong>
+                    <small>提升军团进攻能力。</small>
+                  </span>
+                  <span class="disabled-reason" aria-hidden="true"></span>
+                </button>
+                <button class="action-button policy-action" type="button" data-action="fieldWorks">
+                  <span class="button-mark">FORT</span>
+                  <span class="action-copy">
+                    <strong>构筑工事</strong>
+                    <small>强化当前驻地与军团防御。</small>
+                  </span>
+                  <span class="disabled-reason" aria-hidden="true"></span>
+                </button>
+              </div>
+            </section>
+            <section class="control-group workspace-panel" id="workspace-facilities" data-workspace-panel="facilities" hidden>
+              <h2>特殊设施建设</h2>
+              <div class="controls facility-controls">
+                <button class="action-button eerf-action" type="button" data-action="buildEerf">
+                  <span class="button-mark">EF</span>
+                  <span class="action-copy">
+                    <strong>建造 EERF</strong>
+                    <small>E.E.R.F.极端环境抵抗设施在地下开工。子子孙孙无穷匮也，而山不加增，何苦而不平？</small>
+                  </span>
+                  <span class="disabled-reason" aria-hidden="true"></span>
+                </button>
+                <button class="action-button eerf-action" type="button" data-action="upgradeEerf">
+                  <span class="button-mark">UP</span>
+                  <span class="action-copy">
+                    <strong>升级 EERF</strong>
+                    <small>风雨不动安如山。呜呼！何时眼前突兀见此屋，吾庐独破受冻死亦足！</small>
+                  </span>
+                  <span class="disabled-reason" aria-hidden="true"></span>
+                </button>
+                <button class="action-button crisis-action" type="button" data-action="recovery">
+                  <span class="button-mark">ECO</span>
+                  <span class="action-copy">
+                    <strong>炉边谈话</strong>
+                    <small>我想花几分钟时间，向我们的人民谈谈银行的情况。<br> ——富兰克林·罗斯福，1933年</small>
+                  </span>
+                  <span class="disabled-reason" aria-hidden="true"></span>
+                </button>
+              </div>
+            </section>
+
+            <section class="lower-grid workspace-panel" id="workspace-records" data-workspace-panel="records" hidden>
+              <article class="log-panel" aria-label="文明编年史">
+                <div class="section-head">
+                  <h2>编年史</h2>
+                  <button id="clearLogButton" type="button">清空</button>
                 </div>
-                <dl class="entity-detail-list">
-                  <div><dt>地形攻防</dt><dd id="selectedRegionTerrain">盆地｜攻 +2｜防 +2</dd></div>
-                  <div><dt>归属</dt><dd id="selectedRegionController">本国</dd></div>
-                  <div><dt>防御</dt><dd id="selectedRegionDefense">0</dd></div>
-                  <div><dt>道路</dt><dd id="selectedRegionRoads">0</dd></div>
-                  <div><dt>驻军</dt><dd id="selectedRegionArmies">无</dd></div>
-                </dl>
-                <button id="deployArmyButton" class="region-deploy-button" type="button">部署选中军队</button>
-              </section>
-              <section class="political-panel" aria-label="政治实体">
-                <div class="panel-mini-head">
-                  <span>政治实体</span>
-                  <strong id="entityPanelName">长生军</strong>
+                <div class="log-filters" role="group" aria-label="编年史筛选">
+                  <button type="button" data-log-filter="all" aria-pressed="true">全部</button>
+                  <button type="button" data-log-filter="disaster" aria-pressed="false">灾变</button>
+                  <button type="button" data-log-filter="special" aria-pressed="false">特殊</button>
+                  <button type="button" data-log-filter="progress" aria-pressed="false">发展</button>
                 </div>
-                <div class="entity-cards" id="entityCards"></div>
-                <dl class="entity-detail-list">
-                  <div><dt>关系</dt><dd id="entityRelationValue">本国</dd></div>
-                  <div><dt>领土</dt><dd id="entityTerritoryValue">0</dd></div>
-                  <div><dt>军力</dt><dd id="entityForceValue">0</dd></div>
-                  <div><dt>发展</dt><dd id="entityDevelopmentValue">0</dd></div>
-                  <div><dt>技术</dt><dd id="entityTechnologyValue">0</dd></div>
-                </dl>
-                <label class="entity-strategy-control" for="entityStrategySelect">
-                  <span>国家策略</span>
-                  <select id="entityStrategySelect">
-                    <option value="balanced">均衡发展</option>
-                    <option value="science">技术优先</option>
-                    <option value="fortress">要塞国家</option>
-                    <option value="expansion">扩张主义</option>
-                    <option value="trade">商业网络</option>
-                    <option value="faith">正信共同体</option>
-                  </select>
-                </label>
-                <p id="entityStrategyText">稳定积累发展、技术与军备。</p>
-              </section>
-              <aside class="military-panel" aria-label="军事状态">
-                <div class="selected-army-head">
-                  <span>选中军队</span>
-                  <strong id="selectedArmyName">第一军团</strong>
+                <ol id="logList"></ol>
+              </article>
+
+              <aside class="system-panel" aria-label="文明系统">
+                <div class="section-head">
+                  <h2>文明系统</h2>
                 </div>
-                <dl>
-                  <div><dt>阵营</dt><dd id="selectedArmyOwner">本国</dd></div>
-                  <div><dt>驻地</dt><dd id="selectedArmyRegion">中央盆地</dd></div>
-                  <div><dt>兵力</dt><dd id="militaryForceValue">0</dd></div>
-                  <div><dt>进攻</dt><dd id="militaryAttackValue">0</dd></div>
-                  <div><dt>防守</dt><dd id="militaryDefenseValue">0</dd></div>
-                  <div><dt>科技加成</dt><dd id="militaryTechnologyValue">0</dd></div>
-                  <div><dt>战斗力</dt><dd id="militaryPowerValue">I</dd></div>
-                  <div><dt>战线</dt><dd id="frontierValue">0/0/0</dd></div>
-                </dl>
-                <p class="deployment-hint" id="deploymentHint">选择本国军队，再点击道路相连的地区进行部署。</p>
-                <p id="mapFeed">没有战报。</p>
+                <section class="watch-panel" aria-label="终局观测">
+                  <h2>终局观测</h2>
+                  <ol id="endingWatchList"></ol>
+                </section>
+                <section class="eerf-detail-panel" aria-label="EERF 火种预估">
+                  <h2>EERF 火种预估</h2>
+                  <dl id="eerfDetailList"></dl>
+                </section>
+                <section class="ending-stats-panel" aria-label="终局统计">
+                  <div>
+                    <h2>终局统计</h2>
+                    <p id="endingStatsStatus">已达成 0/12 种｜总计 0 次｜最近 尚无</p>
+                  </div>
+                  <ol id="endingStatsList" class="ending-stats-list"></ol>
+                </section>
+                <section class="archive-panel" aria-label="文明档案">
+                  <h2>文明档案</h2>
+                  <ol id="archiveList"></ol>
+                </section>
               </aside>
-            </div>
-          </div>
-        </section>
+            </section>
 
-        <section class="control-groups" aria-label="玩家行动">
-          <div class="control-group">
-            <h2>基础操作</h2>
-            <div class="controls">
-              <button class="action-button" type="button" data-action="science">
-                <span class="button-mark">SC</span>
-                <span class="action-copy">
-                  <strong>建造研究所</strong>
-                  <small>我们必须知道；我们必将知道。<br> ——大卫·希尔伯特，1930年</small>
-                </span>
-                <span class="disabled-reason" aria-hidden="true"></span>
-              </button>
-              <button class="action-button" type="button" data-action="belief">
-                <span class="button-mark">BE</span>
-                <span class="action-copy">
-                  <strong>潜心苦修</strong>
-                  <small>万物非主，唯有真主。</small>
-                </span>
-                <span class="disabled-reason" aria-hidden="true"></span>
-              </button>
-              <button class="action-button" type="button" data-action="population">
-                <span class="button-mark">POP</span>
-                <span class="action-copy">
-                  <strong>扩建聚居地</strong>
-                  <small>居者有其屋，耕者有其田。安得广厦千万间，大庇天下寒士俱欢颜？</small>
-                </span>
-                <span class="disabled-reason" aria-hidden="true"></span>
-              </button>
-              <button class="action-button" type="button" data-action="economy">
-                <span class="button-mark">EC</span>
-                <span class="action-copy">
-                  <strong>刺激经济</strong>
-                  <small>牛奶会有的，面包也会有的。一切都会有的！<br> ——列宁，1917年</small>
-                </span>
-                <span class="disabled-reason" aria-hidden="true"></span>
-              </button>
-              <button class="action-button arts-action" type="button" data-action="arts">
-                <span class="button-mark">LA</span>
-                <span class="action-copy">
-                  <strong>扶持文艺</strong>
-                  <small>把字刻在石头上。</small>
-                </span>
-                <span class="disabled-reason" aria-hidden="true"></span>
-              </button>
-              <button class="action-button" type="button" data-action="hibernate">
-                <span class="button-mark">HY</span>
-                <span class="action-copy">
-                  <strong>脱水</strong>
-                  <small>脱水！脱水！！！</small>
-                </span>
-                <span class="disabled-reason" aria-hidden="true"></span>
-              </button>
-            </div>
-          </div>
-          <div class="control-group">
-            <h2>战略干预</h2>
-            <div class="controls intervention-controls">
-              <button class="action-button" type="button" data-action="balance">
-                <span class="button-mark">EQ</span>
-                <span class="action-copy">
-                  <strong>均衡治理</strong>
-                  <small>政治是妥协的艺术。百花齐放，百家争鸣。我看没什么，起码挺热闹。</small>
-                </span>
-                <span class="disabled-reason" aria-hidden="true"></span>
-              </button>
-              <button class="action-button suppression-action" type="button" data-action="suppressBelief">
-                <span class="button-mark">-BE</span>
-                <span class="action-copy">
-                  <strong>打压神学</strong>
-                  <small>拆掉神坛，修成观测台。</small>
-                </span>
-                <span class="disabled-reason" aria-hidden="true"></span>
-              </button>
-              <button class="action-button order-action" type="button" data-action="order">
-                <span class="button-mark">OR</span>
-                <span class="action-copy">
-                  <strong>维持秩序</strong>
-                  <small>先让街灯亮起来，再争论谁拥有星空。</small>
-                </span>
-                <span class="disabled-reason" aria-hidden="true"></span>
-              </button>
-              <button class="action-button suppression-action" type="button" data-action="suppressScience">
-                <span class="button-mark">-SC</span>
-                <span class="action-copy">
-                  <strong>打压科学</strong>
-                  <small>收起望远镜，先听钟声。</small>
-                </span>
-                <span class="disabled-reason" aria-hidden="true"></span>
-              </button>
-            </div>
-          </div>
-          <div class="control-group" data-map-expansion>
-            <h2>军事与特殊政策</h2>
-            <div class="controls policy-controls">
-              <button class="action-button military-action" type="button" data-action="militaryCampaign">
-                <span class="button-mark">ATK</span>
-                <span class="action-copy">
-                  <strong>发动远征</strong>
-                  <small>高成本远征：随机沿道路连续征服至多三块领土，首败即止。</small>
-                </span>
-                <span class="disabled-reason" aria-hidden="true"></span>
-              </button>
-              <button class="action-button policy-action" type="button" data-action="levyHost">
-                <span class="button-mark">LEV</span>
-                <span class="action-copy">
-                  <strong>征兵</strong>
-                  <small>抽调青壮年扩军；全军覆没后可在选中的本国领土重建军团。</small>
-                </span>
-                <span class="disabled-reason" aria-hidden="true"></span>
-              </button>
-              <button class="action-button policy-action" type="button" data-action="secureFrontier">
-                <span class="button-mark">DEF</span>
-                <span class="action-copy">
-                  <strong>边疆戒严</strong>
-                  <small>把边境纳入战时管制。</small>
-                </span>
-                <span class="disabled-reason" aria-hidden="true"></span>
-              </button>
-              <button class="action-button policy-action" type="button" data-action="crownAuthority">
-                <span class="button-mark">LAW</span>
-                <span class="action-copy">
-                  <strong>强化王权</strong>
-                  <small>以中央权威整合军政命令。</small>
-                </span>
-                <span class="disabled-reason" aria-hidden="true"></span>
-              </button>
-              <button class="action-button military-action" type="button" data-action="trainLegion">
-                <span class="button-mark">TRN</span>
-                <span class="action-copy">
-                  <strong>整训军团</strong>
-                  <small>提升军团进攻能力。</small>
-                </span>
-                <span class="disabled-reason" aria-hidden="true"></span>
-              </button>
-              <button class="action-button policy-action" type="button" data-action="fieldWorks">
-                <span class="button-mark">FORT</span>
-                <span class="action-copy">
-                  <strong>构筑工事</strong>
-                  <small>强化当前驻地与军团防御。</small>
-                </span>
-                <span class="disabled-reason" aria-hidden="true"></span>
-              </button>
-            </div>
-          </div>
-          <div class="control-group">
-            <h2>特殊设施建设</h2>
-            <div class="controls facility-controls">
-              <button class="action-button eerf-action" type="button" data-action="buildEerf">
-                <span class="button-mark">EF</span>
-                <span class="action-copy">
-                  <strong>建造 EERF</strong>
-                  <small>E.E.R.F.极端环境抵抗设施在地下开工。子子孙孙无穷匮也，而山不加增，何苦而不平？</small>
-                </span>
-                <span class="disabled-reason" aria-hidden="true"></span>
-              </button>
-              <button class="action-button eerf-action" type="button" data-action="upgradeEerf">
-                <span class="button-mark">UP</span>
-                <span class="action-copy">
-                  <strong>升级 EERF</strong>
-                  <small>风雨不动安如山。呜呼！何时眼前突兀见此屋，吾庐独破受冻死亦足！</small>
-                </span>
-                <span class="disabled-reason" aria-hidden="true"></span>
-              </button>
-              <button class="action-button crisis-action" type="button" data-action="recovery">
-                <span class="button-mark">ECO</span>
-                <span class="action-copy">
-                  <strong>炉边谈话</strong>
-                  <small>我想花几分钟时间，向我们的人民谈谈银行的情况。<br> ——富兰克林·罗斯福，1933年</small>
-                </span>
-                <span class="disabled-reason" aria-hidden="true"></span>
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <section class="lower-grid">
-          <article class="log-panel" aria-label="文明编年史">
-            <div class="section-head">
-              <h2>编年史</h2>
-              <button id="clearLogButton" type="button">清空</button>
-            </div>
-            <div class="log-filters" role="group" aria-label="编年史筛选">
-              <button type="button" data-log-filter="all" aria-pressed="true">全部</button>
-              <button type="button" data-log-filter="disaster" aria-pressed="false">灾变</button>
-              <button type="button" data-log-filter="special" aria-pressed="false">特殊</button>
-              <button type="button" data-log-filter="progress" aria-pressed="false">发展</button>
-            </div>
-            <ol id="logList"></ol>
-          </article>
-
-          <aside class="system-panel" aria-label="文明系统">
-            <div class="section-head">
-              <h2>文明系统</h2>
-            </div>
-            <section class="watch-panel" aria-label="终局观测">
-              <h2>终局观测</h2>
-              <ol id="endingWatchList"></ol>
-            </section>
-            <section class="eerf-detail-panel" aria-label="EERF 火种预估">
-              <h2>EERF 火种预估</h2>
-              <dl id="eerfDetailList"></dl>
-            </section>
-            <section class="ending-stats-panel" aria-label="终局统计">
-              <div>
-                <h2>终局统计</h2>
-                <p id="endingStatsStatus">已达成 0/12 种｜总计 0 次｜最近 尚无</p>
-              </div>
-              <ol id="endingStatsList" class="ending-stats-list"></ol>
-            </section>
-            <section class="archive-panel" aria-label="文明档案">
-              <h2>文明档案</h2>
-              <ol id="archiveList"></ol>
-            </section>
           </aside>
-        </section>
+        </div>
       </section>
     </main>
 
-    <script src="map-lab/map-data.js?v=20260904-strategy64"></script>
-    <script src="localization.js?v=20260905-ending-polish"></script>
-    <script src="endings.js?v=20260905-ending-polish"></script>
-    <script src="balance-model.js?v=20260904-v040"></script>
-    <script src="map-lab/map-model.js?v=20260904-strategy64"></script>
-    <script src="game.js?v=20260905-economic-recovery"></script>
+    <script src="map-lab/map-data.js?v=20260913-population-relief"></script>
+    <script src="localization.js?v=20260913-population-relief"></script>
+    <script src="endings.js?v=20260913-population-relief"></script>
+    <script src="balance-model.js?v=20260913-population-relief"></script>
+    <script src="map-lab/map-model.js?v=20260913-population-relief"></script>
+    <script src="map-lab/map-generator.js?v=20260913-population-relief"></script>
+    <script src="game.js?v=20260913-population-relief"></script>
   </body>
 </html>

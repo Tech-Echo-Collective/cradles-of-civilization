@@ -90,7 +90,11 @@
   function buildVoronoiCells(data) {
     const { x, y, width, height } = data.viewBox;
     const margin = Math.max(width, height) * 0.08;
-    const bounds = [
+    // Generated maps supply a convex mainland boundary so visual coastlines
+    // and actual movement borders describe the same contiguous land.
+    const bounds = Array.isArray(data.landPolygon) && data.landPolygon.length >= 3
+      ? data.landPolygon.map((point) => ({ x: point.x, y: point.y }))
+      : [
       { x: x - margin, y: y - margin },
       { x: x + width + margin, y: y - margin },
       { x: x + width + margin, y: y + height + margin },
