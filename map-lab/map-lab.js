@@ -573,7 +573,7 @@
 
   function updateStaticLanguage() {
     document.documentElement.lang = language === "en" ? "en" : "zh-CN";
-    document.title = t("文明摇篮：地图实验室", "Cradles of Civilization: Map Lab");
+    document.title = t("文明摇篮：地图实验室", "Cunae Civilitatis: Map Lab");
     document.querySelectorAll("[data-zh][data-en]").forEach((node) => {
       node.textContent = t(node.dataset.zh, node.dataset.en);
     });

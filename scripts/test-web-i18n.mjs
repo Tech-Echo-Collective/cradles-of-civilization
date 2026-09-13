@@ -32,6 +32,12 @@ const i18n = context.CRADLES_I18N;
 i18n.init();
 assert.equal(i18n.getLanguage(), "en", "?lang=en must select English");
 assert.equal(memoryStore.get("three-sun-chronicle:language:v1"), "en", "language preference must persist separately");
+assert.equal(i18n.translate("文明摇篮"), "Cunae Civilitatis", "the official English brand must match the new name");
+assert.equal(i18n.translate("文明摇篮：文明文字模拟"), "Cunae Civilitatis: A Text-Based Civilization Simulator", "the main page title must use the new brand");
+for (const file of ["index.html", "ending.html", "localization.js", "map-lab/index.html", "map-lab/map-lab.js", "README.md", "scripts/package-game.mjs"]) {
+  assert.doesNotMatch(read(file), /cradles\s+of\s+civilization/iu, `${file} must not retain the retired English brand`);
+  assert.ok(read(file).includes("Cunae Civilitatis"), `${file} must contain the official English name`);
+}
 context.CRADLES_MAP_LAB_DATA.provinces.forEach((province) => {
   assert.equal(i18n.translate(province.nameZh), province.nameEn, `province ${province.id} must use its canonical English name`);
 });
@@ -234,6 +240,7 @@ for (const language of ["zh", "en"]) {
 
     assert.equal(rendered.body.dataset.ending, endingId, `${language} ending ${endingId} must select the requested theme`);
     assert.equal(rendered.documentElement.lang, language === "en" ? "en" : "zh-CN", `${language} ending ${endingId} must set the document language`);
+    assert.ok(rendered.document.title.startsWith(language === "en" ? "Cunae Civilitatis:" : "文明摇篮："), `${language} ending ${endingId} must retain the correct localized brand`);
     assert.deepEqual(titleLines, expectedTitleLines, `${language} ending ${endingId} has the wrong title lines`);
     if (language === "en") assert.ok(!hasHan(rendered.document.title), `English ending ${endingId} must not retain Chinese in the browser title`);
     assert.deepEqual(paragraphs, expectedParagraphs, `${language} ending ${endingId} has the wrong body copy`);
@@ -248,6 +255,7 @@ for (const language of ["zh", "en"]) {
     ? "Your civilization’s final chapter will appear here when you reach an ending. Start a new world to begin its story."
     : "这一页会在文明抵达终局后显示结果。返回新世界，开始一轮新的演化。";
   assert.equal(rendered.body.dataset.ending, "none", `${language} empty ending page must not invent an ending`);
+  assert.ok(rendered.document.title.startsWith(language === "en" ? "Cunae Civilitatis:" : "文明摇篮："), `${language} empty ending page must use the correct localized brand`);
   assert.deepEqual(rendered.elements.endingTitle.children.map((line) => line.textContent), expectedTitleLines, `${language} empty ending page has the wrong title`);
   assert.deepEqual(rendered.elements.endingCopy.children.map((line) => line.textContent), [expectedParagraph], `${language} empty ending page has the wrong copy`);
 }

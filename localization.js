@@ -294,7 +294,7 @@
   "本局复盘": "RUN RECAP",
   "终局统计": "ENDING STATISTICS",
   "指定种子": "Custom Seed",
-  "文明摇篮": "CRADLES OF CIVILIZATION",
+  "文明摇篮": "Cunae Civilitatis",
   "你的国度": "Your Realm",
   "输入国名": "Enter realm name",
   "世界种子": "World Seed",
@@ -372,9 +372,9 @@
 };
 
   const WEB_PAIRS = {
-    "文明摇篮：文明文字模拟": "Cradles of Civilization: A Text-Based Civilization Simulator",
-    "文明摇篮：终局": "Cradles of Civilization: Ending",
-    "文明摇篮终局": "Cradles of Civilization ending",
+    "文明摇篮：文明文字模拟": "Cunae Civilitatis: A Text-Based Civilization Simulator",
+    "文明摇篮：终局": "Cunae Civilitatis: Ending",
+    "文明摇篮终局": "Cunae Civilitatis ending",
     "返回 Tech Echo 官网 / Return to Tech Echo": "Return to Tech Echo",
     "尚无结局记录": "No Ending Recorded",
     "这一页会在文明抵达终局后显示结果。返回新世界，开始一轮新的演化。": "Your civilization’s final chapter will appear here when you reach an ending. Start a new world to begin its story.",
@@ -717,7 +717,7 @@
     "建立国度": "Found a Realm",
     "选择难度": "Choose Difficulty",
     "选择 AI 侵略性": "Choose AI Aggression",
-    "文明摇篮文字游戏": "Cradles of Civilization Text Game",
+    "文明摇篮文字游戏": "Cunae Civilitatis Text Game",
     "三颗恒星在天幕上留下互相矛盾的轨迹。执政官看着围在篝火旁的各人，那时科学、神学、人口与经济都脆弱不堪：这是一个文明的新生。": "Three stars trace contradictory paths across the sky. The governor looks upon those gathered around the fire, when science, theology, population, and economy are all desperately fragile: this is the birth of a civilization.",
     "当前文明进度会被新世界覆盖，终局统计仍会保留。继续？": "The current civilization will be replaced by a new world. Ending statistics will be preserved. Continue?",
     "经济危机锁死了这项行动。正向发展冻结，只能先重启财政。": "The economic crisis has locked this action. Positive development is frozen; fiscal recovery must come first.",

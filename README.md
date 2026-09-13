@@ -1,18 +1,20 @@
-# 文明摇篮 / Cradles Of Civilization
+# 文明摇篮 / Cunae Civilitatis
 
 一个受“三颗恒星文明循环”启发的原创文字策略小游戏。
 
 原创企划 / Original concept: Noah Walker.
 
-当前开发主线：`v0.5.0-alpha.2`（HTML，地图主界面预览，中英双语，早期人口与财政救急微调）
+当前开发主线：`v0.5.0-alpha.3`（HTML，地图主界面预览，中英双语，英文名统一为 Cunae Civilitatis）
 
-上一个已发布版本由 `v0.4.0-alpha.6` 标签保留。新版为开发预览，源码保存在本仓库，官网尚未同步。
+上一版布局由 `v0.4.0-alpha.6` 标签保留。当前为 v0.5 开发预览版，通过下述流程同步源码与官网。
 
 分支分工：`master` 用于 HTML 游戏开发、测试和打包；[`godot-port`](https://github.com/Tech-Echo-Collective/cradles-of-civilization/tree/godot-port) 保留 Godot 原生移植工程。后续网页修改提交到 `master`。
 
 在线试玩：[techecho.org/games/cradles-of-civilization/](https://techecho.org/games/cradles-of-civilization/)
 
 官网使用 [`Tech-Echo-Website` 中的网页副本](https://github.com/Tech-Echo-Collective/Tech-Echo-Website/tree/main/public/games/cradles-of-civilization)，发布官网时需另行同步；本仓库 `master` 是 HTML 源码主线。
+
+发布约定：“推送”默认同时包括 GitHub 提交推送与官网同步发布；只修改不自动发布，明确限定“只推 GitHub”等范围时除外。英文名改为 **Cunae Civilitatis**，中文名、仓库地址、官网路径与存档标识保持不变。
 
 新版采用顶部指标、左侧导航、中央地图、右侧事务和底部事件/结算的工作区布局，保留原来的深色配色、21 个行动及引用。新世界由种子生成一块连通大陆、64 个省份与 10 个战略区，地形、省界和真实邻接随种子变化；旧存档保留固定大陆。地图支持政治/地形/军事图层、拖动缩放及可切换的轻微斜视纯 SVG 立体地形。选择军队与相邻省份后，在右侧下达防御或进攻命令；年份、征兵、战斗、AI、战争迷雾与存档仍使用同一个游戏引擎。
 

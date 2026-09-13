@@ -30,7 +30,7 @@ cpSync(join(root, "map-lab"), join(packageDir, "map-lab"), { recursive: true });
 writeFileSync(
   join(packageDir, "START_HERE.txt"),
   [
-    "文明摇篮 / Cradles Of Civilization",
+    "文明摇篮 / Cunae Civilitatis",
     "原创企划 / Original concept: Noah Walker",
     "",
     "运行方式：",

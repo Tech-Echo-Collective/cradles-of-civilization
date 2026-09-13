@@ -1,6 +1,6 @@
 {
   "name": "cradles-of-civilization",
-  "version": "0.5.0-alpha.2",
+  "version": "0.5.0-alpha.3",
   "private": true,
   "scripts": {
     "test": "node scripts/test-engine.mjs && node scripts/test-economic-recovery.mjs && node scripts/test-population-relief.mjs && node scripts/test-web-i18n.mjs && node scripts/test-map-lab.mjs && node scripts/test-map-generator.mjs && node scripts/test-workspace.mjs && node scripts/test-generated-worlds.mjs",
