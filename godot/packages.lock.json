@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net8.0": {
+      "Godot.SourceGenerators": {
+        "type": "Direct",
+        "requested": "[4.7.1, )",
+        "resolved": "4.7.1",
+        "contentHash": "XNYxnzQtZw/3ebPgpVC5eKMH5z3mx/MFNAb9rNeb/SmyMus+u4GPbwMN1ZsmXf0j4a9L/Uj55PbZIHLk96EFyQ=="
+      },
+      "GodotSharp": {
+        "type": "Direct",
+        "requested": "[4.7.1, )",
+        "resolved": "4.7.1",
+        "contentHash": "OCTPz0MtENY0J1e9Sw4VB9qxS0DK9xpEQLAIMRzCtnVKiJvHZUAAnJ9mU4ewW5+88V4beewp3dl8OE813Qw73g=="
+      },
+      "Jint": {
+        "type": "Direct",
+        "requested": "[4.16.4, )",
+        "resolved": "4.16.4",
+        "contentHash": "Gdqc4XA5N7MqUxv2phUZ7U2ZMvcz7tF6ktCe1xVfpP0MEykP41QTKmjyaFTmVPGgawUgQAW4jJi8jv/YEQQY2w==",
+        "dependencies": {
+          "Acornima": "1.7.0"
+        }
+      },
+      "Acornima": {
+        "type": "Transitive",
+        "resolved": "1.7.0",
+        "contentHash": "a2I4O4qkuAdB0oSaGz6/k0n/bXxMbGcLBra5dNTTVSLmTwM7uORA8ebpOrNMmDfFWOMwvuaRL6gPprRV4HTV0w=="
+      }
+    },
+    "net8.0/win-x64": {}
+  }
+}

@@ -2,3 +2,7 @@ dist/
 node_modules/
 godot/.godot/
 .DS_Store
+
+godot/Tests/Runner/bin/
+godot/Tests/Runner/obj/
+godot/Tests/results/

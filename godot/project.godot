@@ -5,17 +5,17 @@ config_version=5
 
 [application]
 
-config/name="Cradles of Civilization"
+config/name="Cunabula Civilitatis"
 config/description="A civilization-cycle strategy game by Tech Echo Collective."
-config/version="0.4.0-alpha.3"
+config/version="0.5.0-alpha.5-godot.1"
 run/main_scene="res://Main.tscn"
 config/features=PackedStringArray("4.7", "C#")
 
 [display]
 
-window/size/viewport_width=1280
+window/size/viewport_width=1440
 window/size/viewport_height=900
-window/size/mode=2
+window/size/mode=0
 window/size/resizable=true
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"

@@ -1,0 +1,74 @@
+{
+  "version": "0.5.0-alpha.5-godot.1",
+  "sourceCommit": "96b05e39429a500ddfce2b160466a87ed75b2d4f",
+  "build": {
+    "godot": "4.7.1.stable.mono",
+    "targetFramework": "net8.0",
+    "sdk": "10.0.400",
+    "warnings": 0,
+    "errors": 0
+  },
+  "rules": {
+    "passed": true,
+    "endings": [
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+      "F",
+      "G",
+      "H",
+      "I",
+      "J",
+      "K",
+      "L"
+    ],
+    "legalCommands": 5790,
+    "nodeParityCheckpoints": 74,
+    "godotHeadlessDurationSeconds": 82.0,
+    "checks": [
+      "seed geometry",
+      "rule RNG",
+      "resources",
+      "armies and territory",
+      "ending restore read-only",
+      "v11 import",
+      "invalid import atomicity",
+      "recovered storage survives restart"
+    ]
+  },
+  "ui": {
+    "passed": true,
+    "nativeProjectionChecks": 128,
+    "idleFramesWithoutMapRedraw": 20,
+    "endingViews": 12,
+    "layout": {
+      "viewportWidth": 1440,
+      "viewportHeight": 900,
+      "topbarHeight": 78,
+      "mapWidth": 1008,
+      "mapHeight": 436,
+      "timelineHeight": 118,
+      "timelineBottom": 900,
+      "sidebarWidth": 290,
+      "sidebarMinimumWidth": 286,
+      "wideSidebarChildren": []
+    }
+  },
+  "performance": {
+    "machine": "Apple M5 / macOS",
+    "mapDrawMilliseconds": 6.03,
+    "offscreenTextures": 0,
+    "note": "Observed one fitted 1440x900 desktop frame; no FPS or all-hardware guarantee."
+  },
+  "exports": {
+    "macOSUniversal": "exported; packaged native app passed full UI smoke independently of source project",
+    "WindowsX64": "exported and managed dependencies inspected; Windows runtime not tested"
+  },
+  "limitations": [
+    "Rules run in embedded Jint, presentation and map are native Godot C#; not a full C# rule rewrite.",
+    "New native UI is Chinese; historical English ending text retained in catalog.",
+    "Existing v11 loader rounds AI development/technology as in web; no HTML rule change."
+  ]
+}

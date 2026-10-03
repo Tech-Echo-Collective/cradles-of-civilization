@@ -1,0 +1,13 @@
+{
+  "version": "0.5.0-alpha.5",
+  "sourceCommit": "96b05e39429a500ddfce2b160466a87ed75b2d4f",
+  "sourceRepository": "https://github.com/Tech-Echo-Collective/cradles-of-civilization",
+  "files": {
+    "balance-model.js": "cbd7ed9d6c49c1625718889b8ff29ac32836a5070d39c76cf51ff3b3ce68aab9",
+    "endings.js": "c5c7404d800bd9e10ed2b5b059b35d3c6e3aa86093b041e055d6f3e9556b8c3d",
+    "game.js": "12bfa793cb56e5fdca96263e94cf4d7ed0f3ed4ebf2e594e868bc6d5e30da571",
+    "map-data.js": "b3bca73d238d9abacfce033139b4251960a22c9ddcffc437e6d20010f5494bf6",
+    "map-generator.js": "62f65cd9a8d0f650b1ae1a93a56b1f56fd5b3f96f99ecb42901f7790d6109d9c",
+    "map-model.js": "4585a4ec5dc66ac899d070e80322659aa38187731a1ecad9db82730ce228fa81"
+  }
+}
