@@ -1,0 +1,83 @@
+.game-quoted-copy {
+  min-width: 0;
+}
+.game-quoted-copy p {
+  white-space: pre-line;
+}
+.game-quoted-copy figure {
+  margin: 14px 0;
+  min-width: 0;
+}
+.game-quoted-copy blockquote {
+  margin: 0;
+  color: #dfc99c;
+  font-family: var(--serif);
+  font-weight: 400;
+  line-height: 1.85;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.game-quoted-copy figcaption {
+  display: block;
+  margin-top: 5px;
+  color: #a9ad95;
+  font-size: 0.86em;
+  line-height: 1.7;
+}
+.game-quoted-copy cite {
+  display: block;
+  font-style: normal;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.game-quoted-copy.is-compact {
+  font-size: 10px;
+  line-height: 1.5;
+}
+.game-quoted-copy.is-compact figure {
+  margin: 3px 0;
+}
+.game-quoted-copy.is-compact blockquote {
+  font-size: 11px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.game-quoted-copy.is-compact figcaption {
+  margin-top: 1px;
+  font-size: 9px;
+  line-height: 1.4;
+}
+.game-quoted-copy.is-compact cite {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.game-quoted-copy.is-compact.has-quote p {
+  -webkit-line-clamp: 1;
+}
+.game-action-preview > .game-quoted-copy {
+  border-top: 1px solid #55553c;
+  margin-top: 13px;
+  padding-top: 1px;
+  font-size: 13px;
+}
+.game-record > .game-quoted-copy {
+  font-size: 13px;
+}
+.game-event-full.game-quoted-copy {
+  font-size: 14px;
+  line-height: 2;
+  white-space: normal;
+}
+.game-event-full.game-quoted-copy p {
+  margin: 12px 0;
+}
+.game-event-full.game-quoted-copy figure {
+  border-left: 2px solid #a58c57;
+  padding-left: 16px;
+  margin: 20px 0;
+}

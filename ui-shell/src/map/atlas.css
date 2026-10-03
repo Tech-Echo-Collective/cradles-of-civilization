@@ -1,0 +1,109 @@
+.atlas-map {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #b1a583;
+  isolation: isolate;
+}
+.atlas-map canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: grab;
+  outline: none;
+}
+.atlas-map canvas:active {
+  cursor: grabbing;
+}
+.atlas-map canvas:focus-visible {
+  outline: 2px solid #dfc784;
+  outline-offset: -5px;
+}
+.atlas-map::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 100px 20px #30271930,
+    inset 0 0 2px 1px #51463280;
+}
+.atlas-controls {
+  position: absolute;
+  bottom: 205px;
+  right: 22px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border: 1px solid #6d6148;
+  box-shadow: 0 3px 13px #241d2530;
+}
+.atlas-controls button {
+  width: 33px;
+  height: 33px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  color: #d8c494;
+  background: #272922f2;
+  border: 0;
+  font:
+    20px Georgia,
+    serif;
+  cursor: pointer;
+}
+.atlas-controls button:last-child {
+  font-size: 17px;
+}
+.atlas-controls button:hover {
+  color: #f9e0a3;
+  background: #424237;
+}
+.atlas-controls button:focus-visible {
+  outline: 2px solid #f1d795;
+  outline-offset: -3px;
+}
+.atlas-map-note {
+  display: none;
+}
+.atlas-tooltip {
+  position: absolute;
+  z-index: 3;
+  max-width: 220px;
+  padding: 9px 13px;
+  color: #eee0bc;
+  background: #20241e;
+  border: 1px solid #998052;
+  box-shadow: 0 4px 18px #1b1d1b25;
+  font:
+    12px Georgia,
+    serif;
+  pointer-events: none;
+}
+.atlas-tooltip small {
+  display: block;
+  margin-top: 5px;
+  color: #a5a38c;
+  font:
+    9px Arial,
+    sans-serif;
+  letter-spacing: 0.6px;
+}
+.atlas-map-loading {
+  position: absolute;
+  bottom: 190px;
+  left: 19px;
+  color: #4c4635;
+  font:
+    italic 11px Georgia,
+    serif;
+}
+@media (prefers-reduced-motion: reduce) {
+  .atlas-map *,
+  .atlas-map *::before,
+  .atlas-map *::after {
+    scroll-behavior: auto !important;
+  }
+}

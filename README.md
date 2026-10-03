@@ -1,10 +1,12 @@
-# 文明摇篮 / Cunae Civilitatis
+# 文明摇篮 / Cunabula Civilitatis
 
 一个受“三颗恒星文明循环”启发的原创文字策略小游戏。
 
+桌面网页新界面位于 [`ui-shell/`](ui-shell/README.md)，使用本次设计名称 **CUNABULA CIVILITATIS / 文明摇篮**。React + Canvas 已接入下方正式游戏的年度行动、军事、灾变、重启、结局与原存档；新局支持随机大陆。安装 `ui-shell` 依赖后，在仓库根目录运行 `npm run ui:dev`；构建使用 `npm run ui:build`。最初四文明历史展示保留在 `?demo=1`。
+
 原创企划 / Original concept: Noah Walker.
 
-当前开发主线：`v0.5.0-alpha.3`（HTML，地图主界面预览，中英双语，英文名统一为 Cunae Civilitatis）
+当前开发主线：`v0.5.0-alpha.4`（React + Canvas 桌面网页，随机地图、完整玩法与独立结局页；正式英文名 Cunabula Civilitatis）。传统双语 HTML 界面作为兼容入口保留。
 
 上一版布局由 `v0.4.0-alpha.6` 标签保留。当前为 v0.5 开发预览版，通过下述流程同步源码与官网。
 
@@ -12,11 +14,11 @@
 
 在线试玩：[techecho.org/games/cradles-of-civilization/](https://techecho.org/games/cradles-of-civilization/)
 
-官网使用 [`Tech-Echo-Website` 中的网页副本](https://github.com/Tech-Echo-Collective/Tech-Echo-Website/tree/main/public/games/cradles-of-civilization)，发布官网时需另行同步；本仓库 `master` 是 HTML 源码主线。
+官网使用 [`Tech-Echo-Website` 中的网页副本](https://github.com/Tech-Echo-Collective/Tech-Echo-Website/tree/main/public/games/cradles-of-civilization)，发布官网时需另行同步；本仓库 `master` 是网页源码主线。
 
-发布约定：“推送”默认同时包括 GitHub 提交推送与官网同步发布；只修改不自动发布，明确限定“只推 GitHub”等范围时除外。英文名改为 **Cunae Civilitatis**，中文名、仓库地址、官网路径与存档标识保持不变。
+发布约定：“推送”默认同时包括 GitHub 提交推送与官网同步发布；只修改不自动发布，明确限定“只推 GitHub”等范围时除外。英文名改为 **Cunabula Civilitatis**，中文名、仓库地址、官网路径与存档标识保持不变。
 
-新版采用顶部指标、左侧导航、中央地图、右侧事务和底部事件/结算的工作区布局，保留原来的深色配色、21 个行动及引用。新世界由种子生成一块连通大陆、64 个省份与 10 个战略区，地形、省界和真实邻接随种子变化；旧存档保留固定大陆。地图支持政治/地形/军事图层、拖动缩放及可切换的轻微斜视纯 SVG 立体地形。选择军队与相邻省份后，在右侧下达防御或进攻命令；年份、征兵、战斗、AI、战争迷雾与存档仍使用同一个游戏引擎。
+新版采用石墨黑、青铜旧金与羊皮纸视觉，顶部指标、左侧导航、中央 Canvas 地图、右侧事务和底部事件/时间轴完整交互，保留原 21 个行动及引用。新世界由种子生成一块连通大陆、64 个省份与 10 个战略区，地形、省界和真实邻接随种子变化；旧存档保留固定大陆。地图支持政治/地形/军事图层、拖动缩放；只绘制视口内标记，空闲无重绘循环。选择军队与相邻省份后，在右侧下达防御或进攻命令；年份、征兵、战斗、AI、战争迷雾与存档仍使用同一个游戏引擎。
 
 独立地图实验室仍位于 `map-lab/`，用于试验更直接的移动、战斗、伤亡、占领、撤退与征兵交互；它不读写正式存档。
 
@@ -26,13 +28,17 @@ Godot 原生试玩版在 `godot-port` 分支保留为 `v0.4.0-alpha.3`（中英�
 
 ## 运行
 
-网页版可直接用浏览器打开 `index.html`，右上角可切换中文/English；`?lang=en` 可直接打开英文版。
+新版需通过本地服务器运行：先 `npm --prefix ui-shell ci`，再 `npm run ui:dev`。
+
+仓库根目录的 `index.html` 仍是传统双语入口，可以直接打开；官网发布包中对应 `legacy.html`，右上角切换中文/English，`legacy.html?lang=en` 打开英文版。新版的交互和性能说明见 [`ui-shell/README.md`](ui-shell/README.md)。
 
 开始页在同一页设置国名、种子、难度、AI、执政官及地图开关；点击“进入世界”后，在主地图上选择首都并确认建立文明。确认前不会推进年份或开放决议。选择纯数值模式时，仍用主地图选址，确认后收起地图与军事；已开始的存档直接进入工作区。地图实验室可另行打开 `map-lab/index.html`；也可以用本地静态服务器访问 `/map-lab/`。
 
 ## 打包分享
 
-`npm run package` 生成当前 HTML 版 ZIP，并包含中英双语运行文件；网页版存档保存在各自浏览器本机，不会跟着 ZIP 传播。
+`npm run web:release` 构建新版并生成 `dist/web-release/`：包括正式 React 入口、兼容双语入口、地图实验室和 `release.json` 版本/源提交记录。将该目录内容同步到官网 `public/games/cradles-of-civilization/`，再按官网部署流程验证和发布。
+
+`npm run package` 仍生成传统 HTML 版 ZIP。网页版存档保存在各自浏览器本机，不会跟着发布包传播；同域名、同浏览器的原存档键与版本保持兼容。
 
 Godot 的运行和原生导出说明见 [`godot-port` 分支的 README](https://github.com/Tech-Echo-Collective/cradles-of-civilization/blob/godot-port/godot/README.md)。
 
@@ -109,6 +115,8 @@ Godot 的运行和原生导出说明见 [`godot-port` 分支的 README](https://
 ## 结局
 
 终局条件会检查 `SC`、`BE`、`LA`、`POP`、`ECO`、秩序、地图、军力、文明代际次数与毁灭情境。科学封顶、神学封顶、科学撤离、神学撤离、双相平衡、循环废墟、低智停滞、技术威权、罗马化崩盘、永志不忘、全图征服和国家灭亡都可能成为最终结局。除少数自动结算条件外，玩家需要点击“脱离苦海”才会真正进入结局页。
+
+全部 A–L 结局已验证存在真实新局的合法可重放路径。运行 `npm run test:endings` 会检查 12 条路线及终局存档恢复；设置和逐代/军事证据见 [结局可达性报告](ui-shell/docs/ending-reachability.md)。
 
 ## 后台预留
 

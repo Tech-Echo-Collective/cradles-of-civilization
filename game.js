@@ -1,5 +1,8 @@
 "use strict";
 
+// Opt-in presentation host. The classic HTML entrypoint remains the default.
+const GAME_HOST = globalThis.CRADLES_GAME_HOST || null;
+
 const BALANCE_MODEL = globalThis.CRADLES_BALANCE;
 const LEGACY_STRATEGIC_MAP_DATA = globalThis.CRADLES_MAP_LAB_DATA;
 let STRATEGIC_MAP_DATA = LEGACY_STRATEGIC_MAP_DATA;
@@ -1090,6 +1093,7 @@ function installWorldGeography(version, seed) {
 }
 
 function resetStrategicMapGeometry() {
+  if (GAME_HOST) return;
   strategicMapView.realmClipNodes.forEach((node) => node.remove());
   ["provinceNodes", "reliefNodes", "provinceLabelNodes", "realmClipNodes", "realmLabelNodes", "capitalNodes", "armyNodes", "pointers"].forEach((key) => strategicMapView[key].clear());
   strategicMapView.realmBorderNodes = [];
@@ -2020,6 +2024,7 @@ function toggleLanguage() {
 }
 
 function scheduleAutoRunIfNeeded() {
+  if (GAME_HOST) return;
   if (!state?.setupComplete || state.finished || state.awaitingCivilizationRestart || !state.autoRunUntilCollapse) {
     cancelAutoRun();
     return;
@@ -2281,6 +2286,7 @@ function toggleMapExpansion() {
 }
 
 function renderMapExpansionMode() {
+  if (GAME_HOST) return;
   const founding = !state.setupComplete && state.setupStage === "territory";
   const expanded = state?.mapUiExpanded !== false || founding;
   dom.mapExpansionSections?.forEach((section) => {
@@ -2295,6 +2301,7 @@ function renderMapExpansionMode() {
 }
 
 function setWorkspaceTab(tab) {
+  if (GAME_HOST) return false;
   if (!state?.setupComplete || !WORKSPACE_TABS.has(tab)) return false;
   if (tab === "military" && state.mapUiExpanded === false) return false;
   const changed = currentWorkspaceTab !== tab;
@@ -2306,6 +2313,7 @@ function setWorkspaceTab(tab) {
 }
 
 function renderWorkspaceView() {
+  if (GAME_HOST) return;
   const founding = !state?.setupComplete && state?.setupStage === "territory";
   if (dom.workspaceCrisisNotice) dom.workspaceCrisisNotice.hidden = Boolean(actionDisabledReason(ACTIONS.recovery));
   if (currentWorkspaceTab === "military" && state.mapUiExpanded === false) currentWorkspaceTab = "development";
@@ -2344,6 +2352,7 @@ function workspaceChartValue(value) {
 }
 
 function renderWorkspaceChart() {
+  if (GAME_HOST) return;
   if (!state?.setupComplete || state.mapUiExpanded !== false || !dom.workspaceMetricsChart) return;
   const samples = normalizedMetricSamples();
   const group = WORKSPACE_CHART_GROUPS[currentWorkspaceChart];
@@ -5624,6 +5633,11 @@ function finishGame(endingId, context = {}) {
   };
   state.weather = context.trigger || state.weather;
   state.ending = `${ending.name}已经抵达`;
+  if (GAME_HOST) {
+    state.finalEnding.geometryVersion = state.geometryVersion;
+    state.finalEnding.geometrySeed = state.geometrySeed;
+    state.finalEnding.startingRegionId = state.startingRegionId;
+  }
   addLog({
     type: "special",
     title: `${ending.name}｜终局达成`,
@@ -5751,6 +5765,7 @@ function clearSavedRun() {
 }
 
 function goToEndingPage(endingId) {
+  if (GAME_HOST) return; // The host renders finalEnding after the command commits.
   const url = new URL(ENDING_PAGE, window.location.href);
   url.searchParams.set("ending", endingId);
   url.searchParams.set("lang", I18N.isEnglish() ? "en" : "zh");
@@ -5895,6 +5910,7 @@ function eraIndexFor(value, eras) {
 }
 
 function renderSetup(deferLocalization = false) {
+  if (GAME_HOST) return;
   syncLocalizationContext();
   const setupComplete = Boolean(state?.setupComplete);
   const stage = setupComplete ? "complete" : state?.setupStage === "territory" ? "territory" : "settings";
@@ -5953,6 +5969,7 @@ function renderSetup(deferLocalization = false) {
 }
 
 function renderStartingRegionPicker() {
+  if (GAME_HOST) return;
   const selectedId = normalizeStartingRegionId(state.startingRegionId);
   const selectedDefinition = mapRegionById(selectedId);
   const selectedState = mapStateRegion(selectedId);
@@ -5968,6 +5985,7 @@ function renderStartingRegionPicker() {
 }
 
 function render() {
+  if (GAME_HOST) return;
   renderSetup(true);
   if (!state.setupComplete && state.setupStage !== "territory") {
     I18N.localizeDocument(document);
@@ -6012,6 +6030,7 @@ function render() {
 }
 
 function renderActionButtons() {
+  if (GAME_HOST) return;
   dom.actionButtons.forEach((button) => {
     const action = ACTIONS[button.dataset.action];
     const reason = actionDisabledReason(action);
@@ -6026,6 +6045,7 @@ function renderActionButtons() {
 }
 
 function renderTrendStatus() {
+  if (GAME_HOST) return;
   const scTrend = Math.round(finiteOr(state.scTrend, 0));
   const beTrend = Math.round(finiteOr(state.beTrend, 0));
   const scStage = knowledgeTrendStageFor(scTrend);
@@ -6043,6 +6063,7 @@ function renderTrendStatus() {
 }
 
 function renderMetricTrend(key, value, valueNode, stageNode) {
+  if (GAME_HOST) return;
   const trend = Math.round(finiteOr(value, 0));
   if (valueNode) valueNode.textContent = `${formatSignedNumber(trend)}/年`;
   if (stageNode) stageNode.textContent = metricTrendStageFor(key, trend);
@@ -6904,6 +6925,7 @@ function hideStrategicMapTooltip() {
 }
 
 function announceStrategicMap(message) {
+  if (GAME_HOST) return;
   if (!dom.strategicMapLiveRegion) return;
   dom.strategicMapLiveRegion.textContent = "";
   window.requestAnimationFrame(() => {
@@ -6922,6 +6944,7 @@ function scheduleStrategicMapCameraRefresh() {
 }
 
 function renderMap() {
+  if (GAME_HOST) return;
   if (!dom.worldMap || (state.mapUiExpanded === false && state.setupComplete)) return;
   ensureMilitaryMapState();
   const counts = mapOwnerCounts();
@@ -7008,6 +7031,7 @@ function militaryPowerSummary(stats = {}) {
 }
 
 function renderRegionIntel() {
+  if (GAME_HOST) return;
   const selected = mapStateRegion(state.selectedRegionId) || mapStateRegion(selectedArmy()?.regionId) || state.map?.regions?.[0];
   if (!selected) return;
   state.selectedRegionId = selected.id;
@@ -7049,6 +7073,7 @@ function deploymentDisabledReason(army, target) {
 }
 
 function renderPoliticalEntityPanel() {
+  if (GAME_HOST) return;
   const selected = selectedPoliticalEntity();
   if (dom.entityCards) {
     dom.entityCards.innerHTML = "";
@@ -7163,6 +7188,7 @@ function normalizeMetricSample(sample = {}) {
 }
 
 function renderEndingWatch() {
+  if (GAME_HOST) return;
   if (!dom.endingWatchList) return;
 
   const watchItems = endingWatchItems();
@@ -7341,9 +7367,7 @@ function endingPreviewName(endingId) {
   return (summary.endings[endingId] || 0) > 0 ? shortEndingName(endingId) : "???";
 }
 
-function renderEerfDetails() {
-  if (!dom.eerfDetailList) return;
-
+function eerfDetailRows() {
   const level = state.eerfLevel || 0;
   const rows = [];
   if (state.awaitingCivilizationRestart && state.pendingRestart) {
@@ -7371,10 +7395,16 @@ function renderEerfDetails() {
       rows.push(["下级需求", "已满级"]);
     }
   }
-  renderDefinitionRows(dom.eerfDetailList, rows);
+  return rows;
+}
+
+function renderEerfDetails() {
+  if (GAME_HOST || !dom.eerfDetailList) return;
+  renderDefinitionRows(dom.eerfDetailList, eerfDetailRows());
 }
 
 function renderDefinitionRows(list, rows) {
+  if (GAME_HOST) return;
   list.innerHTML = "";
   const fragment = document.createDocumentFragment();
   rows.forEach(([label, value]) => {
@@ -7455,6 +7485,7 @@ function actionRawDelta(action) {
 }
 
 function renderEndingStats() {
+  if (GAME_HOST) return;
   const summary = endingStatsSummary(state.endingStats);
   state.endingStats = summary;
   if (dom.endingStatsStatus) {
@@ -7480,6 +7511,7 @@ function renderEndingStats() {
 }
 
 function renderSpecialNotice() {
+  if (GAME_HOST) return;
   if (!state.specialNotice) {
     dom.specialBanner.hidden = false;
     const specLabel = state.lastSpec === null ? "SPEC ----" : `SPEC ${formatSpec(state.lastSpec)}`;
@@ -7496,6 +7528,7 @@ function renderSpecialNotice() {
 }
 
 function renderLog() {
+  if (GAME_HOST) return;
   dom.logList.innerHTML = "";
   const visibleLogs = state.log.filter(logMatchesFilter);
   dom.logFilterButtons.forEach((button) => {
@@ -7536,6 +7569,7 @@ function logMatchesFilter(entry) {
 }
 
 function renderArchive() {
+  if (GAME_HOST) return;
   dom.archiveList.innerHTML = "";
   if (!state.history.length) {
     const empty = document.createElement("li");
@@ -7623,9 +7657,9 @@ function saveState() {
   }
 }
 
-function loadState() {
+function loadState(serialized = null) {
   try {
-    const raw = localStorage.getItem(STORE_KEY);
+    const raw = serialized === null ? localStorage.getItem(STORE_KEY) : serialized;
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return null;
@@ -7932,8 +7966,361 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
-document.addEventListener("DOMContentLoaded", init);
-window.addEventListener("beforeunload", () => {
-  if (state && !state.finished) saveState();
-  cancelAutoRun();
-});
+/**
+ * Presentation adapter for React and other explicit hosts. Commands reuse the
+ * classic rule functions above; only rendering, scheduling and navigation are
+ * delegated. No caller receives the mutable game state or hidden enemy armies.
+ */
+function createHostedGameEngine() {
+  let initialized = false;
+  let seedWasRequested = false;
+  let cachedView = null;
+  let cachedGeometry = null;
+  let generatedSeedClock = 0;
+  const listeners = new Set();
+  const copy = (value) => value == null ? value : JSON.parse(JSON.stringify(value));
+  const freeze = (value) => {
+    if (value && typeof value === "object" && !Object.isFrozen(value)) {
+      Object.values(value).forEach(freeze);
+      Object.freeze(value);
+    }
+    return value;
+  };
+  const options = (entries) => Object.entries(entries).map(([id, value]) => ({ id, ...copy(value) }));
+  const configs = freeze({
+    governors: options(GOVERNORS), difficulties: options(DIFFICULTIES),
+    aggressions: options(AI_AGGRESSIONS), strategies: options(POLITICAL_STRATEGIES),
+    policies: options(SPECIAL_DECISIONS),
+  });
+  const categories = {
+    science: "knowledge", belief: "knowledge", suppressBelief: "knowledge", suppressScience: "knowledge", arts: "knowledge",
+    population: "governance", balance: "governance", order: "governance", hibernate: "governance", economy: "governance", recovery: "governance",
+    militaryCampaign: "military", levyHost: "military", secureFrontier: "military", crownAuthority: "military", trainLegion: "military", fieldWorks: "military",
+    buildEerf: "facilities", upgradeEerf: "facilities", restartCivilization: "cycle", settleEnding: "cycle",
+  };
+  const viewFields = [
+    "saveVersion", "seed", "geometryVersion", "geometrySeed", "rngState", "setupComplete", "setupStage", "realmName",
+    "difficulty", "aiAggression", "governorId", "startingRegionId", "mapUiExpanded", "lastSavedAt", "loadedFromSave",
+    "turn", "count", "sc", "be", "la", "pop", "eco", "stability", "scTrend", "beTrend", "eerfLevel", "metricTrends",
+    "metricSamples", "selectedArmyId", "selectedEntityId", "selectedRegionId", "specialDecisionState",
+    "awaitingCivilizationRestart", "endingCandidate", "finished", "finalEnding", "endingStats", "lastRand", "lastSpec",
+    "lastTone", "specialNotice", "history", "currentCivilization", "weather", "ending", "log", "autoRunUntilCollapse",
+    "controlLocked", "populationLockTurns", "doomCountdown", "populationGrowthMultiplier", "knowledgeGrowthMultiplier",
+  ];
+
+  function geometryView() {
+    const revision = STRATEGIC_MAP_DATA.geometryRevision;
+    if (cachedGeometry?.revision === revision) return cachedGeometry;
+    cachedGeometry = freeze(copy({
+      revision, signature: STRATEGIC_GEOGRAPHY.signature,
+      viewBox: STRATEGIC_MAP_DATA.viewBox,
+      landPolygon: STRATEGIC_MAP_DATA.landPolygon || null,
+      landPath: STRATEGIC_MAP_DATA.landPath,
+      provinces: STRATEGIC_MAP_DATA.provinces.map((province) => ({ ...province, name: province.nameZh })),
+      cells: STRATEGIC_GEOGRAPHY.cells.map((cell) => ({ provinceId: cell.provinceId, points: cell.points, polygon: cell.points })),
+      rivers: STRATEGIC_MAP_DATA.rivers,
+      connections: STRATEGIC_GEOGRAPHY.connections,
+      neighbors: STRATEGIC_GEOGRAPHY.neighbors,
+      strategicRegions: STRATEGIC_MAP_DATA.strategicRegions,
+      terrainTypes: STRATEGIC_MAP_DATA.terrainTypes,
+    }));
+    return cachedGeometry;
+  }
+
+  function buildView() {
+    const visibleIds = visibleMilitaryRegionIds();
+    const visibleArmies = armies().filter((army) => army.entityId === PLAYER_ENTITY_ID || visibleIds.has(army.regionId))
+      .map((army) => ({ ...army, stats: { ...armyCombatStats(army), technology: militaryTechnologyBonus(army) }, color: STRATEGIC_MAP_ENTITY_COLORS[army.entityId] }));
+    const regions = state.map.regions.map((region) => {
+      const definition = STRATEGIC_GEOGRAPHY.provinceById[region.id];
+      return {
+        ...definition.base, ...region, name: definition.nameZh, nameZh: definition.nameZh, nameEn: definition.nameEn,
+        center: definition.center, terrain: definition.terrain, strategicRegionId: definition.strategicRegionId,
+        neighbors: roadNeighbors(region.id), militaryVisible: visibleIds.has(region.id),
+      };
+    });
+    const entities = politicalEntities().map((entity) => {
+      const roster = entityArmies(entity.id);
+      const allVisible = entity.id === PLAYER_ENTITY_ID || hasFullMilitaryIntel() || roster.every((army) => visibleIds.has(army.regionId));
+      return {
+        ...entity, color: STRATEGIC_MAP_ENTITY_COLORS[entity.id], territories: entityRegions(entity.id).length,
+        force: allVisible ? entityMilitaryForce(entity.id) : null,
+        strategyLabel: politicalStrategyConfig(entity.strategy).label,
+        strategyDescription: politicalStrategyConfig(entity.strategy).description,
+        relationLabel: entityRelationLabel(entity),
+      };
+    });
+    const selectedRegion = regions.find((region) => region.id === state.selectedRegionId) || null;
+    const selectedVisibleArmy = visibleArmies.find((army) => army.id === state.selectedArmyId) || null;
+    const values = Object.fromEntries(viewFields.map((key) => [key, state[key] ?? null]));
+    // Restart payload exposes retained resources, never internal map snapshots.
+    const pendingRestart = state.pendingRestart ? Object.fromEntries(Object.entries(state.pendingRestart).filter(([key]) => key !== "mapState")) : null;
+    const result = copy({
+      ...values, pendingRestart, entities, regions, visibleArmies, selectedRegion, selectedArmy: selectedVisibleArmy,
+      // Keep a consumed seed link (or an unfinished saved setup) visible to the
+      // first settings form without adding presentation metadata to the save.
+      initialSeed: !state.setupComplete && (seedWasRequested || state.loadedFromSave) ? state.seed : null,
+      selectedEntity: entities.find((entity) => entity.id === state.selectedEntityId) || null,
+      deploymentReason: deploymentDisabledReason(selectedVisibleArmy, selectedRegion),
+      deploymentHint: deploymentHintFor(selectedVisibleArmy),
+      availableProvinceIds: regions.filter((region) => !deploymentDisabledReason(selectedVisibleArmy, region)).map((region) => region.id),
+      economicCrisis: isEconomicCrisis(), notice: state.specialNotice,
+      mapEvent: state.map.lastEvent?.regionId && !visibleIds.has(state.map.lastEvent.regionId) ? null : state.map.lastEvent,
+      mapStatus: mapStrategicStatus(), ownerCounts: mapOwnerCounts(),
+      visibleMilitaryRegionIds: [...visibleIds],
+      scienceEra: scienceEra(state.sc), beliefEra: beliefEra(state.be), orderRegime: orderRegime(state.stability),
+      endingWatch: endingWatchItems(), eerfDetails: eerfDetailRows(),
+      actions: Object.entries(ACTIONS).map(([id, action]) => ({
+        id, label: action.label, text: action.text, chronicleText: action.chronicleText,
+        delta: actionRawDelta(action), disabledReason: actionDisabledReason(action),
+        shortcut: ACTION_SHORTCUT_LABELS[id] || "", category: categories[id],
+        policyId: action.policyId || null, type: action.type,
+      })),
+    });
+    return freeze({ ...result, geometry: geometryView(), configs });
+  }
+
+  function publish() {
+    cachedView = buildView();
+    listeners.forEach((listener) => {
+      try { listener(); } catch (error) { console.error("Game host subscriber failed", error); }
+    });
+    return cachedView;
+  }
+
+  function restoreFinalResult() {
+    let final;
+    try { final = JSON.parse(localStorage.getItem(ENDING_STORE_KEY) || "null"); } catch { return false; }
+    if (!final || !globalThis.THREE_SUN_ENDINGS?.[final.id] || !final.snapshot) return false;
+    state = createNewState(final.seed, { geometryVersion: final.geometryVersion || null, geometrySeed: final.geometrySeed || final.seed });
+    Object.assign(state, snapshotForObject(final.snapshot), {
+      eerfLevel: final.snapshot.eerf || 0, setupComplete: true, setupStage: "complete", finished: true,
+      finalEnding: final, realmName: final.realmName || DEFAULT_REALM_NAME, turn: final.turn || 0, count: final.civilization || 1,
+      difficulty: normalizeDifficulty(final.difficulty), aiAggression: normalizeAiAggression(final.aiAggression),
+      governorId: normalizeGovernorId(final.governorId), mapUiExpanded: final.mapUiExpanded !== false,
+      startingRegionId: normalizeStartingRegionId(final.startingRegionId), ending: final.name, weather: final.trigger,
+      endingStats: normalizeEndingStats(final.endingStats || loadEndingStats()),
+    });
+    if (final.mapArchive?.regions?.length) {
+      state.map = createInitialMapState(final.mapArchive, { seed: state.seed, realmName: state.realmName, difficulty: state.difficulty, startingRegionId: state.startingRegionId });
+      state.map.lastEvent = final.mapArchive.lastEvent || null;
+    }
+    // The final record is an archive, not a reconstructed live army roster.
+    state.military.armies = [];
+    state.military.force = 0;
+    state.selectedArmyId = null;
+    state.selectedRegionId = state.startingRegionId;
+    return true;
+  }
+
+  function initialize() {
+    if (initialized) return cachedView;
+    const querySeed = seedFromUrl();
+    const restored = querySeed ? null : loadState();
+    if (querySeed) {
+      clearSavedRun();
+      clearStoredEnding();
+      state = createNewState(querySeed);
+      seedWasRequested = true;
+      saveState();
+      removeSeedFromUrl();
+    } else if (restored) {
+      state = restored;
+      state.loadedFromSave = true;
+    } else if (!restoreFinalResult()) state = createNewState();
+    state.aiAggression = normalizeAiAggression(state.aiAggression);
+    state.governorId = normalizeGovernorId(state.governorId);
+    state.startingRegionId = normalizeStartingRegionId(state.startingRegionId || state.map?.startingRegionId);
+    state.mapUiExpanded = state.mapUiExpanded !== false;
+    if (!state.finished) {
+      alignArmiesWithEntityTerritories();
+      eliminateDefeatedEntities();
+      if (state.setupComplete) maybeFinishGame({ kind: "load", trigger: "载入存档" });
+      if (!state.finished) updateEnding();
+    }
+    initialized = true;
+    return publish();
+  }
+
+  function transaction(run) {
+    initialize();
+    const result = run();
+    if (result?.ok === false) return result;
+    publish();
+    return result || { ok: true };
+  }
+
+  const fail = (reason) => ({ ok: false, reason });
+  function validateImport(parsed) {
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("A save must contain a game state object");
+    for (const key of ["seed", "sc", "be", "pop", "eco", "stability", "turn", "count"]) {
+      if (typeof parsed[key] !== "number" || !Number.isFinite(parsed[key])) throw new Error(`Invalid save field: ${key}`);
+    }
+    if (parsed.saveVersion != null && (!Number.isInteger(parsed.saveVersion) || parsed.saveVersion > SAVE_VERSION || parsed.saveVersion < 0)) throw new Error("Unsupported save version");
+    if (parsed.geometryVersion && parsed.geometryVersion !== globalThis.CRADLES_MAP_GENERATOR?.VERSION) throw new Error("Unsupported map generation version");
+    if (parsed.rngState != null && (typeof parsed.rngState !== "number" || !Number.isFinite(parsed.rngState))) throw new Error("Invalid saved random state");
+    if (parsed.finished && !parsed.finalEnding?.id) throw new Error("A completed save must include its ending");
+  }
+
+  const api = {
+    initialize,
+    getView: () => initialized ? cachedView : initialize(),
+    subscribe(listener) {
+      if (typeof listener !== "function") throw new TypeError("Subscriber must be a function");
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    executeAction(id) {
+      return transaction(() => {
+        const action = ACTIONS[id];
+        const reason = actionDisabledReason(action);
+        if (reason) return fail(reason);
+        advanceRound(id);
+        return { ok: true };
+      });
+    },
+    createGame(config = {}) {
+      return transaction(() => {
+        const realmName = String(config.realmName || DEFAULT_REALM_NAME).trim().slice(0, 24);
+        if (!realmName) return fail("Enter a realm name");
+        const emptySeed = config.seed == null || String(config.seed).trim() === "";
+        if (!emptySeed && !Number.isFinite(Number(config.seed))) return fail("The world seed must be a number");
+        generatedSeedClock = Math.max(Date.now(), generatedSeedClock + 1);
+        const seed = emptySeed ? generatedSeedClock : Number(config.seed);
+        const next = createNewState(seed);
+        Object.assign(next, {
+          realmName, difficulty: normalizeDifficulty(config.difficulty), aiAggression: normalizeAiAggression(config.aiAggression),
+          governorId: normalizeGovernorId(config.governorId), mapUiExpanded: config.mapUiExpanded !== false,
+          startingRegionId: normalizeStartingRegionId(config.startingRegionId), setupStage: "territory",
+        });
+        cancelAutoRun();
+        state = next;
+        seedWasRequested = false;
+        rebuildFoundingPreview();
+        clearStoredEnding();
+        saveState();
+        return { ok: true };
+      });
+    },
+    selectStartingRegion(id) {
+      return transaction(() => selectStartingRegion(id) ? { ok: true } : fail("This founding province cannot be selected now"));
+    },
+    selectProvince(id) {
+      return transaction(() => {
+        if (state.finished) return fail("游戏已经结束");
+        return selectMapRegion(id) ? { ok: true } : fail("Invalid province");
+      });
+    },
+    selectArmy(id) {
+      return transaction(() => {
+        if (state.finished) return fail("游戏已经结束");
+        const army = armyById(id);
+        if (!army || (army.entityId !== PLAYER_ENTITY_ID && !canObserveMilitaryAt(army.regionId))) return fail("This army is outside your military intelligence");
+        return selectMapArmy(id) ? { ok: true } : fail("Invalid army");
+      });
+    },
+    selectEntity(id) {
+      return transaction(() => {
+        if (!politicalEntityById(id)) return fail("Invalid political entity");
+        state.selectedEntityId = id;
+        if (!state.finished) saveState();
+        return { ok: true };
+      });
+    },
+    deployArmy(targetId) {
+      return transaction(() => {
+        const reason = deploymentDisabledReason(selectedArmy(), mapStateRegion(targetId));
+        if (reason) return fail(reason);
+        return deploySelectedArmy(targetId) ? { ok: true } : fail("This army cannot be deployed");
+      });
+    },
+    setStrategy(strategy) {
+      return transaction(() => {
+        const entity = selectedPoliticalEntity();
+        if (!state.setupComplete || state.finished || state.awaitingCivilizationRestart || state.mapUiExpanded === false || entity?.id !== PLAYER_ENTITY_ID || entity.eliminated) return fail("The national strategy cannot be changed now");
+        if (!POLITICAL_STRATEGIES[strategy]) return fail("Invalid national strategy");
+        changeSelectedEntityStrategy({ target: { value: strategy } });
+        return { ok: true };
+      });
+    },
+    setMapExpanded(expanded) {
+      return transaction(() => {
+        if (state.finished || state.awaitingCivilizationRestart) return fail("Strategic mode cannot be changed now");
+        const value = Boolean(expanded);
+        if (state.mapUiExpanded !== value) {
+          if (state.setupComplete) toggleMapExpansion();
+          else { state.mapUiExpanded = value; saveState(); }
+        }
+        return { ok: true };
+      });
+    },
+    returnToSettings() {
+      return transaction(() => {
+        if (state.setupComplete) return fail("This civilization is already established");
+        returnToRealmName();
+        return { ok: true };
+      });
+    },
+    completeSetup() {
+      return transaction(() => {
+        if (state.setupComplete || state.setupStage !== "territory" || !state.realmName) return fail("Choose a realm name and founding province first");
+        completeWorldSetup();
+        return { ok: true };
+      });
+    },
+    tickAutoRun() {
+      return transaction(() => {
+        if (!state.setupComplete || state.finished || state.awaitingCivilizationRestart || !state.autoRunUntilCollapse) return fail("Automatic simulation is not active");
+        advanceRound(DIVIDE_AUTO_ACTION);
+        return { ok: true };
+      });
+    },
+    clearChronicle() {
+      return transaction(() => {
+        if (state.finished) return fail("游戏已经结束");
+        clearChronicle();
+        return { ok: true };
+      });
+    },
+    exportSave() { initialize(); return JSON.stringify(state, null, 2); },
+    importSave(serialized) {
+      initialize();
+      const previous = state;
+      const previousGeometry = cachedGeometry;
+      try {
+        if (typeof serialized !== "string" || serialized.length > 5_000_000) throw new Error("Invalid save format or size");
+        const parsed = JSON.parse(serialized);
+        validateImport(parsed);
+        const candidate = loadState(serialized);
+        if (!candidate) throw new Error("This save could not be read or migrated");
+        state = candidate;
+        alignArmiesWithEntityTerritories();
+        eliminateDefeatedEntities();
+        // Build before writing anything: malformed imports cannot replace the
+        // live state, its published snapshot, or the persisted active game.
+        const nextView = buildView();
+        if (state.finished) { saveFinalEnding(); clearSavedRun(); }
+        else { clearStoredEnding(); saveState(); }
+        cachedView = nextView;
+        publish();
+        return { ok: true };
+      } catch (error) {
+        state = previous;
+        installWorldGeography(previous.geometryVersion, previous.geometrySeed || previous.seed);
+        cachedGeometry = previousGeometry;
+        return fail(error.message || "Invalid saved game");
+      }
+    },
+  };
+  return Object.freeze(api);
+}
+
+if (GAME_HOST) {
+  globalThis.CRADLES_GAME_ENGINE = createHostedGameEngine();
+} else {
+  document.addEventListener("DOMContentLoaded", init);
+  window.addEventListener("beforeunload", () => {
+    if (state && !state.finished) saveState();
+    cancelAutoRun();
+  });
+}
