@@ -486,6 +486,22 @@ export default function App({ engine }) {
   const view = useSyncExternalStore(engine.subscribe, engine.getView, engine.getView);
   const [active, setActive] = useState("overview");
   const [layer, setLayer] = useState("political");
+  const [projection, setProjection] = useState(() => {
+    try {
+      return localStorage.getItem("three-sun-chronicle:map-relief:v1") === "2d" ? "flat" : "relief";
+    } catch {
+      return "relief";
+    }
+  });
+  function toggleProjection() {
+    const mode = projection === "relief" ? "flat" : "relief";
+    setProjection(mode);
+    try {
+      localStorage.setItem("three-sun-chronicle:map-relief:v1", mode === "flat" ? "2d" : "3d");
+    } catch {
+      /* A visual preference remains usable when storage is unavailable. */
+    }
+  }
   const [showLabels, setShowLabels] = useState(true);
   const [selectedAction, setSelectedAction] = useState("science");
   const [focusToken, setFocusToken] = useState(0);
@@ -804,6 +820,15 @@ export default function App({ engine }) {
                 </button>
               ))}
               <button
+                className="game-projection-toggle"
+                aria-label="立体地图"
+                aria-pressed={projection === "relief"}
+                title="切换立体 / 平面视角"
+                onClick={toggleProjection}
+              >
+                {projection === "relief" ? "立体" : "平面"}
+              </button>
+              <button
                 aria-label="省份名称"
                 aria-pressed={showLabels}
                 onClick={() => setShowLabels(!showLabels)}
@@ -823,6 +848,7 @@ export default function App({ engine }) {
               onSelectProvince={selectProvince}
               onSelectArmy={selectArmy}
               layer={layer}
+              projection={projection}
               showLabels={showLabels}
               focusToken={focusToken}
               availableProvinceIds={view.availableProvinceIds}
@@ -1423,6 +1449,9 @@ export default function App({ engine }) {
             <p>
               底部时间轴查看最近 80
               次观测，只读历史不会改写游戏。所有行动都沿用旧游戏的成本、条件、冷却与快捷键。
+            </p>
+            <p>
+              地图上方可切换立体与平面视角；地形起伏与大陆侧面只影响显示，省份道路、侦察与战斗规则相同。视角选择会在本机记住。
             </p>
             <p>新建世界留空种子即可随机生成；重复种子可重现地图，年度结果还取决于你的决议。</p>
           </div>

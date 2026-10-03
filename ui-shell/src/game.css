@@ -219,6 +219,11 @@
   background: #454630;
   color: #e0c48b;
 }
+.game-layer-switch .game-projection-toggle {
+  border-left: 1px solid #6b6348;
+  margin-left: 3px;
+  min-width: 40px;
+}
 .game-map-stage {
   position: relative;
   min-height: 0;
@@ -1344,9 +1349,10 @@
     grid-template-rows: 62px minmax(0, 1fr) 136px;
   }
   .game-map-header {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 3px;
   }
   .game-layer-switch {
     gap: 0;

@@ -14,19 +14,27 @@ React 界面通过原 `game.js` 的可选 presentation host 驱动现有三日�
 
 ## 命令
 
-| 方法 | 原用途 |
-| --- | --- |
-| `createGame(config)` | 新局：国名、种子、难度、AI、执政官、地图玩法开关 |
-| `selectStartingRegion(id)` / `completeSetup()` / `returnToSettings()` | 发源地与建国流程 |
-| `executeAction(id)` | 原 21 行动，检查禁用原因后才消耗 RNG 或年份 |
-| `selectProvince(id)` / `selectArmy(id)` / `selectEntity(id)` | 原选择状态 |
-| `deployArmy(targetId)` / `setStrategy(strategy)` | 原军事调动与国家战略 |
-| `setMapExpanded(boolean)` | 原领土/数值玩法切换 |
-| `tickAutoRun()` | 分裂时的原年度自动行动；UI 管理时钟 |
-| `clearChronicle()` | 清理当前日志，不改变年份或 RNG |
-| `exportSave()` / `importSave(serialized)` | 原格式 JSON 存档与迁移 |
+| 方法                                                                  | 原用途                                           |
+| --------------------------------------------------------------------- | ------------------------------------------------ |
+| `createGame(config)`                                                  | 新局：国名、种子、难度、AI、执政官、地图玩法开关 |
+| `selectStartingRegion(id)` / `completeSetup()` / `returnToSettings()` | 发源地与建国流程                                 |
+| `executeAction(id)`                                                   | 原 21 行动，检查禁用原因后才消耗 RNG 或年份      |
+| `selectProvince(id)` / `selectArmy(id)` / `selectEntity(id)`          | 原选择状态                                       |
+| `deployArmy(targetId)` / `setStrategy(strategy)`                      | 原军事调动与国家战略                             |
+| `setMapExpanded(boolean)`                                             | 原领土/数值玩法切换                              |
+| `tickAutoRun()`                                                       | 分裂时的原年度自动行动；UI 管理时钟              |
+| `clearChronicle()`                                                    | 清理当前日志，不改变年份或 RNG                   |
+| `exportSave()` / `importSave(serialized)`                             | 原格式 JSON 存档与迁移                           |
 
 有效命令完成后发出一次通知；失败返回 `{ok:false, reason}`。所有年份改变来自引擎命令，历史时间轴只读。
+
+## 立体显示与游戏坐标
+
+默认 Canvas 使用轻量 2.5D 仿射视角，大陆顶面统一抬升，山体、低丘和峡谷是独立的视觉地形。地理、道路、命中后的省份 ID 和玩法计算仍使用原平面坐标；装饰高度不会改变移动与战斗。
+
+`game-projection.js` 提供正逆投影和四角范围；拖动、键盘平移、缩放锚点与底图缓存位移都经过同一转换，军队与地名保持屏幕尺寸。`game-relief.js` 按地图版本一次预编译裁切与明暗面，只在底图缓存重建时绘制。视觉 hash 不读取或推进游戏 RNG。
+
+“立体 / 平面”复用旧 `three-sun-chronicle:map-relief:v1` 视图偏好，值仍为 `3d` / `2d`；不写入运行存档。切换保留相机中心与相对缩放，旧固定地图也可显示立体厚度。
 
 ## 随机地图与兼容性
 

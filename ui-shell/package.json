@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "node scripts/test-data.mjs && node scripts/test-quoted-copy.mjs && node ../scripts/test-react-engine.mjs",
+    "test": "node scripts/test-data.mjs && node scripts/test-quoted-copy.mjs && node scripts/test-game-projection.mjs && node ../scripts/test-react-engine.mjs",
     "test:browser": "node scripts/check-game-browser.mjs",
     "test:endings:browser": "node scripts/check-ending-browser.mjs",
     "test:demo-browser": "node scripts/check-browser.mjs"

@@ -9,6 +9,13 @@ import {
   mapLabel,
   compactForce,
 } from "./map/game-geometry.js";
+import {
+  projectionFor,
+  projectOffset,
+  unprojectOffset,
+  projectedBounds,
+} from "./map/game-projection.js";
+import { compileRelief, paintRelief } from "./map/game-relief.js";
 import "./map/game-map.css";
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -67,7 +74,24 @@ function compilePaths(geography) {
       mountains.lineTo(x + 2, y + 7);
     }
   });
-  return { land, cells, roads, rivers, mountains };
+  const projection = projectionFor("relief");
+  const raised = (p) => ({
+    x: p.x + (projection.shearX * projection.topElevation) / projection.scaleY,
+    y: p.y - projection.topElevation / projection.scaleY,
+  });
+  const coastSides = geography.land
+    .map((a, i) => {
+      const b = geography.land[(i + 1) % geography.land.length];
+      const start = projectOffset(a, "relief", 0),
+        end = projectOffset(b, "relief", 0);
+      return {
+        path: polygonPath([a, b, raised(b), raised(a)]),
+        depth: (start.y + end.y) / 2,
+        color: end.x > start.x ? "#8a7b59" : "#625d46",
+      };
+    })
+    .sort((a, b) => a.depth - b.depth);
+  return { land, cells, roads, rivers, mountains, coastSides, relief: compileRelief(geography) };
 }
 
 function createEngine(canvas, propsRef, setTooltip) {
@@ -75,6 +99,7 @@ function createEngine(canvas, propsRef, setTooltip) {
   const cache = document.createElement("canvas");
   const ink = cache.getContext("2d", { alpha: false });
   const paper = makePaperPattern(ink);
+  let projectionMode = propsRef.current.projection === "flat" ? "flat" : "relief";
   let geography = null,
     paths = null;
   let size = { width: 1, height: 1, ratio: 1 };
@@ -106,44 +131,77 @@ function createEngine(canvas, propsRef, setTooltip) {
   function toScreen(coordinate) {
     const point = pointXY(coordinate),
       o = origin();
-    return {
-      x: (point.x - camera.x) * camera.scale + o.x,
-      y: (point.y - camera.y) * camera.scale + o.y,
-    };
+    const projected = projectOffset(
+      { x: point.x - camera.x, y: point.y - camera.y },
+      projectionMode,
+    );
+    return { x: projected.x * camera.scale + o.x, y: projected.y * camera.scale + o.y };
   }
   function toWorld(point) {
     const o = origin();
-    return {
-      x: (point.x - o.x) / camera.scale + camera.x,
-      y: (point.y - o.y) / camera.scale + camera.y,
-    };
+    const world = unprojectOffset(
+      { x: (point.x - o.x) / camera.scale, y: (point.y - o.y) / camera.scale },
+      projectionMode,
+    );
+    return { x: world.x + camera.x, y: world.y + camera.y };
   }
   function viewportBounds() {
-    const a = toWorld({ x: -35, y: -35 }),
-      b = toWorld({ x: size.width + 35, y: size.height + 35 });
-    return { left: a.x, top: a.y, right: b.x, bottom: b.y };
+    // Oblique projection couples x/y: all four corners must be inverted.
+    const corners = [
+      { x: -35, y: -35 },
+      { x: size.width + 35, y: -35 },
+      { x: size.width + 35, y: size.height + 35 },
+      { x: -35, y: size.height + 35 },
+    ].map(toWorld);
+    return {
+      left: Math.min(...corners.map((p) => p.x)),
+      top: Math.min(...corners.map((p) => p.y)),
+      right: Math.max(...corners.map((p) => p.x)),
+      bottom: Math.max(...corners.map((p) => p.y)),
+    };
   }
   const inView = (point, padding = 20) =>
     point.x > -padding &&
     point.x < size.width + padding &&
     point.y > -padding &&
     point.y < size.height + padding;
-  function transform(target, extra = 0) {
-    const o = origin();
-    target.translate(o.x + extra, o.y + extra);
-    target.scale(camera.scale, camera.scale);
+  function transform(target, extra = 0, elevation = projectionFor(projectionMode).topElevation) {
+    const o = origin(),
+      projection = projectionFor(projectionMode);
+    target.translate(o.x + extra, o.y + extra - elevation * camera.scale);
+    target.transform(
+      camera.scale,
+      0,
+      camera.scale * projection.shearX,
+      camera.scale * projection.scaleY,
+      0,
+      0,
+    );
     target.translate(-camera.x, -camera.y);
   }
   function fitScale() {
     if (!geography) return 1;
-    const b = geography.landBounds;
+    const b = projectedBounds(geography.landBounds, projectionMode);
+    const reliefMargin = projectionMode === "relief" ? 50 : 0;
     return Math.max(
       0.05,
       Math.min(
         Math.max(120, size.width - 95) / (b.right - b.left),
-        Math.max(100, usableArea().height - 38) / (b.bottom - b.top),
+        Math.max(100, usableArea().height - 38) / (b.bottom - b.top + reliefMargin),
       ),
     );
+  }
+  function updateProjection(value) {
+    const mode = value === "flat" ? "flat" : "relief";
+    if (mode === projectionMode) return;
+    const oldZoom = camera.scale / baseScale;
+    projectionMode = mode;
+    baseScale = fitScale();
+    camera.scale = baseScale * oldZoom;
+    constrain();
+    clearHover();
+    cached = null;
+    invalidate(true);
   }
   function constrain() {
     if (!geography) return;
@@ -202,6 +260,36 @@ function createEngine(canvas, propsRef, setTooltip) {
     water.addColorStop(1, "#253a36");
     ink.fillStyle = water;
     ink.fillRect(0, 0, width, height);
+    if (projectionMode === "relief") {
+      ink.save();
+      transform(ink, margin, 0);
+      ink.lineJoin = "round";
+      ink.strokeStyle = "#152d2940";
+      ink.lineWidth = 15 / camera.scale;
+      ink.stroke(paths.land);
+      ink.fillStyle = "#2a3830";
+      ink.fill(paths.land);
+      paths.coastSides.forEach((side) => {
+        ink.fillStyle = side.color;
+        ink.fill(side.path);
+      });
+      // Fixed legacy geography supplies an SVG path rather than a polygon.
+      // A few cached silhouettes provide the same continental thickness.
+      if (!paths.coastSides.length) {
+        const projection = projectionFor(projectionMode);
+        for (let elevation = 2; elevation < projection.topElevation; elevation += 2) {
+          ink.save();
+          ink.translate(
+            (projection.shearX * elevation) / projection.scaleY,
+            -elevation / projection.scaleY,
+          );
+          ink.fillStyle = "#756c50";
+          ink.fill(paths.land);
+          ink.restore();
+        }
+      }
+      ink.restore();
+    }
     ink.save();
     transform(ink, margin);
     ink.lineJoin = "round";
@@ -219,9 +307,12 @@ function createEngine(canvas, propsRef, setTooltip) {
     });
     ink.save();
     ink.clip(paths.land);
-    ink.strokeStyle = "#675d403b";
-    ink.lineWidth = 0.85 / camera.scale;
-    ink.stroke(paths.mountains);
+    if (projectionMode === "relief") paintRelief(ink, paths.relief, camera.scale);
+    else {
+      ink.strokeStyle = "#675d403b";
+      ink.lineWidth = 0.85 / camera.scale;
+      ink.stroke(paths.mountains);
+    }
     ink.strokeStyle = "#e1d2a6ae";
     ink.lineWidth = 4 / camera.scale;
     ink.stroke(paths.rivers);
@@ -241,19 +332,27 @@ function createEngine(canvas, propsRef, setTooltip) {
   }
 
   function ensureBase() {
-    const shiftX = cached ? (cached.x - camera.x) * camera.scale : Infinity;
-    const shiftY = cached ? (cached.y - camera.y) * camera.scale : Infinity;
+    const displacement = () =>
+      cached
+        ? projectOffset({ x: cached.x - camera.x, y: cached.y - camera.y }, projectionMode, 0)
+        : { x: Infinity, y: Infinity };
+    const shift = displacement();
     if (
       cacheDirty ||
       !cached ||
       Math.abs(cached.scale - camera.scale) > 0.00001 ||
-      Math.abs(shiftX) > cached.margin * 0.82 ||
-      Math.abs(shiftY) > cached.margin * 0.82
+      Math.abs(shift.x * camera.scale) > cached.margin * 0.82 ||
+      Math.abs(shift.y * camera.scale) > cached.margin * 0.82
     )
       drawBase();
-    const dx = (cached.x - camera.x) * camera.scale - cached.margin;
-    const dy = (cached.y - camera.y) * camera.scale - cached.margin;
-    context.drawImage(cache, dx, dy, cached.width, cached.height);
+    const offset = displacement();
+    context.drawImage(
+      cache,
+      offset.x * camera.scale - cached.margin,
+      offset.y * camera.scale - cached.margin,
+      cached.width,
+      cached.height,
+    );
   }
 
   function stateLookups() {
@@ -450,6 +549,8 @@ function createEngine(canvas, propsRef, setTooltip) {
       y = size.height - 50;
     context.save();
     context.translate(x, y);
+    const north = projectOffset({ x: 0, y: -1 }, projectionMode, 0);
+    context.rotate(Math.atan2(north.y, north.x) + Math.PI / 2);
     context.strokeStyle = "#bfaf7b80";
     context.fillStyle = "#d0bc8a";
     context.lineWidth = 0.8;
@@ -504,6 +605,8 @@ function createEngine(canvas, propsRef, setTooltip) {
       cachePixels: cache.width * cache.height,
       drawCount,
       baseBuildCount,
+      projection: projectionMode,
+      terrainFeatures: projectionMode === "relief" ? paths.relief.featureCount : 0,
       visibleProvinces: visibleCells.length,
       provinceCount: geography.cells.length,
     };
@@ -530,11 +633,11 @@ function createEngine(canvas, propsRef, setTooltip) {
   }
   function zoom(factor, anchor = origin()) {
     if (!geography) return;
-    const old = camera.scale,
-      o = origin();
+    const world = toWorld(anchor);
     camera.scale = clamp(camera.scale * factor, baseScale * 0.8, baseScale * 5);
-    camera.x += (anchor.x - o.x) * (1 / old - 1 / camera.scale);
-    camera.y += (anchor.y - o.y) * (1 / old - 1 / camera.scale);
+    const after = toWorld(anchor);
+    camera.x += world.x - after.x;
+    camera.y += world.y - after.y;
     constrain();
     clearHover();
     invalidate();
@@ -607,8 +710,16 @@ function createEngine(canvas, propsRef, setTooltip) {
       if (Math.hypot(point.x - pointer.start.x, point.y - pointer.start.y) > 4)
         pointer.moved = true;
       if (pointer.moved) {
-        camera.x -= (point.x - pointer.last.x) / camera.scale;
-        camera.y -= (point.y - pointer.last.y) / camera.scale;
+        const delta = unprojectOffset(
+          {
+            x: (point.x - pointer.last.x) / camera.scale,
+            y: (point.y - pointer.last.y) / camera.scale,
+          },
+          projectionMode,
+          0,
+        );
+        camera.x -= delta.x;
+        camera.y -= delta.y;
         constrain();
         invalidate();
       }
@@ -663,8 +774,13 @@ function createEngine(canvas, propsRef, setTooltip) {
     };
     if (arrows[event.key]) {
       event.preventDefault();
-      camera.x += arrows[event.key][0] / camera.scale;
-      camera.y += arrows[event.key][1] / camera.scale;
+      const delta = unprojectOffset(
+        { x: arrows[event.key][0] / camera.scale, y: arrows[event.key][1] / camera.scale },
+        projectionMode,
+        0,
+      );
+      camera.x += delta.x;
+      camera.y += delta.y;
       constrain();
       clearHover();
       invalidate();
@@ -715,6 +831,7 @@ function createEngine(canvas, propsRef, setTooltip) {
   return {
     invalidate,
     updateGeometry,
+    updateProjection,
     zoom,
     reset,
     focus,
@@ -752,6 +869,9 @@ export default function GameMap(props) {
     engineRef.current?.updateGeometry(props.geometry);
   }, [props.geometry]);
   useEffect(() => {
+    engineRef.current?.updateProjection(props.projection);
+  }, [props.projection]);
+  useEffect(() => {
     engineRef.current?.invalidate();
   }, [
     props.regions,
@@ -770,7 +890,7 @@ export default function GameMap(props) {
     }
   }, [props.focusToken]);
   return (
-    <div className="game-map">
+    <div className="game-map" data-projection={props.projection || "relief"}>
       <canvas
         ref={canvasRef}
         tabIndex={0}
